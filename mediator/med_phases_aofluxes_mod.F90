@@ -109,7 +109,7 @@ contains
     type(InternalState)     :: is_local
     type(aoflux_type), save :: aoflux
     logical, save           :: first_call = .true.
-    character(len=*),parameter :: subname='(med_phases_aofluxes)'
+    character(len=*),parameter :: subname='(med_phases_aofluxes_run)'
     !---------------------------------------
 
     rc = ESMF_SUCCESS
@@ -153,17 +153,6 @@ contains
     endif
 
     call memcheck(subname, 5, mastertask)
-
-    ! TODO(mvertens, 2019-01-12): ONLY regrid atm import fields that are needed for the atm/ocn flux calculation
-    ! Regrid atm import field bundle from atm to ocn grid as input for ocn/atm flux calculation
-    call med_map_field_packed( &
-         FBSrc=is_local%wrap%FBImp(compatm,compatm), &
-         FBDst=is_local%wrap%FBImp(compatm,compocn), &
-         FBFracSrc=is_local%wrap%FBFrac(compatm), &
-         field_normOne=is_local%wrap%field_normOne(compatm,compocn,:), &
-         packed_data=is_local%wrap%packed_data(compatm,compocn,:), &
-         routehandles=is_local%wrap%RH(compatm,compocn,:), rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! Calculate atm/ocn fluxes on the destination grid
     call med_aofluxes_run(gcomp, aoflux, rc)
@@ -216,7 +205,7 @@ contains
     integer                 :: flux_max_iteration      ! maximum number of iterations for convergence
     logical                 :: coldair_outbreak_mod    ! cold air outbreak adjustment  (Mahrt & Sun 1995,MWR)
     logical                 :: isPresent, isSet
-    character(*),parameter  :: subName =   '(med_aofluxes_init) '
+    character(*),parameter  :: subName = '(med_aofluxes_init) '
     !-----------------------------------------------------------------------
 
     if (dbug_flag > 5) then
@@ -439,6 +428,40 @@ contains
     ! call FB_getFldPtr(FBFrac , fldname='ifrac' , fldptr1=ifrac, rc=rc)
     ! if (chkerr(rc,__LINE__,u_FILE_u)) return
     ! where (ofrac(:) + ifrac(:) <= 0.0_R8) mask(:) = 0
+    !----------------------------------
+    ! Get config variables on first call
+    !----------------------------------
+
+    call NUOPC_CompAttributeGet(gcomp, name='coldair_outbreak_mod', value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent .and. isSet) then
+       read(cvalue,*) coldair_outbreak_mod
+    else
+       coldair_outbreak_mod = .false.
+    end if
+
+    call NUOPC_CompAttributeGet(gcomp, name='flux_max_iteration', value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent .and. isSet) then
+       read(cvalue,*) flux_max_iteration
+    else
+       flux_max_iteration = 1
+    end if
+
+    call NUOPC_CompAttributeGet(gcomp, name='flux_convergence', value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent .and. isSet) then
+       read(cvalue,*) flux_convergence
+    else
+       flux_convergence = 0.0_r8
+    end if
+
+    call shr_flux_adjust_constants(&
+         flux_convergence_tolerance=flux_convergence, &
+         flux_convergence_max_iteration=flux_max_iteration, &
+         coldair_outbreak_mod=coldair_outbreak_mod)
+
+
 
     if (dbug_flag > 5) then
       call ESMF_LogWrite(trim(subname)//": done", ESMF_LOGMSG_INFO)
