@@ -158,9 +158,9 @@
        description: atmosphere import - merged ocn/ice flux
      #
      - standard_name: Sa_ofrac
-       alias: oceanfrac_in_atm
+       alias: openwater_frac_in_atm
        canonical_units: 1
-       description: atm export to mediator - ocean fraction (varies with time)
+       description: atm export to mediator - open water ocean fraction (varies with time)
      #
      - standard_name: Sa_u10m
        alias: inst_zonal_wind_height10m
