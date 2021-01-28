@@ -34,6 +34,7 @@ contains
     use esmflds               , only : coupling_mode, mapnames
     use esmflds               , only : fldListTo, fldListFr, fldListMed_aoflux, fldListMed_ocnalb
     use med_internalstate_mod , only : mastertask, logunit
+    use esmflds               , only : test_interp
 
     ! input/output parameters:
     type(ESMF_GridComp)              :: gcomp
@@ -119,6 +120,7 @@ contains
     ! to atm: fractions (computed in med_phases_prep_atm)
     call addfld(fldListFr(compice)%flds, 'Si_ifrac')
     call addfld(fldListTo(compatm)%flds, 'Si_ifrac')
+    call addmap(fldListFr(compice)%flds, 'Si_ifrac', compatm, mapconsd, 'none', 'unset')
 
     ! to atm: unmerged from ice
     ! - zonal surface stress, meridional surface stress
@@ -155,7 +157,11 @@ contains
     ! to ocn: sea level pressure from atm
     call addfld(fldListTo(compocn)%flds, 'Sa_pslv')
     call addfld(fldListFr(compatm)%flds, 'Sa_pslv')
-    call addmap(fldListFr(compatm)%flds, 'Sa_pslv', compocn, maptype, 'none', 'unset')
+    if (trim(test_interp) == 'mapbilnr' ) then
+     call addmap(fldListFr(compatm)%flds, 'Sa_pslv', compocn, mapbilnr, 'none', 'unset')
+    else
+     call addmap(fldListFr(compatm)%flds, 'Sa_pslv', compocn, maptype, 'none', 'unset')
+    end if
     call addmrg(fldListTo(compocn)%flds, 'Sa_pslv', mrg_from=compatm, mrg_fld='Sa_pslv', mrg_type='copy')
 
     ! to ocn: from atm (custom merge in med_phases_prep_ocn)
