@@ -41,7 +41,7 @@ module MED
   use esmFldsExchange_nems_mod , only : esmFldsExchange_nems
   use esmFldsExchange_cesm_mod , only : esmFldsExchange_cesm
   use esmFldsExchange_hafs_mod , only : esmFldsExchange_hafs
-  use esmFlds                  , only : test_interp
+  use esmFlds                  , only : test_interp, test_source
 
   implicit none
   private
@@ -747,6 +747,9 @@ contains
     call NUOPC_CompAttributeGet(gcomp, name='test_interp', value=test_interp, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     call ESMF_LogWrite('test_interp = '// trim(test_interp), ESMF_LOGMSG_INFO)
+    call NUOPC_CompAttributeGet(gcomp, name='test_source', value=test_source, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_LogWrite('test_source = '// trim(test_source), ESMF_LOGMSG_INFO)
 
     if (trim(coupling_mode) == 'cesm') then
        call esmFldsExchange_cesm(gcomp, phase='advertise', rc=rc)
