@@ -319,9 +319,9 @@ contains
             ignoreDegenerate=.true., &
             unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
-       fname = trim(compname(n1))//'.'//trim(compname(n2))//trim(mapname)
-       call med_methods_MeshMask_diagnose(fldsrc, '.src.'//trim(fname), 'rgstore', rc=rc)
-       call med_methods_MeshMask_diagnose(flddst, '.dst.'//trim(fname), 'rgstore', rc=rc)
+       fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
+       call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'rgstore', rc=rc)
+       call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'rgstore', rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     else if (mapindex == mapfillv_bilnr) then
        if (mastertask) then
@@ -350,9 +350,9 @@ contains
             unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
             rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
-       fname = trim(compname(n1))//'.'//trim(compname(n2))//trim(mapname)
-       call med_methods_MeshMask_diagnose(fldsrc, '.src.'//trim(fname), 'rgstore', rc=rc)
-       call med_methods_MeshMask_diagnose(flddst, '.dst.'//trim(fname), 'rgstore', rc=rc)
+       fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
+       call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'rgstore', rc=rc)
+       call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'rgstore', rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     else if (mapindex == mapconsd .or. mapindex == mapnstod_consd) then
        if (mastertask) then
@@ -368,9 +368,9 @@ contains
             unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
             rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
-       fname = trim(compname(n1))//'.'//trim(compname(n2))//trim(mapname)
-       call med_methods_MeshMask_diagnose(fldsrc, '.src.'//trim(fname), 'rgstore', rc=rc)
-       call med_methods_MeshMask_diagnose(flddst, '.dst.'//trim(fname), 'rgstore', rc=rc)
+       fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
+       call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'rgstore', rc=rc)
+       call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'rgstore', rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     else if (mapindex == mappatch .or. mapindex == mappatch_uv3d) then
        if (mastertask) then
@@ -529,6 +529,7 @@ contains
     type(ESMF_Field)          :: field_src
     type(ESMF_Mesh)           :: mesh_src
     type(ESMF_Mesh)           :: mesh_dst
+    character(len=CL)         :: fname
     character(len=*),parameter :: subname=' (module_MED_MAP:MapNorm_init)'
     !-----------------------------------------------------------
 
@@ -597,6 +598,10 @@ contains
                          write(logunit,'(a)') trim(subname)//' created field_NormOne for '&
                               //compname(n1)//'->'//compname(n2)//' with mapping '//mapnames(m)
                       endif
+       fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapnames(m))
+       call med_methods_MeshMask_diagnose(field_src, 'src.'//trim(fname), 'norminit', rc=rc)
+       call med_methods_MeshMask_diagnose(is_local%wrap%field_NormOne(n1,n2,m), 'dst.'//trim(fname), 'norminit', rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
                    end if
                 end do ! end of loop over m mappers
              end if ! end of if block for creating destination field
