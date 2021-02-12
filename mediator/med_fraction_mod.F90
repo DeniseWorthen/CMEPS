@@ -110,6 +110,8 @@ module med_fraction_mod
   use med_methods_mod   , only : fldbun_reset     => med_methods_FB_reset
   use med_map_mod       , only : med_map_field
   use esmFlds           , only : ncomps, max_icesheets, num_icesheets
+  use med_methods_mod   , only : med_methods_MeshMask_diagnose
+  use esmFlds           , only : mapnames
 
   implicit none
   private
@@ -178,6 +180,7 @@ contains
     integer             :: i,j,n,n1,ns
     integer             :: maptype
     logical, save       :: first_call = .true.
+    character(len=CL)   :: fname
     character(len=*),parameter :: subname=' (med_fraction_init)'
     !---------------------------------------
 
@@ -292,10 +295,15 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        call med_map_field(field_src, field_dst, is_local%wrap%RH(compice,compatm,:), maptype, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       fname = 'compice.compatm.'//trim(mapnames(maptype))
+       call med_methods_MeshMask_diagnose(field_src, 'src.'//trim(fname), 'fracinit', rc=rc)
+       call med_methods_MeshMask_diagnose(field_dst, 'dst.'//trim(fname), 'fracinit', rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
     end if
 
     !---------------------------------------
-    ! Set 'ofrac' in FBFrac(compocn) 
+    ! Set 'ofrac' in FBFrac(compocn)
     !---------------------------------------
 
     if (is_local%wrap%comp_present(compocn)) then
@@ -343,6 +351,11 @@ contains
        call ESMF_FieldBundleGet(is_local%wrap%FBfrac(compatm), fieldname='ofrac', field=field_dst, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        call med_map_field(field_src, field_dst, is_local%wrap%RH(compocn,compatm,:), maptype, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+       fname = 'compocn.compatm.'//trim(mapnames(maptype))
+       call med_methods_MeshMask_diagnose(field_src, 'src.'//trim(fname), 'fracinit', rc=rc)
+       call med_methods_MeshMask_diagnose(field_dst, 'dst.'//trim(fname), 'fracinit', rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     end if
 
@@ -682,7 +695,7 @@ contains
        ! The model mask is normally assumed to be an selected ocean mask from a fully coupled run
        ! So in it is (1-land fraction) on the atm grid
 
-       ! set ifrac 
+       ! set ifrac
        if (associated(ifrac)) then
           ifrac(:) = Si_ifrac(:) * Si_imask(:)
        endif

@@ -8,6 +8,7 @@ module med_map_mod
   use med_constants_mod     , only : dbug_flag => med_constants_dbug_flag
   use med_utils_mod         , only : chkerr    => med_utils_ChkErr
   use perf_mod              , only : t_startf, t_stopf
+  use med_methods_mod       , only : med_methods_MeshMask_diagnose
 
   implicit none
   private
@@ -233,6 +234,7 @@ contains
     ! local variables
     character(len=CS)          :: string
     character(len=CS)          :: mapname
+    character(len=CL)          :: fname
     integer                    :: srcMaskValue
     integer                    :: dstMaskValue
     character(len=ESMF_MAXSTR) :: lmapfile
@@ -317,6 +319,10 @@ contains
             ignoreDegenerate=.true., &
             unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
+       fname = trim(compname(n1))//'.'//trim(compname(n2))//trim(mapname)
+       call med_methods_MeshMask_diagnose(fldsrc, '.src.'//trim(fname), 'rgstore', rc=rc)
+       call med_methods_MeshMask_diagnose(flddst, '.dst.'//trim(fname), 'rgstore', rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
     else if (mapindex == mapfillv_bilnr) then
        if (mastertask) then
           write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
@@ -344,6 +350,10 @@ contains
             unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
             rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
+       fname = trim(compname(n1))//'.'//trim(compname(n2))//trim(mapname)
+       call med_methods_MeshMask_diagnose(fldsrc, '.src.'//trim(fname), 'rgstore', rc=rc)
+       call med_methods_MeshMask_diagnose(flddst, '.dst.'//trim(fname), 'rgstore', rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
     else if (mapindex == mapconsd .or. mapindex == mapnstod_consd) then
        if (mastertask) then
           write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
@@ -357,6 +367,10 @@ contains
             ignoreDegenerate=.true., &
             unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
             rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       fname = trim(compname(n1))//'.'//trim(compname(n2))//trim(mapname)
+       call med_methods_MeshMask_diagnose(fldsrc, '.src.'//trim(fname), 'rgstore', rc=rc)
+       call med_methods_MeshMask_diagnose(flddst, '.dst.'//trim(fname), 'rgstore', rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     else if (mapindex == mappatch .or. mapindex == mappatch_uv3d) then
        if (mastertask) then

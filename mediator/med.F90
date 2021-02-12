@@ -6,6 +6,7 @@ module MED
 
   use ESMF                     , only : ESMF_VMLogMemInfo
   use med_kind_mod             , only : CX=>SHR_KIND_CX, CS=>SHR_KIND_CS, CL=>SHR_KIND_CL, R8=>SHR_KIND_R8
+  use med_kind_mod             , only : I4=>SHR_KIND_I4
   use med_constants_mod        , only : dbug_flag          => med_constants_dbug_flag
   use med_constants_mod        , only : spval_init         => med_constants_spval_init
   use med_constants_mod        , only : spval              => med_constants_spval
@@ -1991,8 +1992,17 @@ contains
 
             ! Create mesh info data
             call med_meshinfo_create(is_local%wrap%FBImp(n1,n1), &
-                 is_local%wrap%mesh_info(n1), rc=rc)
+                 is_local%wrap%mesh_info(n1), trim(compname(n1)), rc=rc)
             if (ChkErr(rc,__LINE__,u_FILE_u)) return
+   
+            write(msgString,'(A,2i12,4f12.5)') subname//' XX: '//trim(compname(n1))//':  ', &
+                                               minval(is_local%wrap%mesh_info(n1)%mask), &
+                                               maxval(is_local%wrap%mesh_info(n1)%mask), &
+                                               minval(is_local%wrap%mesh_info(n1)%lons), &
+                                               maxval(is_local%wrap%mesh_info(n1)%lons), &
+                                               minval(is_local%wrap%mesh_info(n1)%lats), &
+                                               maxval(is_local%wrap%mesh_info(n1)%lats)
+            call ESMF_LogWrite(trim(msgString), ESMF_LOGMSG_INFO)
          end if
 
          ! The following are FBImp and FBImpAccum mapped to different grids.
@@ -2548,28 +2558,34 @@ contains
 
   !-----------------------------------------------------------------------------
 
-  subroutine med_meshinfo_create(FB, mesh_info, rc)
+  subroutine med_meshinfo_create(FB, mesh_info, lstring, rc)
 
     use ESMF , only : ESMF_Array, ESMF_ArrayCreate, ESMF_ArrayDestroy, ESMF_Field, ESMF_FieldGet
     use ESMF , only : ESMF_DistGrid, ESMF_FieldBundle, ESMF_FieldRegridGetArea, ESMF_FieldBundleGet
     use ESMF , only : ESMF_Mesh, ESMF_MeshGet, ESMF_MESHLOC_ELEMENT, ESMF_TYPEKIND_R8
     use ESMF , only : ESMF_SUCCESS, ESMF_FAILURE, ESMF_LogWrite, ESMF_LOGMSG_INFO
+    use ESMF , only : ESMF_ArrayWrite
     use med_internalstate_mod , only : mesh_info_type
 
     ! input/output variables
     type(ESMF_FieldBundle) , intent(in)    :: FB
     type(mesh_info_type)   , intent(inout) :: mesh_info
+    character(len=*)       , intent(in)    :: lstring
     integer                , intent(out)   :: rc
 
     ! local variables
     type(ESMF_Field)      :: lfield
     type(ESMF_Mesh)       :: lmesh
+    type(ESMF_Array)      :: elemMaskArray
+    type(ESMF_Distgrid)   :: distgrid
     integer               :: numOwnedElements
     integer               :: spatialDim
     real(r8), allocatable :: ownedElemCoords(:)
     real(r8), pointer     :: dataptr(:) => null()
+    integer(i4) , pointer :: maskMesh(:) => null()
     integer               :: n, dimcount, fieldcount
     character(len=*),parameter :: subname=' (module_MED:med_meshinfo_create) '
+    logical :: nodalDistgridIsPresent, elementDistgridIsPresent
     !-------------------------------------------------------------------------------
 
     rc= ESMF_SUCCESS
@@ -2586,8 +2602,13 @@ contains
     enddo
 
     ! Determine dimensions in mesh
-    call ESMF_MeshGet(lmesh, spatialDim=spatialDim, numOwnedElements=numOwnedElements, rc=rc)
+    call ESMF_MeshGet(lmesh, spatialDim=spatialDim, numOwnedElements=numOwnedElements, &
+         nodalDistgridIsPresent=nodalDistgridIsPresent,&
+         elementDistgridIsPresent=elementDistgridIsPresent,&
+         elementDistgrid=distgrid,rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
+    if(nodalDistgridIsPresent)call ESMF_LogWrite('nodal distgrid is present', ESMF_LOGMSG_INFO)
+    if(elementDistgridIsPresent)call ESMF_LogWrite('element distgrid is present', ESMF_LOGMSG_INFO)
 
     ! Obtain mesh info areas
     call ESMF_FieldRegridGetArea(lfield, rc=rc)
@@ -2608,6 +2629,20 @@ contains
        mesh_info%lats(n) = ownedElemCoords(2*n)
     end do
     deallocate(ownedElemCoords)
+
+    ! Obtain mesh mask
+    allocate(maskMesh(numOwnedElements))
+    allocate(mesh_info%mask(numOwnedElements))
+    elemMaskArray = ESMF_ArrayCreate(Distgrid, maskMesh, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_MeshGet(lmesh, elemMaskArray=elemMaskArray, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+     mesh_info%mask(:) = maskMesh(:)
+
+    call ESMF_ArrayWrite(elemMaskArray, 'test.'//trim(lstring)//'.nc', variableName = 'mesh', &
+         overwrite=.true., rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    deallocate(maskMesh)
 
   end subroutine med_meshinfo_create
 

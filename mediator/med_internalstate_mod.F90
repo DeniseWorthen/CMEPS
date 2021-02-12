@@ -8,6 +8,7 @@ module med_internalstate_mod
   use ESMF         , only : ESMF_VM
   use esmFlds      , only : ncomps, nmappers
   use med_kind_mod , only : CX=>SHR_KIND_CX, CS=>SHR_KIND_CS, CL=>SHR_KIND_CL, R8=>SHR_KIND_R8
+  use med_kind_mod , only : I4=>SHR_KIND_I4
 
   implicit none
   private
@@ -24,6 +25,7 @@ module med_internalstate_mod
      real(r8), pointer :: areas(:) => null()
      real(r8), pointer :: lats(:) => null()
      real(r8), pointer :: lons(:) => null()
+     integer(i4), pointer ::  mask(:) => null()
   end type mesh_info_type
 
   type, public :: packed_data_type
