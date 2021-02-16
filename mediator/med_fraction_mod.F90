@@ -297,8 +297,8 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
        fname = 'compice.compatm.'//trim(mapnames(maptype))
-       call med_methods_MeshMask_diagnose(field_src, 'src.'//trim(fname), 'fracinit', rc=rc)
-       call med_methods_MeshMask_diagnose(field_dst, 'dst.'//trim(fname), 'fracinit', rc=rc)
+       !call med_methods_MeshMask_diagnose(field_src, 'src.'//trim(fname), 'fracinit', rc=rc)
+       !call med_methods_MeshMask_diagnose(field_dst, 'dst.'//trim(fname), 'fracinit', rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     end if
 
@@ -354,8 +354,8 @@ contains
        if (chkerr(rc,__LINE__,u_FILE_u)) return
 
        fname = 'compocn.compatm.'//trim(mapnames(maptype))
-       call med_methods_MeshMask_diagnose(field_src, 'src.'//trim(fname), 'fracinit', rc=rc)
-       call med_methods_MeshMask_diagnose(field_dst, 'dst.'//trim(fname), 'fracinit', rc=rc)
+       !call med_methods_MeshMask_diagnose(field_src, 'src.'//trim(fname), 'fracinit', rc=rc)
+       !call med_methods_MeshMask_diagnose(field_dst, 'dst.'//trim(fname), 'fracinit', rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     end if
 

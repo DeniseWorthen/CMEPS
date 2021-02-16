@@ -1991,6 +1991,7 @@ contains
             is_local%wrap%FBExpAccumCnt(n1) = 0
 
             ! Create mesh info data
+            if(trim(compname(n1)) .eq. 'atm')then
             call med_meshinfo_create(is_local%wrap%FBImp(n1,n1), &
                  is_local%wrap%mesh_info(n1), trim(compname(n1)), rc=rc)
             if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -2003,6 +2004,7 @@ contains
                                                minval(is_local%wrap%mesh_info(n1)%lats), &
                                                maxval(is_local%wrap%mesh_info(n1)%lats)
             call ESMF_LogWrite(trim(msgString), ESMF_LOGMSG_INFO)
+            end if
          end if
 
          ! The following are FBImp and FBImpAccum mapped to different grids.
@@ -2564,7 +2566,7 @@ contains
     use ESMF , only : ESMF_DistGrid, ESMF_FieldBundle, ESMF_FieldRegridGetArea, ESMF_FieldBundleGet
     use ESMF , only : ESMF_Mesh, ESMF_MeshGet, ESMF_MESHLOC_ELEMENT, ESMF_TYPEKIND_R8
     use ESMF , only : ESMF_SUCCESS, ESMF_FAILURE, ESMF_LogWrite, ESMF_LOGMSG_INFO
-    use ESMF , only : ESMF_ArrayWrite
+    use ESMF , only : ESMF_ArrayWrite, ESMF_DistGridGet
     use med_internalstate_mod , only : mesh_info_type
 
     ! input/output variables
@@ -2584,7 +2586,13 @@ contains
     real(r8), pointer     :: dataptr(:) => null()
     integer(i4) , pointer :: maskMesh(:) => null()
     integer               :: n, dimcount, fieldcount
+    integer, pointer      :: minIndexPTile(:,:)
+    integer, pointer      :: maxIndexPTile(:,:)
+    integer               :: tileCount
+    integer, pointer      :: Dof(:)
+    integer :: ns
     character(len=*),parameter :: subname=' (module_MED:med_meshinfo_create) '
+    character(len=CL)     :: tmpstr
     logical :: nodalDistgridIsPresent, elementDistgridIsPresent
     !-------------------------------------------------------------------------------
 
@@ -2605,10 +2613,26 @@ contains
     call ESMF_MeshGet(lmesh, spatialDim=spatialDim, numOwnedElements=numOwnedElements, &
          nodalDistgridIsPresent=nodalDistgridIsPresent,&
          elementDistgridIsPresent=elementDistgridIsPresent,&
-         elementDistgrid=distgrid,rc=rc)
+         elementDistgrid=Distgrid,rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     if(nodalDistgridIsPresent)call ESMF_LogWrite('nodal distgrid is present', ESMF_LOGMSG_INFO)
     if(elementDistgridIsPresent)call ESMF_LogWrite('element distgrid is present', ESMF_LOGMSG_INFO)
+
+    call ESMF_DistGridGet(Distgrid,  dimCount=dimCount, tileCount=tileCount, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+    allocate(minIndexPTile(dimCount, tileCount), maxIndexPTile(dimCount, tileCount))
+    call ESMF_DistGridGet(distgrid, minIndexPTile=minIndexPTile, &
+          maxIndexPTile=maxIndexPTile, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+    call ESMF_DistGridGet(distgrid, localDE=0, elementCount=ns, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+     allocate(dof(ns))
+     call ESMF_DistGridGet(distgrid, localDE=0, seqIndexList=dof, rc=rc)
+     write(tmpstr,*) subname,' dof = ',ns,size(dof),dof(1),dof(ns)  !,minval(dof),maxval(dof)
+     call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO)
 
     ! Obtain mesh info areas
     call ESMF_FieldRegridGetArea(lfield, rc=rc)
@@ -2616,7 +2640,8 @@ contains
     allocate(mesh_info%areas(numOwnedElements))
     call ESMF_FieldGet(lfield, farrayPtr=dataptr, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    mesh_info%areas(:) = dataptr
+    mesh_info%areas(:) = dataptr(:)
+    print *,'XXX ',lbound(dataptr,),ubound(dataptr,1)
 
     ! Obtain mesh longitudes and latitudes
     allocate(mesh_info%lats(numOwnedElements))
@@ -2641,6 +2666,8 @@ contains
 
     call ESMF_ArrayWrite(elemMaskArray, 'test.'//trim(lstring)//'.nc', variableName = 'mesh', &
          overwrite=.true., rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_ArrayDestroy(elemMaskArray, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     deallocate(maskMesh)
 

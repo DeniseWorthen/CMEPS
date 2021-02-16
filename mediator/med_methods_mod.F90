@@ -2522,6 +2522,7 @@ contains
     character(len=CL)          :: fname
     integer(i4) , pointer      :: maskMesh(:) => null()
     character(len=*),parameter :: subname='(med_methods_MeshMask_diagnose)'
+    character(len=CL)          :: tmpstr
     ! ----------------------------------------------
 
     if (dbug_flag > 10) then
@@ -2540,9 +2541,15 @@ contains
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
     ! Determine dimensions in mesh
-    call ESMF_MeshGet(lmesh, spatialDim=spatialDim, numOwnedElements=numOwnedElements, &
-         elementDistgrid=distgrid,rc=rc)
+    !call ESMF_MeshGet(lmesh, spatialDim=spatialDim, numOwnedElements=numOwnedElements, &
+    !     elementDistgrid=distgrid,rc=rc)
+    call ESMF_MeshGet(lmesh, elementDistgrid=Distgrid, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_MeshGet(lmesh, spatialDim=spatialDim, numOwnedElements=numOwnedElements, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+    write(tmpstr,*) subname, 'ndims, nelements = ', spatialDim, numOwnedElements
+    call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO)
 
     ! Obtain mesh mask
     allocate(maskMesh(numOwnedElements))

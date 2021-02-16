@@ -310,6 +310,9 @@ contains
        if (mastertask) then
           write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
        end if
+       fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
+       call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'b4.rgstore', rc=rc)
+       call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'b4.rgstore', rc=rc)
        call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mapbilnr), &
             srcMaskValues=(/srcMaskValue/), &
             dstMaskValues=(/dstMaskValue/), &
@@ -320,8 +323,8 @@ contains
             unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
        fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
-       call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'rgstore', rc=rc)
-       call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'rgstore', rc=rc)
+       call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'af.rgstore', rc=rc)
+       call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'af.rgstore', rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     else if (mapindex == mapfillv_bilnr) then
        if (mastertask) then
@@ -599,8 +602,8 @@ contains
                               //compname(n1)//'->'//compname(n2)//' with mapping '//mapnames(m)
                       endif
        fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapnames(m))
-       call med_methods_MeshMask_diagnose(field_src, 'src.'//trim(fname), 'norminit', rc=rc)
-       call med_methods_MeshMask_diagnose(is_local%wrap%field_NormOne(n1,n2,m), 'dst.'//trim(fname), 'norminit', rc=rc)
+       !call med_methods_MeshMask_diagnose(field_src, 'src.'//trim(fname), 'norminit', rc=rc)
+       !call med_methods_MeshMask_diagnose(is_local%wrap%field_NormOne(n1,n2,m), 'dst.'//trim(fname), 'norminit', rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
                    end if
                 end do ! end of loop over m mappers
