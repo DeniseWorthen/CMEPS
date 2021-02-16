@@ -233,6 +233,7 @@ contains
     ! local variables
     character(len=CS)          :: string
     character(len=CS)          :: mapname
+    character(len=CL)          :: fname
     integer                    :: srcMaskValue
     integer                    :: dstMaskValue
     character(len=ESMF_MAXSTR) :: lmapfile
@@ -308,6 +309,9 @@ contains
        if (mastertask) then
           write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
        end if
+       fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
+       call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'b4.rgstore', rc=rc)
+       call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'b4.rgstore', rc=rc)
        call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mapbilnr), &
             srcMaskValues=(/srcMaskValue/), &
             dstMaskValues=(/dstMaskValue/), &
@@ -317,23 +321,29 @@ contains
             ignoreDegenerate=.true., &
             unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
-    else if (mapindex == mapfillv_bilnr) then
-       if (mastertask) then
-          write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
-       end if
-       call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mapfillv_bilnr), &
-            srcMaskValues=(/srcMaskValue/), &
-            dstMaskValues=(/dstMaskValue/), &
-            regridmethod=ESMF_REGRIDMETHOD_BILINEAR, &
-            polemethod=polemethod, &
-            srcTermProcessing=srcTermProcessing_Value, &
-            ignoreDegenerate=.true., &
-            unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, rc=rc)
-       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
+       call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'af.rgstore', rc=rc)
+       call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'af.rgstore', rc=rc)
+    !else if (mapindex == mapfillv_bilnr) then
+    !   if (mastertask) then
+    !      write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
+    !   end if
+    !   call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mapfillv_bilnr), &
+    !        srcMaskValues=(/srcMaskValue/), &
+    !        dstMaskValues=(/dstMaskValue/), &
+    !        regridmethod=ESMF_REGRIDMETHOD_BILINEAR, &
+    !        polemethod=polemethod, &
+    !        srcTermProcessing=srcTermProcessing_Value, &
+    !        ignoreDegenerate=.true., &
+    !        unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, rc=rc)
+    !   if (chkerr(rc,__LINE__,u_FILE_u)) return
     else if (mapindex == mapconsf .or. mapindex == mapnstod_consf) then
        if (mastertask) then
           write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
        end if
+       fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
+       call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'b4.rgstore', rc=rc)
+       call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'b4.rgstore', rc=rc)
        call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mapconsf), &
             srcMaskValues=(/srcMaskValue/), &
             dstMaskValues=(/dstMaskValue/), &
@@ -344,10 +354,16 @@ contains
             unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
             rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
+       fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
+       call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'af.rgstore', rc=rc)
+       call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'af.rgstore', rc=rc)
     else if (mapindex == mapconsd .or. mapindex == mapnstod_consd) then
        if (mastertask) then
           write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
        end if
+       fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
+       call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'b4.rgstore', rc=rc)
+       call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'b4.rgstore', rc=rc)
        call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mapconsd), &
             srcMaskValues=(/srcMaskValue/), &
             dstMaskValues=(/dstMaskValue/), &
@@ -358,6 +374,9 @@ contains
             unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
             rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
+       fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
+       call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'af.rgstore', rc=rc)
+       call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'af.rgstore', rc=rc)
     else if (mapindex == mappatch .or. mapindex == mappatch_uv3d) then
        if (mastertask) then
           write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
