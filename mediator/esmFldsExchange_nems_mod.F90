@@ -34,6 +34,7 @@ contains
     use esmflds               , only : coupling_mode, mapnames
     use esmflds               , only : fldListTo, fldListFr, fldListMed_aoflux, fldListMed_ocnalb
     use med_internalstate_mod , only : mastertask, logunit
+    use esmflds               , only : test_norm
 
     ! input/output parameters:
     type(ESMF_GridComp)              :: gcomp
@@ -65,7 +66,8 @@ contains
       normtype = 'none'
     else
       maptype = mapconsf
-      normtype = 'aonorm'
+    !  normtype = 'aonorm'
+      normtype = trim(test_norm)
     end if
     write(msgString,'(A,i6,A)') trim(subname)//': maptype is ',maptype,', '//mapnames(maptype)
     call ESMF_LogWrite(trim(msgString), ESMF_LOGMSG_INFO)

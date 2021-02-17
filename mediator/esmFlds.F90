@@ -76,6 +76,7 @@ module esmflds
   !-----------------------------------------------
 
   character(len=CS), public :: coupling_mode ! valid values are [cesm,nems_orig,nems_frac,nems_orig_data,hafs]
+  character(len=CS), public :: test_norm
 
   !-----------------------------------------------
   ! Name of model components

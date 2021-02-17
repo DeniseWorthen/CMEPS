@@ -43,6 +43,7 @@ module MED
   use esmFldsExchange_nems_mod , only : esmFldsExchange_nems
   use esmFldsExchange_cesm_mod , only : esmFldsExchange_cesm
   use esmFldsExchange_hafs_mod , only : esmFldsExchange_hafs
+  use esmFlds                  , only : test_norm
 
   implicit none
   private
@@ -745,6 +746,9 @@ contains
        write(logunit,*) '========================================================'
        write(logunit,*)
     end if
+    call NUOPC_CompAttributeGet(gcomp, name='test_norm', value=test_norm, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_LogWrite('test_norm = '// trim(test_norm), ESMF_LOGMSG_INFO)
 
     if (trim(coupling_mode) == 'cesm') then
        call esmFldsExchange_cesm(gcomp, phase='advertise', rc=rc)
