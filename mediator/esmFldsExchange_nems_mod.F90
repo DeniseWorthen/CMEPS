@@ -66,7 +66,7 @@ contains
       normtype = 'none'
     else
       maptype = mapconsf
-    !  normtype = 'aonorm'
+    !  normtype = 'aofrac'
       normtype = trim(test_norm)
     end if
     write(msgString,'(A,i6,A)') trim(subname)//': maptype is ',maptype,', '//mapnames(maptype)

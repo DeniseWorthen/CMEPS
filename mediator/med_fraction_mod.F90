@@ -17,7 +17,7 @@ module med_fraction_mod
   !
   !  the fractions fields are defined for each grid in the fraction bundles as
   !    needed as follows.
-  !    character(*),parameter :: fraclist_a = 'ifrac:ofrac:lfrac:aonorm
+  !    character(*),parameter :: fraclist_a = 'ifrac:ofrac:lfrac:aofrac
   !    character(*),parameter :: fraclist_o = 'ifrac:ofrac:ifrad:ofrad'
   !    character(*),parameter :: fraclist_i = 'ifrac:ofrac'
   !    character(*),parameter :: fraclist_l = 'lfrac'
@@ -120,7 +120,7 @@ module med_fraction_mod
 
   integer, parameter                      :: nfracs = 5
   character(len=6)                        :: fraclist(nfracs,ncomps)
-  character(len=6),parameter,dimension(4) :: fraclist_a = (/'ifrac ','ofrac ','lfrac ','aonorm'/)
+  character(len=6),parameter,dimension(4) :: fraclist_a = (/'ifrac ','ofrac ','lfrac ','aofrac'/)
   character(len=6),parameter,dimension(4) :: fraclist_o = (/'ifrac ','ofrac ','ifrad ','ofrad '/)
   character(len=6),parameter,dimension(2) :: fraclist_i = (/'ifrac ','ofrac '/)
   character(len=6),parameter,dimension(1) :: fraclist_l = (/'lfrac '/)
@@ -630,7 +630,7 @@ contains
     real(r8), pointer          :: lfrac(:) => null()
     real(r8), pointer          :: ifrac(:) => null()
     real(r8), pointer          :: ofrac(:) => null()
-    real(r8), pointer          :: aonorm(:) => null()
+    real(r8), pointer          :: aofrac(:) => null()
     real(r8), pointer          :: Si_ifrac(:) => null()
     real(r8), pointer          :: Si_imask(:) => null()
     real(r8), pointer          :: Sa_ofrac(:) => null()
@@ -757,13 +757,13 @@ contains
              if (ChkErr(rc,__LINE__,u_FILE_u)) return
           end if
 
-          ! Set 'aonorm' from FBImp(compatm) to FBfrac(compatm)
+          ! Set 'aofrac' from FBImp(compatm) to FBfrac(compatm)
           if (trim(coupling_mode) == 'nems_orig' .or. trim(coupling_mode) == 'nems_frac') then
              call fldbun_getdata1d(is_local%wrap%FBImp(compatm,compatm), 'Sa_ofrac', Sa_ofrac, rc)
              if (ChkErr(rc,__LINE__,u_FILE_u)) return
-             call fldbun_getdata1d(is_local%wrap%FBFrac(compatm), 'aonorm', aonorm, rc)
+             call fldbun_getdata1d(is_local%wrap%FBFrac(compatm), 'aofrac', aofrac, rc)
              if (ChkErr(rc,__LINE__,u_FILE_u)) return
-             aonorm(:) = Sa_ofrac(:)
+             aofrac(:) = Sa_ofrac(:)
           end if
 
        end if ! end of if present compatm
