@@ -17,7 +17,7 @@ module med_fraction_mod
   !
   !  the fractions fields are defined for each grid in the fraction bundles as
   !    needed as follows.
-  !    character(*),parameter :: fraclist_a = 'ifrac:ofrac:lfrac:onorm
+  !    character(*),parameter :: fraclist_a = 'ifrac:ofrac:lfrac:aonorm
   !    character(*),parameter :: fraclist_o = 'ifrac:ofrac:ifrad:ofrad'
   !    character(*),parameter :: fraclist_i = 'ifrac:ofrac'
   !    character(*),parameter :: fraclist_l = 'lfrac'
@@ -119,14 +119,14 @@ module med_fraction_mod
   public med_fraction_set
 
   integer, parameter                      :: nfracs = 5
-  character(len=5)                        :: fraclist(nfracs,ncomps)
-  character(len=5),parameter,dimension(4) :: fraclist_a = (/'ifrac','ofrac','lfrac','onorm'/)
-  character(len=5),parameter,dimension(4) :: fraclist_o = (/'ifrac','ofrac','ifrad','ofrad'/)
-  character(len=5),parameter,dimension(2) :: fraclist_i = (/'ifrac','ofrac'/)
-  character(len=5),parameter,dimension(1) :: fraclist_l = (/'lfrac'/)
-  character(len=5),parameter,dimension(2) :: fraclist_g = (/'gfrac','lfrac'/)
-  character(len=5),parameter,dimension(2) :: fraclist_r = (/'rfrac','lfrac'/)
-  character(len=5),parameter,dimension(1) :: fraclist_w = (/'wfrac'/)
+  character(len=6)                        :: fraclist(nfracs,ncomps)
+  character(len=6),parameter,dimension(4) :: fraclist_a = (/'ifrac ','ofrac ','lfrac ','aonorm'/)
+  character(len=6),parameter,dimension(4) :: fraclist_o = (/'ifrac ','ofrac ','ifrad ','ofrad '/)
+  character(len=6),parameter,dimension(2) :: fraclist_i = (/'ifrac ','ofrac '/)
+  character(len=6),parameter,dimension(1) :: fraclist_l = (/'lfrac '/)
+  character(len=6),parameter,dimension(2) :: fraclist_g = (/'gfrac ','lfrac '/)
+  character(len=6),parameter,dimension(2) :: fraclist_r = (/'rfrac ','lfrac '/)
+  character(len=6),parameter,dimension(1) :: fraclist_w = (/'wfrac '/)
 
   !--- standard ---
   real(R8)    , parameter :: eps_fraclim = 1.0e-03      ! truncation limit in fractions_a(lfrac)
@@ -295,7 +295,7 @@ contains
     end if
 
     !---------------------------------------
-    ! Set 'ofrac' in FBFrac(compocn) 
+    ! Set 'ofrac' in FBFrac(compocn)
     !---------------------------------------
 
     if (is_local%wrap%comp_present(compocn)) then
@@ -630,7 +630,7 @@ contains
     real(r8), pointer          :: lfrac(:) => null()
     real(r8), pointer          :: ifrac(:) => null()
     real(r8), pointer          :: ofrac(:) => null()
-    real(r8), pointer          :: onorm(:) => null()
+    real(r8), pointer          :: aonorm(:) => null()
     real(r8), pointer          :: Si_ifrac(:) => null()
     real(r8), pointer          :: Si_imask(:) => null()
     real(r8), pointer          :: Sa_ofrac(:) => null()
@@ -683,7 +683,7 @@ contains
        ! The model mask is normally assumed to be an selected ocean mask from a fully coupled run
        ! So in it is (1-land fraction) on the atm grid
 
-       ! set ifrac 
+       ! set ifrac
        if (associated(ifrac)) then
           ifrac(:) = Si_ifrac(:) * Si_imask(:)
        endif
@@ -757,14 +757,13 @@ contains
              if (ChkErr(rc,__LINE__,u_FILE_u)) return
           end if
 
-          ! Set 'onorm' from FBImp(compatm) to FBfrac(compatm)
-          !if (trim(coupling_mode) == 'nems_frac') then
+          ! Set 'aonorm' from FBImp(compatm) to FBfrac(compatm)
           if (trim(coupling_mode) == 'nems_orig' .or. trim(coupling_mode) == 'nems_frac') then
              call fldbun_getdata1d(is_local%wrap%FBImp(compatm,compatm), 'Sa_ofrac', Sa_ofrac, rc)
              if (ChkErr(rc,__LINE__,u_FILE_u)) return
-             call fldbun_getdata1d(is_local%wrap%FBFrac(compatm), 'onorm', onorm, rc)
+             call fldbun_getdata1d(is_local%wrap%FBFrac(compatm), 'aonorm', aonorm, rc)
              if (ChkErr(rc,__LINE__,u_FILE_u)) return
-             onorm(:) = Sa_ofrac(:)
+             aonorm(:) = Sa_ofrac(:)
           end if
 
        end if ! end of if present compatm

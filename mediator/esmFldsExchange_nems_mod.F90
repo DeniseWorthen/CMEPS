@@ -62,10 +62,10 @@ contains
     ! Set maptype according to coupling_mode
     if (trim(coupling_mode) == 'nems_orig' .or. trim(coupling_mode) == 'nems_orig_data') then
       maptype = mapnstod_consf
-      !normtype = 'none'
+      normtype = 'none'
     else
       maptype = mapconsf
-      !normtype = 'onorm'
+      normtype = 'aonorm'
     end if
     write(msgString,'(A,i6,A)') trim(subname)//': maptype is ',maptype,', '//mapnames(maptype)
     call ESMF_LogWrite(trim(msgString), ESMF_LOGMSG_INFO)
@@ -169,8 +169,7 @@ contains
     ! to ocn: sea level pressure from atm
     call addfld(fldListTo(compocn)%flds, 'Sa_pslv')
     call addfld(fldListFr(compatm)%flds, 'Sa_pslv')
-    !call addmap(fldListFr(compatm)%flds, 'Sa_pslv', compocn, maptype, 'none', 'unset')
-    call addmap(fldListFr(compatm)%flds, 'Sa_pslv', compocn, maptype, normtype, 'unset')
+    call addmap(fldListFr(compatm)%flds, 'Sa_pslv', compocn, mapbilnr, 'none', 'unset')
     call addmrg(fldListTo(compocn)%flds, 'Sa_pslv', mrg_from=compatm, mrg_fld='Sa_pslv', mrg_type='copy')
 
     ! to ocn: from atm (custom merge in med_phases_prep_ocn)
