@@ -178,6 +178,7 @@ contains
     integer             :: i,j,n,n1,ns
     integer             :: maptype
     logical, save       :: first_call = .true.
+    character(len=CL)   :: tmpstr
     character(len=*),parameter :: subname=' (med_fraction_init)'
     !---------------------------------------
 
@@ -256,6 +257,10 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        if (associated(ifrac)) then
           ifrac(:) = Si_imask(:)
+          write(tmpstr,'(A,2g14.7)') trim(subname)//' ifrac masked min-max: ', &
+               minval(ifrac, mask=ifrac .gt. 0.0_R8), &
+               maxval(ifrac, mask=ifrac .lt. 1.0_R8)
+          call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO)
        end if
     end if
 
@@ -306,6 +311,10 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        if (associated(ofrac)) then
           ofrac(:) = So_omask(:)
+          write(tmpstr,'(A,2g14.7)') trim(subname)//' ofrac masked min-max: ', &
+               minval(ofrac, mask=ofrac .gt. 0.0_R8), &
+               maxval(ofrac, mask=ofrac .lt. 1.0_R8)
+          call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO)
        end if
     end if
 
