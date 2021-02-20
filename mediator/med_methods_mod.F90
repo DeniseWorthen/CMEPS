@@ -5,6 +5,7 @@ module med_methods_mod
   !-----------------------------------------------------------------------------
 
   use med_kind_mod       , only : CX=>SHR_KIND_CX, CS=>SHR_KIND_CS, CL=>SHR_KIND_CL, R8=>SHR_KIND_R8
+  use med_kind_mod       , only : I4=>SHR_KIND_I4
   use ESMF               , only : operator(<), operator(/=), operator(+), operator(-), operator(*) , operator(>=)
   use ESMF               , only : operator(<=), operator(>), operator(==)
   use ESMF               , only : ESMF_FieldStatus_Flag
@@ -72,6 +73,8 @@ module med_methods_mod
   public med_methods_FieldPtr_compare
 
   public med_methods_Clock_TimePrint
+
+  public med_methods_MeshMask_diagnose
 
   private med_methods_Mesh_Print
   private med_methods_Grid_Print
@@ -2491,5 +2494,82 @@ contains
     deallocate(fieldlist)
 
   end subroutine med_methods_FB_getmesh
+!-----------------------------------------------------------------------------
+  subroutine med_methods_MeshMask_diagnose(field, fieldname, string, rc)
+
+    ! ----------------------------------------------
+    ! Diagnose Mesh
+    ! ----------------------------------------------
+
+    use ESMF, only : ESMF_Field, ESMF_FieldGet, ESMF_Mesh, ESMF_MeshGet
+    use ESMF, only : ESMF_Array, ESMF_Distgrid, ESMF_ArrayCreate, ESMF_ArrayWrite
+    use ESMF, only : ESMF_ArrayDestroy
+
+    ! input/output variables
+    type(ESMF_Field) , intent(inout)        :: field
+    character(len=*) , intent(in)           :: fieldname
+    character(len=*) , intent(in), optional :: string
+    integer          , intent(out)          :: rc
+
+    ! local variables
+    type(ESMF_Mesh)            :: lmesh
+    type(ESMF_Array)           :: elemMaskArray
+    type(ESMF_Distgrid)        :: distgrid
+    integer                    :: numOwnedElements
+    integer                    :: spatialDim
+    integer                    :: lrank
+    character(len=CS)          :: lstring
+    character(len=CL)          :: fname
+    integer(i4) , pointer      :: maskMesh(:) => null()
+    character(len=*),parameter :: subname='(med_methods_MeshMask_diagnose)'
+    character(len=CL)          :: tmpstr
+    ! ----------------------------------------------
+
+    if (dbug_flag > 10) then
+      call ESMF_LogWrite(trim(subname)//": called", ESMF_LOGMSG_INFO)
+    endif
+    rc = ESMF_SUCCESS
+
+    lstring = ''
+    if (present(string)) then
+       lstring = trim(string)
+    endif
+
+    fname = trim(lstring)//'.'//trim(fieldname)//'.nc'
+
+    call ESMF_FieldGet(field, mesh=lmesh, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+    ! Determine dimensions in mesh
+    !call ESMF_MeshGet(lmesh, spatialDim=spatialDim, numOwnedElements=numOwnedElements, &
+    !     elementDistgrid=distgrid,rc=rc)
+    call ESMF_MeshGet(lmesh, elementDistgrid=Distgrid, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_MeshGet(lmesh, spatialDim=spatialDim, numOwnedElements=numOwnedElements, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+    write(tmpstr,*) subname, 'ndims, nelements = ', spatialDim, numOwnedElements
+    call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO)
+
+    ! Obtain mesh mask
+    allocate(maskMesh(numOwnedElements))
+    elemMaskArray = ESMF_ArrayCreate(Distgrid, maskMesh, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_MeshGet(lmesh, elemMaskArray=elemMaskArray, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call ESMF_ArrayWrite(elemMaskArray, filename=trim(fname), variableName='mesh', &
+         overwrite=.true., rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    deallocate(maskMesh)
+
+    !?
+    call ESMF_ArrayDestroy(elemMaskArray)
+
+    if (dbug_flag > 10) then
+      call ESMF_LogWrite(trim(subname)//": done", ESMF_LOGMSG_INFO)
+    endif
+
+  end subroutine med_methods_MeshMask_diagnose
 
 end module med_methods_mod
