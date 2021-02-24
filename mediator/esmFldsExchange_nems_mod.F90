@@ -174,7 +174,7 @@ contains
     if (trim(test_interp) == 'mapbilnr' ) then
      call addmap(fldListFr(compatm)%flds, 'Sa_pslv', compocn, mapbilnr, 'none', 'unset')
     else
-     call addmap(fldListFr(compatm)%flds, 'Sa_pslv', compocn, maptype, normtype, 'unset')
+     call addmap(fldListFr(compatm)%flds, 'Sa_pslv', compocn, maptype,  'none', 'unset')
     end if
     call addmrg(fldListTo(compocn)%flds, 'Sa_pslv', mrg_from=compatm, mrg_fld='Sa_pslv', mrg_type='copy')
 

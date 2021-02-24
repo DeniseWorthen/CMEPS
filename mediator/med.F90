@@ -1960,6 +1960,7 @@ contains
             if (mastertask) then
                write(logunit,'(a)') trim(subname)//' initializing FBs for '//trim(compname(n1))
             end if
+            call ESMF_LogWrite(trim(subname)//' initializing FBs for '//trim(compname(n1)),  ESMF_LOGMSG_INFO)
 
             ! Create FBImp(:) with pointers directly into NStateImp(:)
             call FB_init_pointer(is_local%wrap%NStateImp(n1), is_local%wrap%FBImp(n1,n1), &
@@ -2008,6 +2009,8 @@ contains
                   write(logunit,'(a)') trim(subname)//' initializing FBs for '//&
                        trim(compname(n1))//'_'//trim(compname(n2))
                end if
+               call ESMF_LogWrite(trim(subname)//' initializing FBs for '//&
+                       trim(compname(n1))//'_'//trim(compname(n2)), ESMF_LOGMSG_INFO)
 
                call FB_init(is_local%wrap%FBImp(n1,n2), is_local%wrap%flds_scalar_name, &
                     STgeom=is_local%wrap%NStateImp(n2), &

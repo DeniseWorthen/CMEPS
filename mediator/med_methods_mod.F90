@@ -261,7 +261,7 @@ contains
     integer                :: i,j,n,n1
     integer                :: fieldCount,fieldCountgeom
     logical                :: found
-    character(ESMF_MAXSTR) :: lname
+    character(ESMF_MAXSTR) :: lname, fbname
     type(ESMF_Field)       :: field,lfield
     type(ESMF_Mesh)        :: lmesh
     type(ESMF_StaggerLoc)  :: staggerloc
@@ -285,7 +285,8 @@ contains
     if (present(name)) then
       lname = trim(name)
     endif
-    lname = 'FB '//trim(lname)
+    !lname = 'FB '//trim(lname)
+    fbname = trim(lname)
 
     !---------------------------------
     ! check argument consistency and
@@ -510,6 +511,9 @@ contains
 
           ! Add the created field bundle FBout
           if (dbug_flag > 1) then
+           if( n .eq. 1 )call ESMF_LogWrite( &
+           "XXX: "//trim(fbname)//" first field added "//trim(lfieldNameList(n)), ESMF_LOGMSG_INFO)
+
              call ESMF_LogWrite(trim(subname)//":"//trim(lname)//" adding field "//trim(lfieldNameList(n)), &
                   ESMF_LOGMSG_INFO)
           end if
@@ -1873,7 +1877,7 @@ contains
     elseif (geomtype == ESMF_GEOMTYPE_MESH) then
       call ESMF_FieldGet(field, mesh=lmesh, rc=rc)
       if (chkerr(rc,__LINE__,u_FILE_u)) return
-      call med_methods_Mesh_Print(lmesh, string, rc)
+      !call med_methods_Mesh_Print(lmesh, string, rc)
       if (chkerr(rc,__LINE__,u_FILE_u)) return
     endif
 
