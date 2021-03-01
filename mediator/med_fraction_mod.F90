@@ -155,6 +155,8 @@ contains
     use med_map_mod           , only : med_map_routehandles_init, med_map_rh_is_created
     use med_internalstate_mod , only : InternalState, logunit, mastertask
     use perf_mod              , only : t_startf, t_stopf
+    use ESMF                  , only : ESMF_FieldWrite, ESMF_MeshGet, ESMF_DistGridGet, ESMF_DistGrid
+    use ESMF                  , only : ESMF_Mesh, ESMF_MESHLOC_ELEMENT, ESMF_FieldCreate
 
     ! input/output variables
     type(ESMF_GridComp)  :: gcomp
@@ -178,8 +180,11 @@ contains
     integer             :: i,j,n,n1,ns
     integer             :: maptype
     logical, save       :: first_call = .true.
-    character(len=CL)   :: tmpstr
     character(len=*),parameter :: subname=' (med_fraction_init)'
+    integer, pointer    :: Dof(:)
+    type(ESMF_Field)    :: doffield
+    type(ESMF_Mesh)     :: lmesh
+    type(ESMF_DistGrid) :: distgrid
     !---------------------------------------
 
     call t_startf('MED:'//subname)
@@ -257,10 +262,6 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        if (associated(ifrac)) then
           ifrac(:) = Si_imask(:)
-          write(tmpstr,'(A,2g14.7)') trim(subname)//' ifrac masked min-max: ', &
-               minval(ifrac, mask=ifrac .gt. 0.0_R8), &
-               maxval(ifrac, mask=ifrac .lt. 1.0_R8)
-          call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO)
        end if
     end if
 
@@ -297,6 +298,21 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        call med_map_field(field_src, field_dst, is_local%wrap%RH(compice,compatm,:), maptype, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       call ESMF_FieldGet(field_dst, mesh=lmesh, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_MeshGet(lmesh, elementDistgrid=distgrid, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_DistGridGet(distgrid, localDE=0, elementCount=ns, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       allocate(dof(ns))
+       call ESMF_DistGridGet(distgrid, localDE=0, seqIndexList=dof, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       doffield = ESMF_FieldCreate(lmesh, dof, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_FieldWrite(doffield, fileName='dof.atm.ifrac.nc', variableName='dof', overwrite=.true., rc=rc)
+
+       call ESMF_FieldWrite(field_dst, fileName='dst.atm.ifrac.nc', variableName='ifrac', overwrite=.true., rc=rc)
     end if
 
     !---------------------------------------
@@ -311,10 +327,6 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        if (associated(ofrac)) then
           ofrac(:) = So_omask(:)
-          write(tmpstr,'(A,2g14.7)') trim(subname)//' ofrac masked min-max: ', &
-               minval(ofrac, mask=ofrac .gt. 0.0_R8), &
-               maxval(ofrac, mask=ofrac .lt. 1.0_R8)
-          call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO)
        end if
     end if
 
