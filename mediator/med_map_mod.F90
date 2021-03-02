@@ -128,15 +128,23 @@ contains
        do n2 = 1, ncomps
           if (n1 /= n2) then
              if (is_local%wrap%med_coupling_active(n1,n2)) then ! If coupling is active between n1 and n2
+
                 ! Get source and destination fields
-                call med_methods_FB_getNumFlds(is_local%wrap%FBImp(n1,n1), 'FBImp', nflds, rc)
+                call med_methods_FB_getFieldN(is_local%wrap%FBImp(n1,n1), 1, fldsrc, rc)
                 if (chkerr(rc,__LINE__,u_FILE_u)) return
-                call med_methods_FB_getFieldN(is_local%wrap%FBImp(n1,n1), nflds, fldsrc, rc)
+                call med_methods_FB_getFieldN(is_local%wrap%FBImp(n1,n2), 1, flddst, rc)
                 if (chkerr(rc,__LINE__,u_FILE_u)) return
-                call med_methods_FB_getNumFlds(is_local%wrap%FBImp(n1,n2), 'FBImp', nflds, rc)
-                if (chkerr(rc,__LINE__,u_FILE_u)) return
-                call med_methods_FB_getFieldN(is_local%wrap%FBImp(n1,n2), nflds, flddst, rc)
-                if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+                ! Test using last field not first field
+                ! Get source and destination fields
+                !call med_methods_FB_getNumFlds(is_local%wrap%FBImp(n1,n1), 'FBImp', nflds, rc)
+                !if (chkerr(rc,__LINE__,u_FILE_u)) return
+                !call med_methods_FB_getFieldN(is_local%wrap%FBImp(n1,n1), nflds, fldsrc, rc)
+                !if (chkerr(rc,__LINE__,u_FILE_u)) return
+                !call med_methods_FB_getNumFlds(is_local%wrap%FBImp(n1,n2), 'FBImp', nflds, rc)
+                !if (chkerr(rc,__LINE__,u_FILE_u)) return
+                !call med_methods_FB_getFieldN(is_local%wrap%FBImp(n1,n2), nflds, flddst, rc)
+                !if (chkerr(rc,__LINE__,u_FILE_u)) return
 
     ! create a field for dstStatusField
     call med_methods_FB_getNameN(is_local%wrap%FBImp(n2,n2), 1, fldname, rc)
@@ -243,15 +251,20 @@ contains
        call ESMF_LogWrite(trim(subname)//": start", ESMF_LOGMSG_INFO)
     endif
 
-    call med_methods_FB_getNumFlds(FBsrc, 'FBsrc', nflds, rc)
+    call med_methods_FB_getFieldN(FBsrc, 1, fldsrc, rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call med_methods_FB_getFieldN(FBsrc, nflds, fldsrc, rc)
+    call med_methods_FB_getFieldN(FBDst, 1, flddst, rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
-    call med_methods_FB_getNumFlds(FBDst, 'FBdst', nflds, rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call med_methods_FB_getFieldN(FBDst, nflds, flddst, rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    ! Test using last field
+    !call med_methods_FB_getNumFlds(FBsrc, 'FBsrc', nflds, rc)
+    !if (chkerr(rc,__LINE__,u_FILE_u)) return
+    !call med_methods_FB_getFieldN(FBsrc, nflds, fldsrc, rc)
+    !if (chkerr(rc,__LINE__,u_FILE_u)) return
+    !call med_methods_FB_getNumFlds(FBDst, 'FBdst', nflds, rc)
+    !if (chkerr(rc,__LINE__,u_FILE_u)) return
+    !call med_methods_FB_getFieldN(FBDst, nflds, flddst, rc)
+    !if (chkerr(rc,__LINE__,u_FILE_u)) return
 
     ! create a field for dstStatusField
     call med_methods_FB_getmesh(FBDst, lmesh, rc)
@@ -264,10 +277,11 @@ contains
     ! write flddst_debug 
     mapname = trim(mapnames(mapindex))
     if(trim(mapname) .eq. 'consd' .or. trim(mapname) .eq. 'consf' .or. trim(mapname) .eq. 'bilnr')then
-     call med_methods_FB_getNameN(FBDst,  nflds, fldname, rc)
+     ! Test using last field
+     !call med_methods_FB_getNameN(FBDst,  nflds, fldname, rc)
+     call med_methods_FB_getNameN(FBDst,  1, fldname, rc)
      if (chkerr(rc,__LINE__,u_FILE_u)) return
      fname = 'rh.fb.'//trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)//'.'//trim(fldname)//'.nc'
-     !call med_methods_MeshField_Write(flddst_debug, trim(fname), 'dststatus',rc=rc)
      call ESMF_FieldWrite(flddst_debug, filename=trim(fname), variableName='dststatus', overwrite=.true., rc=rc)
      if (chkerr(rc,__LINE__,u_FILE_u)) return
     end if
@@ -321,16 +335,11 @@ contains
     integer                    :: srcTermProcessing_Value = 0
     type(ESMF_PoleMethod_Flag), parameter :: polemethod=ESMF_POLEMETHOD_ALLAVG
     character(len=*), parameter :: subname=' (module_med_map: med_map_routehandles_initfrom_field) '
-    type(ESMF_Field)            :: flddst_debug
     !---------------------------------------------
 
     lmapfile = 'unset'
     if (present(mapfile)) then
        lmapfile = trim(mapfile)
-    end if
-
-    if(present(lfield)) then
-     flddst_debug = lfield
     end if
 
     mapname = trim(mapnames(mapindex))
@@ -394,9 +403,9 @@ contains
        if (mastertask) then
           write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
        end if
-       fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
-       call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'b4.rgstore', rc=rc)
-       call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'b4.rgstore', rc=rc)
+       !fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
+       !call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'b4.rgstore', rc=rc)
+       !call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'b4.rgstore', rc=rc)
        if(present(lfield))then
        call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mapbilnr), &
             srcMaskValues=(/srcMaskValue/), &
@@ -419,9 +428,9 @@ contains
             unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
        end if
-       fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
-       call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'af.rgstore', rc=rc)
-       call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'af.rgstore', rc=rc)
+       !fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
+       !call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'af.rgstore', rc=rc)
+       !call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'af.rgstore', rc=rc)
     else if (mapindex == mapfillv_bilnr) then
        if (mastertask) then
           write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
@@ -439,9 +448,9 @@ contains
        if (mastertask) then
           write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
        end if
-       fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
-       call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'b4.rgstore', rc=rc)
-       call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'b4.rgstore', rc=rc)
+       !fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
+       !call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'b4.rgstore', rc=rc)
+       !call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'b4.rgstore', rc=rc)
        if(present(lfield))then
        call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mapconsf), &
             srcMaskValues=(/srcMaskValue/), &
@@ -466,16 +475,16 @@ contains
             rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
        end if
-       fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
-       call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'af.rgstore', rc=rc)
-       call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'af.rgstore', rc=rc)
+       !fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
+       !call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'af.rgstore', rc=rc)
+       !call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'af.rgstore', rc=rc)
     else if (mapindex == mapconsd .or. mapindex == mapnstod_consd) then
        if (mastertask) then
           write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
        end if
-       fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
-       call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'b4.rgstore', rc=rc)
-       call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'b4.rgstore', rc=rc)
+       !fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
+       !call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'b4.rgstore', rc=rc)
+       !call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'b4.rgstore', rc=rc)
        if(present(lfield))then
        call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mapconsd), &
             srcMaskValues=(/srcMaskValue/), &
@@ -500,9 +509,9 @@ contains
             rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
        end if
-       fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
-       call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'af.rgstore', rc=rc)
-       call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'af.rgstore', rc=rc)
+       !fname = trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)
+       !call med_methods_MeshMask_diagnose(fldsrc, 'src.'//trim(fname), 'af.rgstore', rc=rc)
+       !call med_methods_MeshMask_diagnose(flddst, 'dst.'//trim(fname), 'af.rgstore', rc=rc)
     else if (mapindex == mappatch .or. mapindex == mappatch_uv3d) then
        if (mastertask) then
           write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)

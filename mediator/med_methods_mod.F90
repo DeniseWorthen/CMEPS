@@ -5,7 +5,6 @@ module med_methods_mod
   !-----------------------------------------------------------------------------
 
   use med_kind_mod       , only : CX=>SHR_KIND_CX, CS=>SHR_KIND_CS, CL=>SHR_KIND_CL, R8=>SHR_KIND_R8
-  use med_kind_mod       , only : I4=>SHR_KIND_I4
   use ESMF               , only : operator(<), operator(/=), operator(+), operator(-), operator(*) , operator(>=)
   use ESMF               , only : operator(<=), operator(>), operator(==)
   use ESMF               , only : ESMF_FieldStatus_Flag
@@ -2508,6 +2507,7 @@ contains
     use ESMF, only : ESMF_Field, ESMF_FieldGet, ESMF_Mesh, ESMF_MeshGet
     use ESMF, only : ESMF_Array, ESMF_Distgrid, ESMF_ArrayCreate, ESMF_ArrayWrite
     use ESMF, only : ESMF_ArrayDestroy
+    use med_kind_mod       , only : I4=>SHR_KIND_I4
 
     ! input/output variables
     type(ESMF_Field) , intent(inout)        :: field
