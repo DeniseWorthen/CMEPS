@@ -313,6 +313,22 @@ contains
        call ESMF_FieldWrite(doffield, fileName='dof.atm.ifrac.nc', variableName='dof', overwrite=.true., rc=rc)
 
        call ESMF_FieldWrite(field_dst, fileName='dst.atm.ifrac.nc', variableName='ifrac', overwrite=.true., rc=rc)
+       deallocate(dof)
+
+       call ESMF_FieldGet(field_src, mesh=lmesh, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_MeshGet(lmesh, elementDistgrid=distgrid, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_DistGridGet(distgrid, localDE=0, elementCount=ns, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       allocate(dof(ns))
+       call ESMF_DistGridGet(distgrid, localDE=0, seqIndexList=dof, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       doffield = ESMF_FieldCreate(lmesh, dof, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_FieldWrite(doffield, fileName='dof.ice.ifrac.nc', variableName='dof', overwrite=.true., rc=rc)
+       deallocate(dof)
+
     end if
 
     !---------------------------------------
@@ -365,6 +381,20 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        call med_map_field(field_src, field_dst, is_local%wrap%RH(compocn,compatm,:), maptype, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+       call ESMF_FieldGet(field_src, mesh=lmesh, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_MeshGet(lmesh, elementDistgrid=distgrid, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_DistGridGet(distgrid, localDE=0, elementCount=ns, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       allocate(dof(ns))
+       call ESMF_DistGridGet(distgrid, localDE=0, seqIndexList=dof, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       doffield = ESMF_FieldCreate(lmesh, dof, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_FieldWrite(doffield, fileName='dof.ocn.ofrac.nc', variableName='dof', overwrite=.true., rc=rc)
+       deallocate(dof)
     end if
 
     !---------------------------------------

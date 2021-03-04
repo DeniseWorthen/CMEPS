@@ -1871,7 +1871,7 @@ contains
     if (geomtype == ESMF_GEOMTYPE_GRID) then
       call ESMF_FieldGet(field, grid=lgrid, rc=rc)
       if (chkerr(rc,__LINE__,u_FILE_u)) return
-      call med_methods_Grid_Print(lgrid, string, rc)
+      !call med_methods_Grid_Print(lgrid, string, rc)
       if (chkerr(rc,__LINE__,u_FILE_u)) return
     elseif (geomtype == ESMF_GEOMTYPE_MESH) then
       call ESMF_FieldGet(field, mesh=lmesh, rc=rc)
@@ -1894,9 +1894,9 @@ contains
       call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO)
       write (msgString,*) trim(subname)//":"//trim(string)//": dataptr bounds dim=2 ",lbound(dataptr2,2),ubound(dataptr2,2)
       call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO)
-    elseif (lrank == 0) then
+    !elseif (lrank == 0) then
       ! means data allocation does not exist yet
-      continue
+    !  continue
     else
        call ESMF_LogWrite(trim(subname)//": ERROR rank not supported ", &
             ESMF_LOGMSG_ERROR, line=__LINE__, file=u_FILE_u)

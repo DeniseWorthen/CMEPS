@@ -83,7 +83,7 @@ contains
 
     use ESMF            , only : ESMF_Mesh, ESMF_MeshLoc, ESMF_MESHLOC_ELEMENT, ESMF_TYPEKIND_I4
     use ESMF            , only : ESMF_FieldCreate, ESMF_FieldDestroy
-    use ESMF            , only : ESMF_FieldWrite
+    use ESMF            , only : ESMF_FieldWrite, ESMF_LOGMSG_INFO
     use esmFlds         , only : mapnames
     use esmFlds         , only : compname
 
@@ -107,6 +107,7 @@ contains
     logical             :: mapexists = .false.
     character(len=*), parameter :: subname=' (module_med_map: RouteHandles_init) '
     integer             :: nflds
+    character(len=CX)   :: tmpstr
     !-----------------------------------------------------------
 
     call t_startf('MED:'//subname)
@@ -147,9 +148,9 @@ contains
                 !if (chkerr(rc,__LINE__,u_FILE_u)) return
 
     ! create a field for dstStatusField
-    call med_methods_FB_getNameN(is_local%wrap%FBImp(n2,n2), 1, fldname, rc)
-    call ESMF_LogWrite(trim(subname)//": using Imp(n2,n2) mesh "//trim(fldname), ESMF_LOGMSG_INFO)
-    call med_methods_FB_getmesh(is_local%wrap%FBImp(n2,n2), lmesh, rc)
+    call med_methods_FB_getNameN(is_local%wrap%FBImp(n1,n2), 1, fldname, rc)
+    call ESMF_LogWrite(trim(subname)//": using FBImp(n1,n2) mesh,field "//trim(fldname), ESMF_LOGMSG_INFO)
+    call med_methods_FB_getmesh(is_local%wrap%FBImp(n1,n2), lmesh, rc)
     flddst_debug = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_I4, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
@@ -163,6 +164,8 @@ contains
 
                 ! Loop over fields
                 do nf = 1,size(fldListFr(n1)%flds)
+    write(tmpstr,*)trim(subname)//": using field ",nf,trim(fldListFr(n1)%flds(nf)%stdname)
+    call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO)
 
                    ! Determine the mapping type for mapping field nf from n1 to n2
                    mapindex = fldListFr(n1)%flds(nf)%mapindex(n2)
@@ -171,11 +174,15 @@ contains
                       ! determine if route handle has already been created
                       mapexists = med_map_RH_is_created(is_local%wrap%RH,n1,n2,mapindex,rc=rc)
                       if (chkerr(rc,__LINE__,u_FILE_u)) return
+    if(mapexists)call ESMF_LogWrite(trim(subname)//": already have RH for "//trim(compname(n1))// &
+    "."//trim(compname(n2))//"  "//trim(mapnames(mapindex)), ESMF_LOGMSG_INFO)
 
                       ! Create route handle for target mapindex if route handle is required
                       ! (i.e. mapindex /= mapunset) and route handle has not already been created
                       if (.not. mapexists) then
                          mapfile = trim(fldListFr(n1)%flds(nf)%mapfile(n2))
+    call ESMF_LogWrite(trim(subname)//": creating RH "//trim(fldListFr(n1)%flds(nf)%stdname)//"  "//trim(compname(n1))// &
+    "."//trim(compname(n2))//"  "//trim(mapnames(mapindex)), ESMF_LOGMSG_INFO)
                          call med_map_routehandles_initfrom_field(n1, n2, fldsrc, flddst, &
                               mapindex, is_local%wrap%rh(n1,n2,:), mapfile=trim(mapfile), lfield=flddst_debug, rc=rc)
                          if (chkerr(rc,__LINE__,u_FILE_u)) return
@@ -190,7 +197,9 @@ contains
     end if
 
                       end if
-
+                   else
+    write(tmpstr,*)trim(subname)//": mapindex unset for field ",nf,trim(fldListFr(n1)%flds(nf)%stdname)
+    call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO)
                    end if ! end if mapindex is mapunset
                 end do ! loop over fields
     call ESMF_FieldDestroy(flddst_debug, rc=rc)
@@ -271,6 +280,8 @@ contains
     flddst_debug = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_I4, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
+    call ESMF_LogWrite(trim(subname)//": creating RH "//trim(compname(n1))// &
+    "."//trim(compname(n2))//"  "//trim(mapnames(mapindex)), ESMF_LOGMSG_INFO)
     call med_map_routehandles_initfrom_field(n1, n2, fldsrc, flddst, mapindex, routehandle(n1,n2,:), lfield=flddst_debug, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
@@ -351,8 +362,13 @@ contains
        if (n2 == compocn .or. n2 == compice) dstMaskValue = 0
     else if (coupling_mode(1:4) == 'nems') then
        if (n1 == compatm .and. (n2 == compocn .or. n2 == compice)) then
-          srcMaskValue = 1
-          dstMaskValue = 0
+          if (mapindex == mapbilnr) then
+            srcMaskValue = ispval_mask
+            dstMaskValue = 0
+          else
+            srcMaskValue = 1
+            dstMaskValue = 0
+          end if
        else if (n2 == compatm .and. (n1 == compocn .or. n1 == compice)) then
           srcMaskValue = 0
           dstMaskValue = 1
