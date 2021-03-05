@@ -527,15 +527,15 @@ contains
             unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
             rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
-    end if
 
-    ! Output destination status file to file if requested
-    if (dststatus_print) then
-       fname = 'dststatus.'//trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)//'_2.nc'
-       call ESMF_LogWrite(trim(subname)//": writing dstStatusField to "//trim(fname), ESMF_LOGMSG_INFO)
+       ! Output destination status file to file if requested
+       if (dststatus_print) then
+          fname = 'dststatus.'//trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)//'_2.nc'
+          call ESMF_LogWrite(trim(subname)//": writing dstStatusField to "//trim(fname), ESMF_LOGMSG_INFO)
 
-       call ESMF_FieldWrite(lfield, filename=trim(fname), variableName='dststatus', overwrite=.true., rc=rc)
-       if (chkerr(rc,__LINE__,u_FILE_u)) return
+          call ESMF_FieldWrite(lfield, filename=trim(fname), variableName='dststatus', overwrite=.true., rc=rc)
+          if (chkerr(rc,__LINE__,u_FILE_u)) return
+       end if
     end if
 
     ! Check that a valid route handle has been created
