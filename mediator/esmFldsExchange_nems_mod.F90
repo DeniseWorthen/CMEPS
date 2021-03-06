@@ -337,7 +337,11 @@ contains
        fldname = trim(flds(n))
        call addfld(fldListTo(compice)%flds, trim(fldname))
        call addfld(fldListFr(compatm)%flds, trim(fldname))
-       call addmap(fldListFr(compatm)%flds, trim(fldname), compice, maptype, 'none', 'unset')
+       if (trim(test_interp) == 'mapbilnr' ) then
+        call addmap(fldListFr(compatm)%flds, trim(fldname), compice, mapbilnr, 'none', 'unset')
+       else
+        call addmap(fldListFr(compatm)%flds, trim(fldname), compice, maptype, 'none', 'unset')
+       end if
        call addmrg(fldListTo(compice)%flds, trim(fldname), mrg_from=compatm, mrg_fld=trim(fldname), mrg_type='copy')
     end do
     deallocate(flds)

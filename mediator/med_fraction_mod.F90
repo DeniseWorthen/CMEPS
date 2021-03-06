@@ -294,7 +294,6 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        call med_map_field(field_src, field_dst, is_local%wrap%RH(compice,compatm,:), maptype, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
     end if
 
     !---------------------------------------
@@ -347,7 +346,6 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        call med_map_field(field_src, field_dst, is_local%wrap%RH(compocn,compatm,:), maptype, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
-
     end if
 
     !---------------------------------------
