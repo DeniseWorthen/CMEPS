@@ -9,7 +9,6 @@ module med_map_mod
   use med_constants_mod     , only : dbug_flag => med_constants_dbug_flag
   use med_utils_mod         , only : chkerr    => med_utils_ChkErr
   use perf_mod              , only : t_startf, t_stopf
-  use med_methods_mod       , only : med_methods_MeshMask_diagnose
   use med_methods_mod       , only : med_methods_FB_getmesh
   use med_methods_mod       , only : med_methods_FB_getNameN
   use med_methods_mod       , only : med_methods_FB_getNumFlds
