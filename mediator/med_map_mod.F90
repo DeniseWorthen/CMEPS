@@ -1,6 +1,7 @@
 module med_map_mod
 
   use med_kind_mod          , only : CX=>SHR_KIND_CX, CS=>SHR_KIND_CS, CL=>SHR_KIND_CL, R8=>SHR_KIND_R8
+  use med_kind_mod          , only : I4=>SHR_KIND_I4
   use ESMF                  , only : ESMF_SUCCESS, ESMF_FAILURE
   use ESMF                  , only : ESMF_LOGMSG_ERROR, ESMF_LOGMSG_INFO, ESMF_LogWrite
   use ESMF                  , only : ESMF_Field
@@ -84,7 +85,7 @@ contains
     !use ESMF            , only : ESMF_Mesh, ESMF_MeshLoc, ESMF_MESHLOC_ELEMENT, ESMF_TYPEKIND_I4
     !use ESMF            , only : ESMF_FieldCreate, ESMF_FieldDestroy
     !use ESMF            , only : ESMF_FieldWrite, ESMF_LOGMSG_INFO
-    !use esmFlds         , only : mapnames
+    use esmFlds         , only : mapnames
     !use esmFlds         , only : compname
 
     ! input/output variables
@@ -100,14 +101,15 @@ contains
     ! local variables
     type(InternalState) :: is_local
     type(ESMF_Field)    :: fldsrc
+    type(ESMF_Field)    :: flddst
     !type(ESMF_Field)    :: flddst, londst, latdst
     integer             :: n,n1,n2,m,nf
     character(len=CX)   :: mapfile
     integer             :: mapindex
     logical             :: mapexists = .false.
     character(len=*), parameter :: subname=' (module_med_map: RouteHandles_init) '
-    !integer             :: nflds
-    !character(len=CX)   :: tmpstr
+    integer             :: nflds
+    character(len=CX)   :: tmpstr
     !-----------------------------------------------------------
 
     call t_startf('MED:'//subname)
@@ -187,7 +189,7 @@ contains
                               mapindex, is_local%wrap%rh(n1,n2,:), mapfile=trim(mapfile), rc=rc)
                          if (chkerr(rc,__LINE__,u_FILE_u)) return
 
-    ! write flddst_debug 
+    ! write flddst_debug
     !mapname = trim(mapnames(mapindex))
     !if(trim(mapname) .eq. 'consd' .or. trim(mapname) .eq. 'consf' .or. trim(mapname) .eq. 'bilnr')then
     ! call med_methods_FB_getNameN(is_local%wrap%FBImp(n1,n2), nf, fldname, rc)
@@ -226,8 +228,8 @@ contains
     !use ESMF            , only : ESMF_FieldCreate, ESMF_FieldDestroy
     !use ESMF            , only : ESMF_FieldWrite, ESMF_FieldPrint
     use med_methods_mod , only : med_methods_FB_getFieldN, med_methods_FB_getNameN
-    !use esmFlds         , only : mapunset, mapnames
-    !use esmFlds         , only : ncomps, compatm, compice, compocn, compname
+    use esmFlds         , only : mapunset, mapnames
+    use esmFlds         , only : ncomps, compatm, compice, compocn, compname
 
     !---------------------------------------------
     ! Initialize initialize additional route handles for mapping fractions
@@ -280,12 +282,12 @@ contains
     !flddst_debug = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_I4, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
     !if (chkerr(rc,__LINE__,u_FILE_u)) return
 
-    call ESMF_LogWrite(trim(subname)//": creating RH "//trim(compname(n1))// &
-    "."//trim(compname(n2))//"  "//trim(mapnames(mapindex)), ESMF_LOGMSG_INFO)
+    !call ESMF_LogWrite(trim(subname)//": creating RH "//trim(compname(n1))// &
+    !"."//trim(compname(n2))//"  "//trim(mapnames(mapindex)), ESMF_LOGMSG_INFO)
     call med_map_routehandles_initfrom_field(n1, n2, fldsrc, flddst, mapindex, routehandle(n1,n2,:), rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
-    ! write flddst_debug 
+    ! write flddst_debug
     !mapname = trim(mapnames(mapindex))
     !if(trim(mapname) .eq. 'consd' .or. trim(mapname) .eq. 'consf' .or. trim(mapname) .eq. 'bilnr')then
      ! Test using last field
@@ -315,6 +317,8 @@ contains
     use ESMF              , only : ESMF_REGRIDMETHOD_CONSERVE, ESMF_NORMTYPE_DSTAREA, ESMF_NORMTYPE_FRACAREA
     use ESMF              , only : ESMF_UNMAPPEDACTION_IGNORE, ESMF_REGRIDMETHOD_NEAREST_STOD
     use ESMF              , only : ESMF_Mesh, ESMF_MeshLoc, ESMF_MESHLOC_ELEMENT, ESMF_TYPEKIND_I4
+    use ESMF              , only : ESMF_MeshGet, ESMF_DistGridGet, ESMF_DistGrid
+    use ESMF              , only : ESMF_FieldGet, ESMF_FieldCreate, ESMF_FieldWrite, ESMF_FieldDestroy
     use esmFlds           , only : mapbilnr, mapconsf, mapconsd, mappatch, mappatch_uv3d, mapfcopy
     use esmFlds           , only : mapunset, mapnames, nmappers
     use esmFlds           , only : mapnstod, mapnstod_consd, mapnstod_consf, mapnstod_consd
@@ -337,7 +341,8 @@ contains
 
     ! local variables
     type(ESMF_Mesh)            :: lmesh
-    type(ESMF_Field)           :: lfield
+    type(ESMF_Field)           :: lfield, doffield
+    type(ESMF_DistGrid)        :: distgrid
     character(len=CS)          :: string
     character(len=CS)          :: mapname
     character(len=CL)          :: fname
@@ -346,6 +351,8 @@ contains
     character(len=ESMF_MAXSTR) :: lmapfile
     logical                    :: rhprint = .false.
     logical                    :: dststatus_print = .true.
+    integer                    :: ns
+    integer(I4), pointer       :: dof(:) => null()
     integer                    :: srcTermProcessing_Value = 0
     type(ESMF_PoleMethod_Flag), parameter :: polemethod=ESMF_POLEMETHOD_ALLAVG
     character(len=*), parameter :: subname=' (module_med_map: med_map_routehandles_initfrom_field) '
@@ -359,7 +366,7 @@ contains
     mapname = trim(mapnames(mapindex))
     call ESMF_LogWrite(trim(subname)//": mapname "//trim(mapname), ESMF_LOGMSG_INFO)
 
-    ! create a field to retrieve the dststatus field 
+    ! create a field to retrieve the dststatus field
     call ESMF_FieldGet(flddst, mesh=lmesh, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     lfield = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_I4, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
@@ -509,12 +516,27 @@ contains
 
     ! Output destination status field to file if requested
     if (dststatus_print) then
-       if (mapindex /= mapcopy .and. mapindex /= 'unset') then
+       if (mapindex /= mapfcopy .or. lmapfile /= 'unset') then
          fname = 'dststatus.'//trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)//'.nc'
          call ESMF_LogWrite(trim(subname)//": writing dstStatusField to "//trim(fname), ESMF_LOGMSG_INFO)
 
-         call ESMF_FieldWrite(lfield, filename=trim(fname), variableName='dststatus', overwrite=.true., rc=rc)
+         call ESMF_FieldWrite(lfield, filename=trim(fname), variableName='dststatus', &
+              overwrite=.true., rc=rc)
          if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+         ! the sequence index in order to sort the dststatus field
+         call ESMF_MeshGet(lmesh, elementDistgrid=distgrid, rc=rc)
+         if (chkerr(rc,__LINE__,u_FILE_u)) return
+         call ESMF_DistGridGet(distgrid, localDE=0, elementCount=ns, rc=rc)
+         if (chkerr(rc,__LINE__,u_FILE_u)) return
+         allocate(dof(ns))
+         call ESMF_DistGridGet(distgrid, localDE=0, seqIndexList=dof, rc=rc)
+         if (chkerr(rc,__LINE__,u_FILE_u)) return
+         doffield = ESMF_FieldCreate(lmesh, dof, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
+         if (chkerr(rc,__LINE__,u_FILE_u)) return
+         call ESMF_FieldWrite(doffield, fileName='dof.'//trim(compname(n2))//'.nc', variableName='dof', &
+              overwrite=.true., rc=rc)
+         deallocate(dof)
        end if
     end if
 
@@ -558,7 +580,7 @@ contains
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     endif
 
-    ! ? 
+    ! ?
     call ESMF_FieldDestroy(lfield, rc=rc)
 
   end subroutine med_map_routehandles_initfrom_field
