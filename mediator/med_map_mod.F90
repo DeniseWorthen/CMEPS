@@ -734,7 +734,7 @@ contains
                 call ESMF_FieldGet(fieldlist(1), mesh=mesh_dst, rc=rc)
                 if (chkerr(rc,__LINE__,u_FILE_u)) return
 
-                ! Createis_local%wrap%field_NormOne(n1,n2,m)
+                ! Create is_local%wrap%field_NormOne(n1,n2,m)
                 do m = 1,nmappers
                    if (med_map_RH_is_created(is_local%wrap%RH,n1,n2,m,rc=rc)) then
                       is_local%wrap%field_NormOne(n1,n2,m) = ESMF_FieldCreate(mesh_dst, &
