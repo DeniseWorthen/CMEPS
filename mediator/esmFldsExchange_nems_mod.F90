@@ -96,6 +96,7 @@ contains
     call addfld(fldListFr(compocn)%flds, 'So_omask')
     call addmap(fldListFr(compocn)%flds, 'So_omask', compice,  mapfcopy, 'unset', 'unset')
 
+    !TODO: ? these are states and should be mapbilnr
     if ( trim(coupling_mode) == 'nems_orig_data') then
       ! atm and ocn fields required for atm/ocn flux calculation'
       allocate(flds(10))
@@ -104,7 +105,11 @@ contains
       do n = 1,size(flds)
          fldname = trim(flds(n))
          call addfld(fldListFr(compatm)%flds, trim(fldname))
+       if (trim(test_interp) == 'mapbilnr' ) then
+        call addmap(fldListFr(compatm)%flds, trim(fldname), compice, mapbilnr, 'none', 'unset')
+       else
          call addmap(fldListFr(compatm)%flds, trim(fldname), compocn, maptype, 'none', 'unset')
+       end if
       end do
       deallocate(flds)
 
