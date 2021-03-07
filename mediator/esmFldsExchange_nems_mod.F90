@@ -106,7 +106,7 @@ contains
          fldname = trim(flds(n))
          call addfld(fldListFr(compatm)%flds, trim(fldname))
        if (trim(test_interp) == 'mapbilnr' ) then
-        call addmap(fldListFr(compatm)%flds, trim(fldname), compice, mapbilnr, 'none', 'unset')
+        call addmap(fldListFr(compatm)%flds, trim(fldname), compocn, mapbilnr, 'none', 'unset')
        else
          call addmap(fldListFr(compatm)%flds, trim(fldname), compocn, maptype, 'none', 'unset')
        end if
