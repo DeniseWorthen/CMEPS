@@ -316,7 +316,7 @@ contains
     use ESMF              , only : ESMF_REGRIDMETHOD_CONSERVE, ESMF_NORMTYPE_DSTAREA, ESMF_NORMTYPE_FRACAREA
     use ESMF              , only : ESMF_UNMAPPEDACTION_IGNORE, ESMF_REGRIDMETHOD_NEAREST_STOD
     use ESMF              , only : ESMF_Mesh, ESMF_MeshLoc, ESMF_MESHLOC_ELEMENT, ESMF_TYPEKIND_I4
-    use ESMF              , only : ESMF_MeshGet, ESMF_DistGridGet, ESMF_DistGrid
+    use ESMF              , only : ESMF_MeshGet, ESMF_DistGridGet, ESMF_DistGrid, ESMF_TYPEKIND_R8
     use ESMF              , only : ESMF_FieldGet, ESMF_FieldCreate, ESMF_FieldWrite, ESMF_FieldDestroy
     use esmFlds           , only : mapbilnr, mapconsf, mapconsd, mappatch, mappatch_uv3d, mapfcopy
     use esmFlds           , only : mapunset, mapnames, nmappers
@@ -667,7 +667,7 @@ contains
     use ESMF              , only: ESMF_GridComp
     use ESMF              , only: ESMF_Mesh, ESMF_TYPEKIND_R8, ESMF_MESHLOC_ELEMENT
     use ESMF              , only: ESMF_FieldBundle, ESMF_FieldBundleGet, ESMF_FieldBundleCreate
-    use ESMF              , only: ESMF_FieldBundleIsCreated
+    use ESMF              , only: ESMF_FieldBundleIsCreated, ESMF_FieldWrite
     use ESMF              , only: ESMF_Field, ESMF_FieldGet, ESMF_FieldCreate, ESMF_FieldDestroy
     use esmFlds           , only: ncomps, nmappers, compname, mapnames
     use med_constants_mod , only: czero => med_constants_czero
@@ -677,15 +677,16 @@ contains
     integer, intent(out) :: rc
 
     ! local variables
-    type(InternalState)       :: is_local
-    integer                   :: n1, n2, m
-    character(len=1)          :: cn1,cn2,cm
-    real(R8), pointer         :: dataptr(:) => null()
-    integer                   :: fieldCount
-    type(ESMF_Field), pointer :: fieldlist(:) => null()
-    type(ESMF_Field)          :: field_src
-    type(ESMF_Mesh)           :: mesh_src
-    type(ESMF_Mesh)           :: mesh_dst
+    type(InternalState)        :: is_local
+    integer                    :: n1, n2, m
+    character(len=1)           :: cn1,cn2,cm
+    real(R8), pointer          :: dataptr(:) => null()
+    integer                    :: fieldCount
+    type(ESMF_Field), pointer  :: fieldlist(:) => null()
+    type(ESMF_Field)           :: field_src
+    type(ESMF_Mesh)            :: mesh_src
+    type(ESMF_Mesh)            :: mesh_dst
+    character(len=CL)          :: fname
     character(len=*),parameter :: subname=' (module_MED_MAP:MapNorm_init)'
     !-----------------------------------------------------------
 
@@ -754,6 +755,11 @@ contains
                          write(logunit,'(a)') trim(subname)//' created field_NormOne for '&
                               //compname(n1)//'->'//compname(n2)//' with mapping '//mapnames(m)
                       endif
+     fname = 'unityone.'//trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapnames(m))//'.nc'
+     call ESMF_LogWrite(trim(subname)//": writing unityone to "//trim(fname), ESMF_LOGMSG_INFO)
+     call ESMF_FieldWrite(is_local%wrap%field_NormOne(n1,n2,m), filename=trim(fname), variableName='unity', &
+          overwrite=.true., rc=rc)
+     if (chkerr(rc,__LINE__,u_FILE_u)) return
                    end if
                 end do ! end of loop over m mappers
              end if ! end of if block for creating destination field
