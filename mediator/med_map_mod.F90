@@ -81,34 +81,20 @@ contains
     use esmFlds         , only : fldListFr, ncomps, mapunset, compname
     use med_methods_mod , only : med_methods_FB_getFieldN
 
-    !use ESMF            , only : ESMF_Mesh, ESMF_MeshLoc, ESMF_MESHLOC_ELEMENT, ESMF_TYPEKIND_I4
-    !use ESMF            , only : ESMF_FieldCreate, ESMF_FieldDestroy
-    !use ESMF            , only : ESMF_FieldWrite, ESMF_LOGMSG_INFO
-    use esmFlds         , only : mapnames
-    !use esmFlds         , only : compname
-
     ! input/output variables
     type(ESMF_GridComp)  :: gcomp
     integer, intent(in)  :: llogunit
     integer, intent(out) :: rc
 
-    !type(ESMF_Mesh)    :: lmesh
-    !type(ESMF_Field)   :: flddst_debug
-    !character(CL)      :: fname, fldname
-    !character(CS)      :: mapname
-
     ! local variables
     type(InternalState) :: is_local
     type(ESMF_Field)    :: fldsrc
     type(ESMF_Field)    :: flddst
-    !type(ESMF_Field)    :: flddst, londst, latdst
     integer             :: n,n1,n2,m,nf
     character(len=CX)   :: mapfile
     integer             :: mapindex
     logical             :: mapexists = .false.
     character(len=*), parameter :: subname=' (module_med_map: RouteHandles_init) '
-    integer             :: nflds
-    character(len=CX)   :: tmpstr
     !-----------------------------------------------------------
 
     call t_startf('MED:'//subname)
@@ -130,43 +116,14 @@ contains
        do n2 = 1, ncomps
           if (n1 /= n2) then
              if (is_local%wrap%med_coupling_active(n1,n2)) then ! If coupling is active between n1 and n2
-
                 ! Get source and destination fields
                 call med_methods_FB_getFieldN(is_local%wrap%FBImp(n1,n1), 1, fldsrc, rc)
                 if (chkerr(rc,__LINE__,u_FILE_u)) return
                 call med_methods_FB_getFieldN(is_local%wrap%FBImp(n1,n2), 1, flddst, rc)
                 if (chkerr(rc,__LINE__,u_FILE_u)) return
 
-                ! Test using last field not first field
-                ! Get source and destination fields
-                !call med_methods_FB_getNumFlds(is_local%wrap%FBImp(n1,n1), 'FBImp', nflds, rc)
-                !if (chkerr(rc,__LINE__,u_FILE_u)) return
-                !call med_methods_FB_getFieldN(is_local%wrap%FBImp(n1,n1), nflds, fldsrc, rc)
-                !if (chkerr(rc,__LINE__,u_FILE_u)) return
-                !call med_methods_FB_getNumFlds(is_local%wrap%FBImp(n1,n2), 'FBImp', nflds, rc)
-                !if (chkerr(rc,__LINE__,u_FILE_u)) return
-                !call med_methods_FB_getFieldN(is_local%wrap%FBImp(n1,n2), nflds, flddst, rc)
-                !if (chkerr(rc,__LINE__,u_FILE_u)) return
-
-    ! create a field for dstStatusField
-    !call med_methods_FB_getNameN(is_local%wrap%FBImp(n1,n2), 1, fldname, rc)
-    !call ESMF_LogWrite(trim(subname)//": using FBImp(n1,n2) mesh,field "//trim(fldname), ESMF_LOGMSG_INFO)
-    !call med_methods_FB_getmesh(is_local%wrap%FBImp(n1,n2), lmesh, rc)
-    !flddst_debug = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_I4, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
-    !if (chkerr(rc,__LINE__,u_FILE_u)) return
-
-    ! create fields for dst lat and lon from mesh and a fortran pointer
-    !latdst = ESMF_FieldCreate(lmesh, is_local%wrap%mesh_info(n2)%lats, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
-    !fname = 'dstlat.'//trim(compname(n2))//'.nc'
-    !call ESMF_FieldWrite(latdst, filename=trim(fname), variableName='dstlat', overwrite=.true., rc=rc)
-    !londst = ESMF_FieldCreate(lmesh, is_local%wrap%mesh_info(n2)%lons, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
-    !fname = 'dstlon.'//trim(compname(n2))//'.nc'
-    !call ESMF_FieldWrite(londst, filename=trim(fname), variableName='dstlon', overwrite=.true., rc=rc)
-
                 ! Loop over fields
                 do nf = 1,size(fldListFr(n1)%flds)
-    write(tmpstr,*)trim(subname)//": using field ",nf,trim(fldListFr(n1)%flds(nf)%stdname)
-    call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO)
 
                    ! Determine the mapping type for mapping field nf from n1 to n2
                    mapindex = fldListFr(n1)%flds(nf)%mapindex(n2)
@@ -175,37 +132,18 @@ contains
                       ! determine if route handle has already been created
                       mapexists = med_map_RH_is_created(is_local%wrap%RH,n1,n2,mapindex,rc=rc)
                       if (chkerr(rc,__LINE__,u_FILE_u)) return
-    if(mapexists)call ESMF_LogWrite(trim(subname)//": already have RH for "//trim(compname(n1))// &
-    "."//trim(compname(n2))//"  "//trim(mapnames(mapindex)), ESMF_LOGMSG_INFO)
 
                       ! Create route handle for target mapindex if route handle is required
                       ! (i.e. mapindex /= mapunset) and route handle has not already been created
                       if (.not. mapexists) then
                          mapfile = trim(fldListFr(n1)%flds(nf)%mapfile(n2))
-    call ESMF_LogWrite(trim(subname)//": creating RH "//trim(fldListFr(n1)%flds(nf)%stdname)//"  "//trim(compname(n1))// &
-    "."//trim(compname(n2))//"  "//trim(mapnames(mapindex)), ESMF_LOGMSG_INFO)
                          call med_map_routehandles_initfrom_field(n1, n2, fldsrc, flddst, &
                               mapindex, is_local%wrap%rh(n1,n2,:), mapfile=trim(mapfile), rc=rc)
                          if (chkerr(rc,__LINE__,u_FILE_u)) return
-
-    ! write flddst_debug
-    !mapname = trim(mapnames(mapindex))
-    !if(trim(mapname) .eq. 'consd' .or. trim(mapname) .eq. 'consf' .or. trim(mapname) .eq. 'bilnr')then
-    ! call med_methods_FB_getNameN(is_local%wrap%FBImp(n1,n2), nf, fldname, rc)
-    ! fname = 'rh.esmflds.'//trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)//'.'//trim(fldname)//'.nc'
-    ! call ESMF_FieldWrite(flddst_debug, filename=trim(fname), variableName='dststatus', overwrite=.true., rc=rc)
-    ! if (chkerr(rc,__LINE__,u_FILE_u)) return
-    !end if
-
                       end if
-                   else
-    write(tmpstr,*)trim(subname)//": mapindex unset for field ",nf,trim(fldListFr(n1)%flds(nf)%stdname)
-    call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO)
+
                    end if ! end if mapindex is mapunset
                 end do ! loop over fields
-    !call ESMF_FieldDestroy(flddst_debug, rc=rc)
-    !call ESMF_FieldDestroy(latdst, rc=rc)
-    !call ESMF_FieldDestroy(londst, rc=rc)
              end if ! if coupling is active between n1 and n2
           end if ! if n1 not equal to n2
        end do ! loop over n2
@@ -223,12 +161,7 @@ contains
 
     use ESMF            , only : ESMF_LogWrite, ESMF_LOGMSG_INFO, ESMF_SUCCESS, ESMF_LogFlush
     use ESMF            , only : ESMf_Field, ESMF_FieldBundle, ESMF_RouteHandle
-    !use ESMF            , only : ESMF_Mesh, ESMF_MeshLoc, ESMF_MESHLOC_ELEMENT, ESMF_TYPEKIND_I4
-    !use ESMF            , only : ESMF_FieldCreate, ESMF_FieldDestroy
-    !use ESMF            , only : ESMF_FieldWrite, ESMF_FieldPrint
-    use med_methods_mod , only : med_methods_FB_getFieldN, med_methods_FB_getNameN
-    use esmFlds         , only : mapunset, mapnames
-    use esmFlds         , only : ncomps, compatm, compice, compocn, compname
+    use med_methods_mod , only : med_methods_FB_getFieldN
 
     !---------------------------------------------
     ! Initialize initialize additional route handles for mapping fractions
@@ -247,11 +180,6 @@ contains
     type(ESMF_Field)   :: fldsrc
     type(ESMF_Field)   :: flddst
     character(len=*), parameter :: subname=' (module_MED_map:med_map_routehandles_initfrom_fieldbundle) '
-    !type(ESMF_Mesh)    :: lmesh
-    !type(ESMF_Field)   :: flddst_debug
-    !character(CL)      :: fname,fldname
-    !character(CS)      :: mapname
-    !integer            :: nflds
     !---------------------------------------------
 
     call t_startf('MED:'//subname)
@@ -266,38 +194,8 @@ contains
     call med_methods_FB_getFieldN(FBDst, 1, flddst, rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
-    ! Test using last field
-    !call med_methods_FB_getNumFlds(FBsrc, 'FBsrc', nflds, rc)
-    !if (chkerr(rc,__LINE__,u_FILE_u)) return
-    !call med_methods_FB_getFieldN(FBsrc, nflds, fldsrc, rc)
-    !if (chkerr(rc,__LINE__,u_FILE_u)) return
-    !call med_methods_FB_getNumFlds(FBDst, 'FBdst', nflds, rc)
-    !if (chkerr(rc,__LINE__,u_FILE_u)) return
-    !call med_methods_FB_getFieldN(FBDst, nflds, flddst, rc)
-    !if (chkerr(rc,__LINE__,u_FILE_u)) return
-
-    ! create a field for dstStatusField
-    !call med_methods_FB_getmesh(FBDst, lmesh, rc)
-    !flddst_debug = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_I4, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
-    !if (chkerr(rc,__LINE__,u_FILE_u)) return
-
-    !call ESMF_LogWrite(trim(subname)//": creating RH "//trim(compname(n1))// &
-    !"."//trim(compname(n2))//"  "//trim(mapnames(mapindex)), ESMF_LOGMSG_INFO)
     call med_map_routehandles_initfrom_field(n1, n2, fldsrc, flddst, mapindex, routehandle(n1,n2,:), rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-
-    ! write flddst_debug
-    !mapname = trim(mapnames(mapindex))
-    !if(trim(mapname) .eq. 'consd' .or. trim(mapname) .eq. 'consf' .or. trim(mapname) .eq. 'bilnr')then
-     ! Test using last field
-     !call med_methods_FB_getNameN(FBDst,  nflds, fldname, rc)
-     !call med_methods_FB_getNameN(FBDst,  1, fldname, rc)
-     !if (chkerr(rc,__LINE__,u_FILE_u)) return
-     !fname = 'rh.fb.'//trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)//'.'//trim(fldname)//'.nc'
-     !call ESMF_FieldWrite(flddst_debug, filename=trim(fname), variableName='dststatus', overwrite=.true., rc=rc)
-     !if (chkerr(rc,__LINE__,u_FILE_u)) return
-    !end if
-    !call ESMF_FieldDestroy(flddst_debug, rc=rc)
 
     if (dbug_flag > 1) then
       call ESMF_LogWrite(trim(subname)//": done", ESMF_LOGMSG_INFO)
@@ -340,7 +238,7 @@ contains
 
     ! local variables
     type(ESMF_Mesh)            :: lmesh
-    type(ESMF_Field)           :: lfield, doffield
+    type(ESMF_Field)            :: lfield, doffield
     type(ESMF_DistGrid)        :: distgrid
     character(len=CS)          :: string
     character(len=CS)          :: mapname

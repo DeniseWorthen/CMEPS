@@ -155,8 +155,6 @@ contains
     use med_map_mod           , only : med_map_routehandles_init, med_map_rh_is_created
     use med_internalstate_mod , only : InternalState, logunit, mastertask
     use perf_mod              , only : t_startf, t_stopf
-    use ESMF                  , only : ESMF_FieldWrite, ESMF_MeshGet, ESMF_DistGridGet, ESMF_DistGrid
-    use ESMF                  , only : ESMF_Mesh, ESMF_MESHLOC_ELEMENT, ESMF_FieldCreate
 
     ! input/output variables
     type(ESMF_GridComp)  :: gcomp

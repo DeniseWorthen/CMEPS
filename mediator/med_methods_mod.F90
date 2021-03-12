@@ -258,7 +258,7 @@ contains
     integer                :: i,j,n,n1
     integer                :: fieldCount,fieldCountgeom
     logical                :: found
-    character(ESMF_MAXSTR) :: lname, fbname
+    character(ESMF_MAXSTR) :: lname
     type(ESMF_Field)       :: field,lfield
     type(ESMF_Mesh)        :: lmesh
     type(ESMF_StaggerLoc)  :: staggerloc
@@ -282,8 +282,7 @@ contains
     if (present(name)) then
       lname = trim(name)
     endif
-    !lname = 'FB '//trim(lname)
-    fbname = trim(lname)
+    lname = 'FB '//trim(lname)
 
     !---------------------------------
     ! check argument consistency and
@@ -508,9 +507,6 @@ contains
 
           ! Add the created field bundle FBout
           if (dbug_flag > 1) then
-           if( n .eq. 1 )call ESMF_LogWrite( &
-           "XXX: "//trim(fbname)//" first field added "//trim(lfieldNameList(n)), ESMF_LOGMSG_INFO)
-
              call ESMF_LogWrite(trim(subname)//":"//trim(lname)//" adding field "//trim(lfieldNameList(n)), &
                   ESMF_LOGMSG_INFO)
           end if
@@ -1869,12 +1865,12 @@ contains
     if (geomtype == ESMF_GEOMTYPE_GRID) then
       call ESMF_FieldGet(field, grid=lgrid, rc=rc)
       if (chkerr(rc,__LINE__,u_FILE_u)) return
-      !call med_methods_Grid_Print(lgrid, string, rc)
+      call med_methods_Grid_Print(lgrid, string, rc)
       if (chkerr(rc,__LINE__,u_FILE_u)) return
     elseif (geomtype == ESMF_GEOMTYPE_MESH) then
       call ESMF_FieldGet(field, mesh=lmesh, rc=rc)
       if (chkerr(rc,__LINE__,u_FILE_u)) return
-      !call med_methods_Mesh_Print(lmesh, string, rc)
+      call med_methods_Mesh_Print(lmesh, string, rc)
       if (chkerr(rc,__LINE__,u_FILE_u)) return
     endif
 
@@ -1892,9 +1888,9 @@ contains
       call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO)
       write (msgString,*) trim(subname)//":"//trim(string)//": dataptr bounds dim=2 ",lbound(dataptr2,2),ubound(dataptr2,2)
       call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO)
-    !elseif (lrank == 0) then
+    elseif (lrank == 0) then
       ! means data allocation does not exist yet
-    !  continue
+      continue
     else
        call ESMF_LogWrite(trim(subname)//": ERROR rank not supported ", &
             ESMF_LOGMSG_ERROR, line=__LINE__, file=u_FILE_u)
