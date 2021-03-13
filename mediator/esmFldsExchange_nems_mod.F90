@@ -43,7 +43,7 @@ contains
 
     ! local variables:
     integer             :: i, n, maptype
-    character(len=CS)   :: normtype = 'none'
+    character(len=CS)   :: normtype = 'one'
     character(len=CX)   :: msgString
     character(len=CL)   :: cvalue
     character(len=CS)   :: fldname
@@ -63,7 +63,7 @@ contains
     ! Set maptype according to coupling_mode
     if (trim(coupling_mode) == 'nems_orig' .or. trim(coupling_mode) == 'nems_orig_data') then
       maptype = mapnstod_consf
-      normtype = 'none'
+      normtype = 'one'
     else
       maptype = mapconsf
     !  normtype = 'aofrac'
@@ -106,9 +106,9 @@ contains
          fldname = trim(flds(n))
          call addfld(fldListFr(compatm)%flds, trim(fldname))
        if (trim(test_interp) == 'mapbilnr' ) then
-        call addmap(fldListFr(compatm)%flds, trim(fldname), compocn, mapbilnr, 'none', 'unset')
+        call addmap(fldListFr(compatm)%flds, trim(fldname), compocn, mapbilnr, 'one', 'unset')
        else
-         call addmap(fldListFr(compatm)%flds, trim(fldname), compocn, maptype, 'none', 'unset')
+         call addmap(fldListFr(compatm)%flds, trim(fldname), compocn, maptype, 'one', 'unset')
        end if
       end do
       deallocate(flds)
@@ -177,9 +177,9 @@ contains
     call addfld(fldListTo(compocn)%flds, 'Sa_pslv')
     call addfld(fldListFr(compatm)%flds, 'Sa_pslv')
     if (trim(test_interp) == 'mapbilnr' ) then
-     call addmap(fldListFr(compatm)%flds, 'Sa_pslv', compocn, mapbilnr, 'none', 'unset')
+     call addmap(fldListFr(compatm)%flds, 'Sa_pslv', compocn, mapbilnr, 'one', 'unset')
     else
-     call addmap(fldListFr(compatm)%flds, 'Sa_pslv', compocn, maptype,  'none', 'unset')
+     call addmap(fldListFr(compatm)%flds, 'Sa_pslv', compocn, maptype,  'one', 'unset')
     end if
     call addmrg(fldListTo(compocn)%flds, 'Sa_pslv', mrg_from=compatm, mrg_fld='Sa_pslv', mrg_type='copy')
 
@@ -194,6 +194,8 @@ contains
        fldname = trim(flds(n))
        call addfld(fldListTo(compocn)%flds, trim(fldname))
        call addfld(fldListFr(compatm)%flds, trim(fldname))
+       !TODO: normtype is configurable to allow testing of aofrac vs previous value of 'none'
+       ! ?? aofrac is not req here; sw fluxes from atm are not ocean-only
        call addmap(fldListFr(compatm)%flds, trim(fldname), compocn, maptype, normtype, 'unset')
     end do
     deallocate(flds)
@@ -219,6 +221,8 @@ contains
        fldname = trim(flds(n))
        call addfld(fldListTo(compocn)%flds, trim(fldname))
        call addfld(fldListFr(compatm)%flds, trim(fldname))
+       !TODO: normtype is configurable to allow testing of aofrac vs previous value of 'none'
+       ! ?? aofrac is not req here; rain/snow from atm is not ocean-only
        call addmap(fldListFr(compatm)%flds, trim(fldname), compocn, maptype, normtype, 'unset')
        call addmrg(fldListTo(compocn)%flds, trim(fldname), &
             mrg_from=compatm, mrg_fld=trim(fldname), mrg_type='copy_with_weights', mrg_fracname='ofrac')
@@ -233,6 +237,8 @@ contains
           call addfld(fldListTo(compocn)%flds, 'Foxx_'//trim(flds(n)))
           call addfld(fldListFr(compice)%flds, 'Fioi_'//trim(flds(n)))
           call addfld(fldListFr(compatm)%flds, 'Faxa_'//trim(flds(n)))
+          !TODO: normtype is configurable to allow testing of aofrac vs previous value of 'none'
+          ! aofrac req'd; these are ocean-only fluxes from atm
           call addmap(fldListFr(compatm)%flds, 'Faxa_'//trim(flds(n)), compocn, maptype, normtype, 'unset')
           call addmap(fldListFr(compice)%flds, 'Fioi_'//trim(flds(n)), compocn, mapfcopy, 'unset', 'unset')
        end do
@@ -241,6 +247,8 @@ contains
        ! to ocn: net long wave via auto merge
        call addfld(fldListTo(compocn)%flds, 'Faxa_lwnet')
        call addfld(fldListFr(compatm)%flds, 'Faxa_lwnet')
+       !TODO: normtype is configurable to allow testing of aofrac vs previous value of 'none'
+       ! aofrac req'd?:
        call addmap(fldListFr(compatm)%flds, 'Faxa_lwnet', compocn, maptype, normtype, 'unset')
        call addmrg(fldListTo(compocn)%flds, 'Faxa_lwnet', &
             mrg_from=compatm, mrg_fld='Faxa_lwnet', mrg_type='copy_with_weights', mrg_fracname='ofrac')
@@ -248,13 +256,18 @@ contains
        ! to ocn: merged sensible heat flux (custom merge in med_phases_prep_ocn)
        call addfld(fldListTo(compocn)%flds, 'Faxa_sen')
        call addfld(fldListFr(compatm)%flds, 'Faxa_sen')
+       !TODO: normtype is configurable to allow testing of aofrac vs previous value of 'none'
+       ! aofrac req'd; this is ocean-only fluxes from atm
        call addmap(fldListFr(compatm)%flds, 'Faxa_sen', compocn, maptype, normtype, 'unset')
 
        ! to ocn: evaporation water flux (custom merge in med_phases_prep_ocn)
        call addfld(fldListTo(compocn)%flds, 'Faxa_evap')
        call addfld(fldListFr(compatm)%flds, 'Faxa_lat')
+       !TODO: normtype is configurable to allow testing of aofrac vs previous value of 'none'
+       ! aofrac req'd; this is ocean-only fluxes from atm
        call addmap(fldListFr(compatm)%flds, 'Faxa_lat', compocn, maptype, normtype, 'unset')
     else
+       ! nems_orig_data
        ! to ocn: surface stress from mediator and ice stress via auto merge
        allocate(flds(2))
        flds = (/'taux', 'tauy'/)
@@ -272,7 +285,7 @@ contains
        ! to ocn: long wave net via auto merge
        call addfld(fldListTo(compocn)%flds, 'Foxx_lwnet')
        call addfld(fldListFr(compatm)%flds, 'Faxa_lwdn')
-       call addmap(fldListFr(compatm)%flds, 'Faxa_lwdn', compocn, maptype, 'none', 'unset')
+       call addmap(fldListFr(compatm)%flds, 'Faxa_lwdn', compocn, maptype, 'one', 'unset')
        call addmrg(fldListTo(compocn)%flds, 'Foxx_lwnet', &
              mrg_from=compmed, mrg_fld='Faox_lwup', mrg_type='merge', mrg_fracname='ofrac')
        call addmrg(fldListTo(compocn)%flds, 'Foxx_lwnet', &
@@ -324,7 +337,8 @@ contains
        fldname = trim(flds(n))
        call addfld(fldListFr(compatm)%flds, trim(fldname))
        call addfld(fldListTo(compice)%flds, trim(fldname))
-       call addmap(fldListFr(compatm)%flds, trim(fldname), compice, maptype, 'none', 'unset')
+       ! TODO: what should this be for norm?
+       call addmap(fldListFr(compatm)%flds, trim(fldname), compice, maptype, 'one', 'unset')
        call addmrg(fldListTo(compice)%flds, trim(fldname), mrg_from=compatm, mrg_fld=trim(fldname), mrg_type='copy')
     end do
     deallocate(flds)
@@ -343,9 +357,9 @@ contains
        call addfld(fldListTo(compice)%flds, trim(fldname))
        call addfld(fldListFr(compatm)%flds, trim(fldname))
        if (trim(test_interp) == 'mapbilnr' ) then
-        call addmap(fldListFr(compatm)%flds, trim(fldname), compice, mapbilnr, 'none', 'unset')
+        call addmap(fldListFr(compatm)%flds, trim(fldname), compice, mapbilnr, 'one', 'unset')
        else
-        call addmap(fldListFr(compatm)%flds, trim(fldname), compice, maptype, 'none', 'unset')
+        call addmap(fldListFr(compatm)%flds, trim(fldname), compice, maptype, 'one', 'unset')
        end if
        call addmrg(fldListTo(compice)%flds, trim(fldname), mrg_from=compatm, mrg_fld=trim(fldname), mrg_type='copy')
     end do
