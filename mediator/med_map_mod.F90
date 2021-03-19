@@ -277,7 +277,7 @@ contains
        if (n2 == compocn .or. n2 == compice) dstMaskValue = 0
     else if (coupling_mode(1:4) == 'nems') then
        if (n1 == compatm .and. (n2 == compocn .or. n2 == compice)) then
-          if (mapindex == mapbilnr) then
+          if (mapindex == mapbilnr .or. mapindex == mapbilnr_nstod) then
             srcMaskValue = ispval_mask
             dstMaskValue = 0
           else

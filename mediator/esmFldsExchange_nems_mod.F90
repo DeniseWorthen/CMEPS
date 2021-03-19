@@ -29,7 +29,7 @@ contains
     use esmFlds               , only : addmap => med_fldList_AddMap
     use esmFlds               , only : addmrg => med_fldList_AddMrg
     use esmflds               , only : compmed, compatm, compocn, compice, comprof, ncomps
-    use esmflds               , only : mapbilnr, mapconsf, mapconsd, mappatch
+    use esmflds               , only : mapbilnr, mapconsf, mapconsd, mappatch, mapbilnr_nstod
     use esmflds               , only : mapfcopy, mapnstod, mapnstod_consd, mapnstod_consf
     use esmflds               , only : coupling_mode, mapnames
     use esmflds               , only : fldListTo, fldListFr, fldListMed_aoflux, fldListMed_ocnalb
@@ -107,6 +107,8 @@ contains
          call addfld(fldListFr(compatm)%flds, trim(fldname))
        if (trim(test_interp) == 'mapbilnr' ) then
         call addmap(fldListFr(compatm)%flds, trim(fldname), compocn, mapbilnr, 'one', 'unset')
+       elseif (trim(test_interp) == 'mapbilnr_nstod' ) then
+        call addmap(fldListFr(compatm)%flds, trim(fldname), compocn, mapbilnr_nstod, 'one', 'unset')
        else
          call addmap(fldListFr(compatm)%flds, trim(fldname), compocn, maptype, 'one', 'unset')
        end if
@@ -178,6 +180,8 @@ contains
     call addfld(fldListFr(compatm)%flds, 'Sa_pslv')
     if (trim(test_interp) == 'mapbilnr' ) then
      call addmap(fldListFr(compatm)%flds, 'Sa_pslv', compocn, mapbilnr, 'one', 'unset')
+    elseif (trim(test_interp) == 'mapbilnr_nstod' ) then
+     call addmap(fldListFr(compatm)%flds, trim(fldname), compocn, mapbilnr_nstod, 'one', 'unset')
     else
      call addmap(fldListFr(compatm)%flds, 'Sa_pslv', compocn, maptype,  'one', 'unset')
     end if
@@ -358,6 +362,8 @@ contains
        call addfld(fldListFr(compatm)%flds, trim(fldname))
        if (trim(test_interp) == 'mapbilnr' ) then
         call addmap(fldListFr(compatm)%flds, trim(fldname), compice, mapbilnr, 'one', 'unset')
+       elseif (trim(test_interp) == 'mapbilnr_nstod' ) then
+        call addmap(fldListFr(compatm)%flds, trim(fldname), compice, mapbilnr_nstod, 'one', 'unset')
        else
         call addmap(fldListFr(compatm)%flds, trim(fldname), compice, maptype, 'one', 'unset')
        end if
