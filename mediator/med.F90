@@ -1965,7 +1965,6 @@ contains
             if (mastertask) then
                write(logunit,'(a)') trim(subname)//' initializing FBs for '//trim(compname(n1))
             end if
-            call ESMF_LogWrite(trim(subname)//' initializing FBs for '//trim(compname(n1)),  ESMF_LOGMSG_INFO)
 
             ! Create FBImp(:) with pointers directly into NStateImp(:)
             call FB_init_pointer(is_local%wrap%NStateImp(n1), is_local%wrap%FBImp(n1,n1), &
@@ -2014,8 +2013,6 @@ contains
                   write(logunit,'(a)') trim(subname)//' initializing FBs for '//&
                        trim(compname(n1))//'_'//trim(compname(n2))
                end if
-               call ESMF_LogWrite(trim(subname)//' initializing FBs for '//&
-                       trim(compname(n1))//'_'//trim(compname(n2)), ESMF_LOGMSG_INFO)
 
                call FB_init(is_local%wrap%FBImp(n1,n2), is_local%wrap%flds_scalar_name, &
                     STgeom=is_local%wrap%NStateImp(n2), &
@@ -2051,13 +2048,13 @@ contains
 
       if ( is_local%wrap%med_coupling_active(compocn,compatm) .or. is_local%wrap%med_coupling_active(compatm,compocn)) then
 
-         if (.not. is_local%wrap%med_coupling_active(compatm,compocn)) then
-            is_local%wrap%med_coupling_active(compatm,compocn) = .true.
-         end if
-
          ! Create field bundles for mediator ocean albedo computation
          fieldCount = med_fldList_GetNumFlds(fldListMed_ocnalb)
          if (fieldCount > 0) then
+            if (.not. is_local%wrap%med_coupling_active(compatm,compocn)) then
+               is_local%wrap%med_coupling_active(compatm,compocn) = .true.
+            end if
+
             allocate(fldnames(fieldCount))
             call med_fldList_getfldnames(fldListMed_ocnalb%flds, fldnames, rc=rc)
             if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -2404,7 +2401,8 @@ contains
        !---------------------------------------
        ! Initialize mediator IO
        !---------------------------------------
-       call med_io_init()
+       call med_io_init(gcomp, rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
        !---------------------------------------
        ! Initialize mediator water/heat budget diags
