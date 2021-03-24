@@ -237,8 +237,8 @@ contains
     integer                    , intent(out)   :: rc
 
     ! local variables
-    type(ESMF_Mesh)            :: lmesh
-    type(ESMF_Field)            :: lfield, doffield
+    type(ESMF_Mesh)            :: dstmesh
+    type(ESMF_Field)           :: dststatusfield, doffield
     type(ESMF_DistGrid)        :: distgrid
     character(len=CS)          :: string
     character(len=CS)          :: mapname
@@ -264,9 +264,9 @@ contains
     call ESMF_LogWrite(trim(subname)//": mapname "//trim(mapname), ESMF_LOGMSG_INFO)
 
     ! create a field to retrieve the dststatus field
-    call ESMF_FieldGet(flddst, mesh=lmesh, rc=rc)
+    call ESMF_FieldGet(flddst, mesh=dstmesh, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    lfield = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_I4, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
+    dststatusfield = ESMF_FieldCreate(dstmesh, ESMF_TYPEKIND_I4, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
     if (trim(coupling_mode) == 'cesm') then
@@ -341,6 +341,7 @@ contains
                polemethod=polemethod, &
                srcTermProcessing=srcTermProcessing_Value, &
                ignoreDegenerate=.true., &
+               dstStatusField=dststatusfield, &
                unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, rc=rc)
           if (chkerr(rc,__LINE__,u_FILE_u)) return
        end if
@@ -355,7 +356,7 @@ contains
             polemethod=polemethod, &
             srcTermProcessing=srcTermProcessing_Value, &
             ignoreDegenerate=.true., &
-            dstStatusField=lfield, &
+            dstStatusField=dststatusfield, &
             unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     else if (mapindex == mapbilnr_nstod) then
@@ -370,7 +371,7 @@ contains
             polemethod=polemethod, &
             srcTermProcessing=srcTermProcessing_Value, &
             ignoreDegenerate=.true., &
-            dstStatusField=lfield, &
+            dstStatusField=dststatusfield, &
             unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     else if (mapindex == mapconsf .or. mapindex == mapnstod_consf) then
@@ -384,7 +385,7 @@ contains
             normType=ESMF_NORMTYPE_FRACAREA, &
             srcTermProcessing=srcTermProcessing_Value, &
             ignoreDegenerate=.true., &
-            dstStatusField=lfield, &
+            dstStatusField=dststatusfield, &
             unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
             rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
@@ -399,7 +400,7 @@ contains
             normType=ESMF_NORMTYPE_DSTAREA, &
             srcTermProcessing=srcTermProcessing_Value, &
             ignoreDegenerate=.true., &
-            dstStatusField=lfield, &
+            dstStatusField=dststatusfield, &
             unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
             rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
@@ -415,7 +416,7 @@ contains
                polemethod=polemethod, &
                srcTermProcessing=srcTermProcessing_Value, &
                ignoreDegenerate=.true., &
-               dstStatusField=lfield, &
+               dstStatusField=dststatusfield, &
                unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, rc=rc)
           if (chkerr(rc,__LINE__,u_FILE_u)) return
        end if
@@ -435,23 +436,24 @@ contains
          fname = 'dststatus.'//trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)//'.nc'
          call ESMF_LogWrite(trim(subname)//": writing dstStatusField to "//trim(fname), ESMF_LOGMSG_INFO)
 
-         call ESMF_FieldWrite(lfield, filename=trim(fname), variableName='dststatus', &
+         call ESMF_FieldWrite(dststatusfield, filename=trim(fname), variableName='dststatus', &
               overwrite=.true., rc=rc)
          if (chkerr(rc,__LINE__,u_FILE_u)) return
 
          ! the sequence index in order to sort the dststatus field
-         call ESMF_MeshGet(lmesh, elementDistgrid=distgrid, rc=rc)
+         call ESMF_MeshGet(dstmesh, elementDistgrid=distgrid, rc=rc)
          if (chkerr(rc,__LINE__,u_FILE_u)) return
          call ESMF_DistGridGet(distgrid, localDE=0, elementCount=ns, rc=rc)
          if (chkerr(rc,__LINE__,u_FILE_u)) return
          allocate(dof(ns))
          call ESMF_DistGridGet(distgrid, localDE=0, seqIndexList=dof, rc=rc)
          if (chkerr(rc,__LINE__,u_FILE_u)) return
-         doffield = ESMF_FieldCreate(lmesh, dof, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
+         doffield = ESMF_FieldCreate(dstmesh, dof, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
          if (chkerr(rc,__LINE__,u_FILE_u)) return
          call ESMF_FieldWrite(doffield, fileName='dof.'//trim(compname(n2))//'.nc', variableName='dof', &
               overwrite=.true., rc=rc)
          deallocate(dof)
+         call ESMF_FieldDestroy(doffield, rc=rc, noGarbage=.true.)
        end if
     end if
 
@@ -463,7 +465,7 @@ contains
             regridmethod=ESMF_REGRIDMETHOD_NEAREST_STOD, &
             srcTermProcessing=srcTermProcessing_Value, &
             ignoreDegenerate=.true., &
-            dstStatusField=lfield, &
+            dstStatusField=dststatusfield, &
             unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
             rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
@@ -473,7 +475,7 @@ contains
           fname = 'dststatus.'//trim(compname(n1))//'.'//trim(compname(n2))//'.'//trim(mapname)//'_2.nc'
           call ESMF_LogWrite(trim(subname)//": writing dstStatusField to "//trim(fname), ESMF_LOGMSG_INFO)
 
-          call ESMF_FieldWrite(lfield, filename=trim(fname), variableName='dststatus', overwrite=.true., rc=rc)
+          call ESMF_FieldWrite(dststatusfield, filename=trim(fname), variableName='dststatus', overwrite=.true., rc=rc)
           if (chkerr(rc,__LINE__,u_FILE_u)) return
        end if
     end if
@@ -495,8 +497,7 @@ contains
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     endif
 
-    ! ?
-    call ESMF_FieldDestroy(lfield, rc=rc)
+    call ESMF_FieldDestroy(dststatusfield, rc=rc, noGarbage=.true.)
 
   end subroutine med_map_routehandles_initfrom_field
 
