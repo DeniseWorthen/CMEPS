@@ -222,7 +222,7 @@ contains
     use esmFlds           , only : mapfillv_bilnr, mapbilnr_nstod
     use esmFlds           , only : ncomps, compatm, compice, compocn, compname
     use esmFlds           , only : mapfcopy, mapconsd, mapconsf, mapnstod
-    use esmFlds           , only : coupling_mode
+    use esmFlds           , only : coupling_mode, dststatus_print
     use esmFlds           , only : atm_name
     use med_constants_mod , only : ispval_mask => med_constants_ispval_mask
 
@@ -247,7 +247,6 @@ contains
     integer                    :: dstMaskValue
     character(len=ESMF_MAXSTR) :: lmapfile
     logical                    :: rhprint = .false.
-    logical                    :: dststatus_print = .true.
     integer                    :: ns
     integer(I4), pointer       :: dof(:) => null()
     integer                    :: srcTermProcessing_Value = 0
@@ -276,13 +275,13 @@ contains
        if (n2 == compocn .or. n2 == compice) dstMaskValue = 0
     else if (coupling_mode(1:4) == 'nems') then
        if (n1 == compatm .and. (n2 == compocn .or. n2 == compice)) then
-          if (mapindex == mapbilnr .or. mapindex == mapbilnr_nstod) then
-            srcMaskValue = ispval_mask
-            dstMaskValue = 0
-          else
+          !if (mapindex == mapbilnr .or. mapindex == mapbilnr_nstod) then
+          !  srcMaskValue = ispval_mask
+          !  dstMaskValue = 0
+          !else
             srcMaskValue = 1
             dstMaskValue = 0
-          end if
+          !end if
        else if (n2 == compatm .and. (n1 == compocn .or. n1 == compice)) then
           srcMaskValue = 0
           dstMaskValue = 1
