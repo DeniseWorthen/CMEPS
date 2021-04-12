@@ -43,6 +43,7 @@ module MED
   use esmFldsExchange_nems_mod , only : esmFldsExchange_nems
   use esmFldsExchange_cesm_mod , only : esmFldsExchange_cesm
   use esmFldsExchange_hafs_mod , only : esmFldsExchange_hafs
+  use esmFlds                  , only : norm_mode
 
   implicit none
   private
