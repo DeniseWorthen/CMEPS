@@ -42,7 +42,7 @@ contains
     integer          , intent(inout) :: rc
 
     ! local variables:
-    integer             :: i, n, maptyp
+    integer             :: i, n, maptype
     character(len=CS)   :: normtype
     character(len=CX)   :: msgString
     character(len=CL)   :: cvalue
