@@ -719,6 +719,8 @@ contains
     type(ESMF_Field), pointer  :: fieldlist_src(:) => null()
     type(ESMF_Field), pointer  :: fieldlist_dst(:) => null()
     character(CL), allocatable :: fieldNameList(:)
+    character(CS)              :: mapnorm_mapindex
+    character(len=CX)          :: tmpstr
     character(len=*), parameter :: subname=' (module_MED_map:med_packed_field_create) '
     !-----------------------------------------------------------
 
@@ -765,6 +767,7 @@ contains
     ! Determine the normalization type for each packed_data mapping element
     ! Loop over mapping types
     do mapindex = 1,nmappers
+       mapnorm_mapindex = 'not_set'
        ! Loop over source field bundle
        do nf = 1, fieldCount
           ! Loop over the fldsSrc types
@@ -776,6 +779,24 @@ contains
                   trim(fldsSrc(ns)%shortname) == trim(fieldnamelist(nf))) then
                 ! Set the normalization to the input
                 packed_data(mapindex)%mapnorm = fldsSrc(ns)%mapnorm(destcomp)
+                if (mapnorm_mapindex == 'not_set') then
+                   mapnorm_mapindex = packed_data(mapindex)%mapnorm
+                   write(tmpstr,*)'Map type '//trim(mapnames(mapindex)) &
+                      //', destcomp '//trim(compname(destcomp)) &
+                      //',  mapnorm '//trim(mapnorm_mapindex) &
+                      //'  '//trim(fieldnamelist(nf))
+                   call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO)
+                else
+                   if (mapnorm_mapindex /= packed_data(mapindex)%mapnorm) then
+                     write(tmpstr,*)'Map type '//trim(mapnames(mapindex)) &
+                        //', destcomp '//trim(compname(destcomp)) &
+                        //',  mapnorm '//trim(mapnorm_mapindex) &
+                        //' set; cannot set mapnorm to '//trim(packed_data(mapindex)%mapnorm) &
+                        //'  '//trim(fieldnamelist(nf))
+                     call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO)
+                     !call ESMF_Finalize(endflag=ESMF_END_ABORT)
+                   end if
+                end if
              end if
           end do
        end do
