@@ -219,7 +219,7 @@ contains
     use esmFlds           , only : mapbilnr, mapconsf, mapconsd, mappatch, mappatch_uv3d, mapbilnr_uv3d, mapfcopy
     use esmFlds           , only : mapunset, mapnames, nmappers
     use esmFlds           , only : mapnstod, mapnstod_consd, mapnstod_consf, mapnstod_consd
-    use esmFlds           , only : mapfillv_bilnr, mapbilnr_nstod
+    use esmFlds           , only : mapfillv_bilnr, mapbilnr_nstod, mapconsf_fnorm
     use esmFlds           , only : ncomps, compatm, compice, compocn, compname
     use esmFlds           , only : mapfcopy, mapconsd, mapconsf, mapnstod
     use esmFlds           , only : coupling_mode, dststatus_print
@@ -368,21 +368,24 @@ contains
             dstStatusField=dststatusfield, &
             unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
-    else if (mapindex == mapconsf .or. mapindex == mapnstod_consf) then
-       if (mastertask) then
-          write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
+    else if (mapindex == mapconsf .or. mapindex == mapnstod_consf .or. mapindex == mapconsf_fnorm) then
+       if (.not. ESMF_RouteHandleIsCreated(routehandles(mapconsf)) .or. &
+           .not. ESMF_RouteHandleIsCreated(routehandles(mapnstod_consf))) then
+          if (mastertask) then
+             write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
+          end if
+          call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mapconsf), &
+               srcMaskValues=(/srcMaskValue/), &
+               dstMaskValues=(/dstMaskValue/), &
+               regridmethod=ESMF_REGRIDMETHOD_CONSERVE, &
+               normType=ESMF_NORMTYPE_FRACAREA, &
+               srcTermProcessing=srcTermProcessing_Value, &
+               ignoreDegenerate=.true., &
+               dstStatusField=dststatusfield, &
+               unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
+               rc=rc)
+          if (chkerr(rc,__LINE__,u_FILE_u)) return
        end if
-       call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mapconsf), &
-            srcMaskValues=(/srcMaskValue/), &
-            dstMaskValues=(/dstMaskValue/), &
-            regridmethod=ESMF_REGRIDMETHOD_CONSERVE, &
-            normType=ESMF_NORMTYPE_FRACAREA, &
-            srcTermProcessing=srcTermProcessing_Value, &
-            ignoreDegenerate=.true., &
-            dstStatusField=dststatusfield, &
-            unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
-            rc=rc)
-       if (chkerr(rc,__LINE__,u_FILE_u)) return
     else if (mapindex == mapconsd .or. mapindex == mapnstod_consd) then
        if (mastertask) then
           write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
@@ -794,7 +797,7 @@ contains
                         //' set; cannot set mapnorm to '//trim(packed_data(mapindex)%mapnorm) &
                         //'  '//trim(fieldnamelist(nf))
                      call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO)
-                     !call ESMF_Finalize(endflag=ESMF_END_ABORT)
+                     call ESMF_Finalize(endflag=ESMF_END_ABORT)
                    end if
                 end if
              end if
