@@ -167,6 +167,7 @@ contains
     type(ESMF_Field)    :: lfield
     real(R8), pointer   :: frac(:) => null()
     real(R8), pointer   :: ofrac(:) => null()
+    real(R8), pointer   :: aofrac(:) => null()
     real(R8), pointer   :: lfrac(:) => null()
     real(R8), pointer   :: ifrac(:) => null()
     real(R8), pointer   :: gfrac(:) => null()
@@ -175,6 +176,7 @@ contains
     real(R8), pointer   :: Sl_lfrin(:) => null()
     real(R8), pointer   :: Si_imask(:) => null()
     real(R8), pointer   :: So_omask(:) => null()
+    real(R8), pointer   :: Sa_ofrac(:) => null()
     integer             :: i,j,n,n1,ns
     integer             :: maptype
     logical, save       :: first_call = .true.
@@ -344,6 +346,18 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        call med_map_field(field_src, field_dst, is_local%wrap%RH(compocn,compatm,:), maptype, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+      !TODO: Required?
+      ! Set 'aofrac' in FBfrac(compatm)
+      ! if (trim(coupling_mode) == 'nems_orig' .or. trim(coupling_mode) == 'nems_frac') then
+      !    call fldbun_getdata1d(is_local%wrap%FBImp(compatm,compatm), 'Sa_ofrac', Sa_ofrac, rc)
+      !    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+      !    call fldbun_getdata1d(is_local%wrap%FBFrac(compatm), 'aofrac', aofrac, rc)
+      !    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+      !    if (associated(ofrac)) then
+      !       aofrac(:) = Sa_ofrac(:)
+      !    end if
+      ! end if
     end if
 
     !---------------------------------------

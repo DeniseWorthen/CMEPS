@@ -79,6 +79,7 @@ contains
     use esmFlds         , only : fldListFr, ncomps, mapunset, compname
     use med_methods_mod , only : med_methods_FB_getFieldN
 
+    use esmFlds         , only : mapnames
     ! input/output variables
     type(ESMF_GridComp)  :: gcomp
     integer, intent(in)  :: llogunit
@@ -90,6 +91,7 @@ contains
     type(ESMF_Field)    :: flddst
     integer             :: n,n1,n2,m,nf
     character(len=CX)   :: mapfile
+    character(len=CX)   :: tmpstr
     integer             :: mapindex
     logical             :: mapexists = .false.
     character(len=*), parameter :: subname=' (module_med_map: RouteHandles_init) '
@@ -125,11 +127,14 @@ contains
 
                    ! Determine the mapping type for mapping field nf from n1 to n2
                    mapindex = fldListFr(n1)%flds(nf)%mapindex(n2)
+
                    if (mapindex /= mapunset) then
 
                       ! determine if route handle has already been created
                       mapexists = med_map_RH_is_created(is_local%wrap%RH,n1,n2,mapindex,rc=rc)
                       if (chkerr(rc,__LINE__,u_FILE_u)) return
+                     ! if(mapexists)call ESMF_LogWrite(trim(mapnames(mapindex))//" exists", ESMF_LOGMSG_INFO)
+                     ! if(.not.mapexists)call ESMF_LogWrite(trim(mapnames(mapindex))//" does not exist", ESMF_LOGMSG_INFO)
 
                       ! Create route handle for target mapindex if route handle is required
                       ! (i.e. mapindex /= mapunset) and route handle has not already been created
@@ -221,7 +226,6 @@ contains
     use esmFlds           , only : mapnstod, mapnstod_consd, mapnstod_consf, mapnstod_consd
     use esmFlds           , only : mapfillv_bilnr, mapbilnr_nstod, mapconsf_fnorm
     use esmFlds           , only : ncomps, compatm, compice, compocn, compname
-    use esmFlds           , only : mapfcopy, mapconsd, mapconsf, mapnstod
     use esmFlds           , only : coupling_mode, dststatus_print
     use esmFlds           , only : atm_name
     use med_constants_mod , only : ispval_mask => med_constants_ispval_mask
@@ -526,9 +530,9 @@ contains
   logical function med_map_RH_is_created_RH1d(RHs,mapindex,rc)
 
     use ESMF    , only : ESMF_RouteHandle, ESMF_RouteHandleIsCreated
-    use esmFlds , only : mapconsd, mapconsf, mapnstod
+    use esmFlds , only : mapconsd, mapconsf, mapnstod, mapbilnr, mappatch
     use esmFlds , only : mapnstod_consd, mapnstod_consf
-
+    use esmFlds , only : mapbilnr_uv3d, mappatch_uv3d, mapconsf_fnorm
     ! input/output varaibes
     type(ESMF_RouteHandle) , intent(in)    :: RHs(:)
     integer                , intent(in)    :: mapindex
@@ -561,6 +565,22 @@ contains
        rc = rc2
        if (chkerr(rc,__LINE__,u_FILE_u)) return
        mapexists = .true.
+    else if (mapindex == mapbilnr_uv3d .and. &
+             ESMF_RouteHandleIsCreated(RHs(mapbilnr), rc=rc1)) then
+       rc = rc1
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       mapexists = .true.
+    else if (mapindex == mappatch_uv3d .and. &
+             ESMF_RouteHandleIsCreated(RHs(mappatch), rc=rc1)) then
+       rc = rc1
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       mapexists = .true.
+    !TODO: Why doesn't this work????
+    !else if (mapindex == mapconsf_fnorm .and. &
+    !         ESMF_RouteHandleIsCreated(RHs(mapconsf), rc=rc1)) then
+    !   rc = rc1
+    !   if (chkerr(rc,__LINE__,u_FILE_u)) return
+    !   mapexists = .true.
     else if (ESMF_RouteHandleIsCreated(RHs(mapindex), rc=rc1)) then
        rc = rc1
        if (chkerr(rc,__LINE__,u_FILE_u)) return
@@ -593,13 +613,13 @@ contains
     ! local variables
     type(InternalState)       :: is_local
     integer                   :: n1, n2, m
-    character(len=1)          :: cn1,cn2,cm
     real(R8), pointer         :: dataptr(:) => null()
     integer                   :: fieldCount
     type(ESMF_Field), pointer :: fieldlist(:) => null()
     type(ESMF_Field)          :: field_src
     type(ESMF_Mesh)           :: mesh_src
     type(ESMF_Mesh)           :: mesh_dst
+    logical                   :: rhexists = .false.
     character(len=*),parameter :: subname=' (module_MED_MAP:MapNorm_init)'
     !-----------------------------------------------------------
 
@@ -651,6 +671,10 @@ contains
                 ! Create is_local%wrap%field_NormOne(n1,n2,m)
                 do m = 1,nmappers
                    if (med_map_RH_is_created(is_local%wrap%RH,n1,n2,m,rc=rc)) then
+                    !rhexists = med_map_RH_is_created(is_local%wrap%RH,n1,n2,m,rc=rc)
+                    !if(rhexists)call ESMF_LogWrite(trim(mapnames(m))//" RH exists", ESMF_LOGMSG_INFO)
+                    !if(.not.rhexists)call ESMF_LogWrite(trim(mapnames(m))//" RH does not exist", ESMF_LOGMSG_INFO)
+
                       is_local%wrap%field_NormOne(n1,n2,m) = ESMF_FieldCreate(mesh_dst, &
                            ESMF_TYPEKIND_R8, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
                       if (chkerr(rc,__LINE__,u_FILE_u)) return
@@ -664,7 +688,6 @@ contains
                            maptype=m, rc=rc)
                       if (chkerr(rc,__LINE__,u_FILE_u)) return
                       if (mastertask) then
-                         write(cn1,'(i1)') n1; write(cn2,'(i1)') n2; write(cm ,'(i1)') m
                          write(logunit,'(a)') trim(subname)//' created field_NormOne for '&
                               //compname(n1)//'->'//compname(n2)//' with mapping '//mapnames(m)
                       endif

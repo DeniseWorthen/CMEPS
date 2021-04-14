@@ -57,7 +57,8 @@ module esmflds
   integer , public, parameter :: map_glc2ocn_ice   = 14 ! custom smoothing map to map ice from glc->ocn (cesm only)
   integer , public, parameter :: mapfillv_bilnr    = 15 ! fill value followed by bilinear
   integer , public, parameter :: mapbilnr_nstod    = 16 ! bilinear with nstod extrapolation
-  integer , public, parameter :: nmappers          = 16
+  integer , public, parameter :: mapconsf_fnorm    = 17 ! conservative with fractional normalization (ufs only)
+  integer , public, parameter :: nmappers          = 17
 
   character(len=*) , public, parameter :: mapnames(nmappers) = &
        (/'bilnr      ',&
@@ -75,7 +76,8 @@ module esmflds
          'glc2ocn_ice',&
          'glc2ocn_liq',&
          'fillv_bilnr',&
-         'bilnr_nstod'/)
+         'bilnr_nstod',&
+         'consf_fnorm'/)
 
   !-----------------------------------------------
   ! Set coupling mode
