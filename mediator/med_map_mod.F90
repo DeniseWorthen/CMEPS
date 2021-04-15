@@ -91,7 +91,6 @@ contains
     type(ESMF_Field)    :: flddst
     integer             :: n,n1,n2,m,nf
     character(len=CX)   :: mapfile
-    character(len=CX)   :: tmpstr
     integer             :: mapindex
     logical             :: mapexists = .false.
     character(len=*), parameter :: subname=' (module_med_map: RouteHandles_init) '
@@ -132,8 +131,6 @@ contains
                       ! determine if route handle has already been created
                       mapexists = med_map_RH_is_created(is_local%wrap%RH,n1,n2,mapindex,rc=rc)
                       if (chkerr(rc,__LINE__,u_FILE_u)) return
-                     ! if(mapexists)call ESMF_LogWrite(trim(mapnames(mapindex))//" exists", ESMF_LOGMSG_INFO)
-                     ! if(.not.mapexists)call ESMF_LogWrite(trim(mapnames(mapindex))//" does not exist", ESMF_LOGMSG_INFO)
 
                       ! Create route handle for target mapindex if route handle is required
                       ! (i.e. mapindex /= mapunset) and route handle has not already been created
@@ -623,7 +620,6 @@ contains
     type(ESMF_Field)          :: field_src
     type(ESMF_Mesh)           :: mesh_src
     type(ESMF_Mesh)           :: mesh_dst
-    logical                   :: rhexists = .false.
     character(len=*),parameter :: subname=' (module_MED_MAP:MapNorm_init)'
     !-----------------------------------------------------------
 
@@ -674,10 +670,6 @@ contains
 
                 ! Create is_local%wrap%field_NormOne(n1,n2,m)
                 do m = 1,nmappers
-                    rhexists = med_map_RH_is_created(is_local%wrap%RH,n1,n2,m,rc=rc)
-                    if(rhexists)call ESMF_LogWrite(trim(mapnames(m))//" RH exists", ESMF_LOGMSG_INFO)
-                    if(.not.rhexists)call ESMF_LogWrite(trim(mapnames(m))//" RH does not exist", ESMF_LOGMSG_INFO)
-
                    if (med_map_RH_is_created(is_local%wrap%RH,n1,n2,m,rc=rc)) then
                       is_local%wrap%field_NormOne(n1,n2,m) = ESMF_FieldCreate(mesh_dst, &
                            ESMF_TYPEKIND_R8, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
