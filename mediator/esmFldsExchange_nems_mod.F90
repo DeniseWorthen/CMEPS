@@ -224,7 +224,6 @@ contains
           call addfld(fldListTo(compocn)%flds, 'Foxx_'//trim(flds(n)))
           call addfld(fldListFr(compice)%flds, 'Fioi_'//trim(flds(n)))
           call addfld(fldListFr(compatm)%flds, 'Faxa_'//trim(flds(n)))
-          !call addmap(fldListFr(compatm)%flds, 'Faxa_'//trim(flds(n)), compocn, maptype, normtype, 'unset')
           call addmap(fldListFr(compatm)%flds, 'Faxa_'//trim(flds(n)), compocn, mapconsf_fnorm, normtype, 'unset')
           call addmap(fldListFr(compice)%flds, 'Fioi_'//trim(flds(n)), compocn, mapfcopy, 'unset', 'unset')
        end do
@@ -233,7 +232,6 @@ contains
        ! to ocn: net long wave via auto merge
        call addfld(fldListTo(compocn)%flds, 'Faxa_lwnet')
        call addfld(fldListFr(compatm)%flds, 'Faxa_lwnet')
-       !call addmap(fldListFr(compatm)%flds, 'Faxa_lwnet', compocn, maptype, normtype, 'unset')
        call addmap(fldListFr(compatm)%flds, 'Faxa_lwnet', compocn, mapconsf_fnorm, normtype, 'unset')
        call addmrg(fldListTo(compocn)%flds, 'Faxa_lwnet', &
             mrg_from=compatm, mrg_fld='Faxa_lwnet', mrg_type='copy_with_weights', mrg_fracname='ofrac')
@@ -241,13 +239,11 @@ contains
        ! to ocn: merged sensible heat flux (custom merge in med_phases_prep_ocn)
        call addfld(fldListTo(compocn)%flds, 'Faxa_sen')
        call addfld(fldListFr(compatm)%flds, 'Faxa_sen')
-       !call addmap(fldListFr(compatm)%flds, 'Faxa_sen', compocn, maptype, normtype, 'unset')
        call addmap(fldListFr(compatm)%flds, 'Faxa_sen', compocn, mapconsf_fnorm, normtype, 'unset')
 
        ! to ocn: evaporation water flux (custom merge in med_phases_prep_ocn)
        call addfld(fldListTo(compocn)%flds, 'Faxa_evap')
        call addfld(fldListFr(compatm)%flds, 'Faxa_lat')
-       !call addmap(fldListFr(compatm)%flds, 'Faxa_lat', compocn, maptype, normtype, 'unset')
        call addmap(fldListFr(compatm)%flds, 'Faxa_lat', compocn, mapconsf_fnorm, normtype, 'unset')
     else
        ! nems_orig_data
