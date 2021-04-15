@@ -550,9 +550,9 @@ contains
   logical function med_map_RH_is_created_RH1d(RHs,mapindex,rc)
 
     use ESMF    , only : ESMF_RouteHandle, ESMF_RouteHandleIsCreated
-    use esmFlds , only : mapconsd, mapconsf, mapnstod, mapbilnr, mappatch
+    use esmFlds , only : mapconsd, mapconsf, mapnstod
     use esmFlds , only : mapnstod_consd, mapnstod_consf
-    use esmFlds , only : mapbilnr_uv3d, mappatch_uv3d, mapconsf_fnorm
+
     ! input/output varaibes
     type(ESMF_RouteHandle) , intent(in)    :: RHs(:)
     integer                , intent(in)    :: mapindex
@@ -583,21 +583,6 @@ contains
        rc = rc1
        if (chkerr(rc,__LINE__,u_FILE_u)) return
        rc = rc2
-       if (chkerr(rc,__LINE__,u_FILE_u)) return
-       mapexists = .true.
-    else if (mapindex == mapbilnr_uv3d .and. &
-             ESMF_RouteHandleIsCreated(RHs(mapbilnr), rc=rc1)) then
-       rc = rc1
-       if (chkerr(rc,__LINE__,u_FILE_u)) return
-       mapexists = .true.
-    else if (mapindex == mappatch_uv3d .and. &
-             ESMF_RouteHandleIsCreated(RHs(mappatch), rc=rc1)) then
-       rc = rc1
-       if (chkerr(rc,__LINE__,u_FILE_u)) return
-       mapexists = .true.
-    else if (mapindex == mapconsf_fnorm .and. &
-             ESMF_RouteHandleIsCreated(RHs(mapconsf), rc=rc1)) then
-       rc = rc1
        if (chkerr(rc,__LINE__,u_FILE_u)) return
        mapexists = .true.
     else if (ESMF_RouteHandleIsCreated(RHs(mapindex), rc=rc1)) then
@@ -830,6 +815,7 @@ contains
                       //', destcomp '//trim(compname(destcomp)) &
                       //',  mapnorm '//trim(mapnorm_mapindex) &
                       //'  '//trim(fieldnamelist(nf))
+                   if (mastertask) write(logunit,*)trim(tmpstr)
                    call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO)
                 else
                    if (mapnorm_mapindex /= packed_data(mapindex)%mapnorm) then
@@ -838,6 +824,7 @@ contains
                         //',  mapnorm '//trim(mapnorm_mapindex) &
                         //' set; cannot set mapnorm to '//trim(packed_data(mapindex)%mapnorm) &
                         //'  '//trim(fieldnamelist(nf))
+                     if (mastertask) write(logunit,*)trim(tmpstr)
                      call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO)
                      call ESMF_Finalize(endflag=ESMF_END_ABORT)
                    end if
