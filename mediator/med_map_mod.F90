@@ -127,7 +127,6 @@ contains
 
                    ! Determine the mapping type for mapping field nf from n1 to n2
                    mapindex = fldListFr(n1)%flds(nf)%mapindex(n2)
-
                    if (mapindex /= mapunset) then
 
                       ! determine if route handle has already been created
