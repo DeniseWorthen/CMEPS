@@ -213,7 +213,7 @@ contains
     use ESMF              , only : ESMF_RouteHandle, ESMF_RouteHandlePrint, ESMF_Field, ESMF_MAXSTR
     use ESMF              , only : ESMF_PoleMethod_Flag, ESMF_POLEMETHOD_ALLAVG
     use ESMF              , only : ESMF_FieldSMMStore, ESMF_FieldRedistStore, ESMF_FieldRegridStore
-    use ESMF              , only : ESMF_RouteHandleIsCreated
+    use ESMF              , only : ESMF_RouteHandleIsCreated, ESMF_RouteHandleCreate
     use ESMF              , only : ESMF_REGRIDMETHOD_BILINEAR, ESMF_REGRIDMETHOD_PATCH
     use ESMF              , only : ESMF_REGRIDMETHOD_CONSERVE, ESMF_NORMTYPE_DSTAREA, ESMF_NORMTYPE_FRACAREA
     use ESMF              , only : ESMF_UNMAPPEDACTION_IGNORE, ESMF_REGRIDMETHOD_NEAREST_STOD
@@ -372,13 +372,27 @@ contains
             dstStatusField=dststatusfield, &
             unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
-    else if (mapindex == mapconsf .or. mapindex == mapnstod_consf .or. mapindex == mapconsf_fnorm) then
-       if (.not. ESMF_RouteHandleIsCreated(routehandles(mapconsf)) .or. &
-           .not. ESMF_RouteHandleIsCreated(routehandles(mapnstod_consf))) then
+    else if (mapindex == mapconsf .or. mapindex == mapnstod_consf) then
+       if (mastertask) then
+          write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
+       end if
+       call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mapconsf), &
+            srcMaskValues=(/srcMaskValue/), &
+            dstMaskValues=(/dstMaskValue/), &
+            regridmethod=ESMF_REGRIDMETHOD_CONSERVE, &
+            normType=ESMF_NORMTYPE_FRACAREA, &
+            srcTermProcessing=srcTermProcessing_Value, &
+            ignoreDegenerate=.true., &
+            dstStatusField=dststatusfield, &
+            unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
+            rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+    else if (mapindex == mapconsf_fnorm) then
+       if (.not. ESMF_RouteHandleIsCreated(routehandles(mapconsf))) then
           if (mastertask) then
              write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
           end if
-          call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mapconsf), &
+          call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mapconsf_fnorm), &
                srcMaskValues=(/srcMaskValue/), &
                dstMaskValues=(/dstMaskValue/), &
                regridmethod=ESMF_REGRIDMETHOD_CONSERVE, &
@@ -388,6 +402,13 @@ contains
                dstStatusField=dststatusfield, &
                unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
                rc=rc)
+          if (chkerr(rc,__LINE__,u_FILE_u)) return
+       else
+          ! Copy existing consf RH
+          if (mastertask) then
+             write(logunit,'(A)') trim(subname)//' copying RH(mapconsf) to '//trim(mapname)//' for '//trim(string)
+          end if
+          routehandles(mapconsf_fnorm) = ESMF_RouteHandleCreate(routehandles(mapconsf), rc=rc)
           if (chkerr(rc,__LINE__,u_FILE_u)) return
        end if
     else if (mapindex == mapconsd .or. mapindex == mapnstod_consd) then
@@ -575,12 +596,11 @@ contains
        rc = rc1
        if (chkerr(rc,__LINE__,u_FILE_u)) return
        mapexists = .true.
-    !TODO: Why doesn't this work????
-    !else if (mapindex == mapconsf_fnorm .and. &
-    !         ESMF_RouteHandleIsCreated(RHs(mapconsf), rc=rc1)) then
-    !   rc = rc1
-    !   if (chkerr(rc,__LINE__,u_FILE_u)) return
-    !   mapexists = .true.
+    else if (mapindex == mapconsf_fnorm .and. &
+             ESMF_RouteHandleIsCreated(RHs(mapconsf), rc=rc1)) then
+       rc = rc1
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       mapexists = .true.
     else if (ESMF_RouteHandleIsCreated(RHs(mapindex), rc=rc1)) then
        rc = rc1
        if (chkerr(rc,__LINE__,u_FILE_u)) return
@@ -670,11 +690,11 @@ contains
 
                 ! Create is_local%wrap%field_NormOne(n1,n2,m)
                 do m = 1,nmappers
-                   if (med_map_RH_is_created(is_local%wrap%RH,n1,n2,m,rc=rc)) then
-                    !rhexists = med_map_RH_is_created(is_local%wrap%RH,n1,n2,m,rc=rc)
-                    !if(rhexists)call ESMF_LogWrite(trim(mapnames(m))//" RH exists", ESMF_LOGMSG_INFO)
-                    !if(.not.rhexists)call ESMF_LogWrite(trim(mapnames(m))//" RH does not exist", ESMF_LOGMSG_INFO)
+                    rhexists = med_map_RH_is_created(is_local%wrap%RH,n1,n2,m,rc=rc)
+                    if(rhexists)call ESMF_LogWrite(trim(mapnames(m))//" RH exists", ESMF_LOGMSG_INFO)
+                    if(.not.rhexists)call ESMF_LogWrite(trim(mapnames(m))//" RH does not exist", ESMF_LOGMSG_INFO)
 
+                   if (med_map_RH_is_created(is_local%wrap%RH,n1,n2,m,rc=rc)) then
                       is_local%wrap%field_NormOne(n1,n2,m) = ESMF_FieldCreate(mesh_dst, &
                            ESMF_TYPEKIND_R8, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
                       if (chkerr(rc,__LINE__,u_FILE_u)) return
@@ -689,7 +709,7 @@ contains
                       if (chkerr(rc,__LINE__,u_FILE_u)) return
                       if (mastertask) then
                          write(logunit,'(a)') trim(subname)//' created field_NormOne for '&
-                              //compname(n1)//'->'//compname(n2)//' with mapping '//mapnames(m)
+                              //compname(n1)//'->'//compname(n2)//' with mapping '//trim(mapnames(m))
                       endif
                    end if
                 end do ! end of loop over m mappers
