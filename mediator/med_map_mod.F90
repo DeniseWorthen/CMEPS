@@ -79,7 +79,6 @@ contains
     use esmFlds         , only : fldListFr, ncomps, mapunset, compname
     use med_methods_mod , only : med_methods_FB_getFieldN
 
-    use esmFlds         , only : mapnames
     ! input/output variables
     type(ESMF_GridComp)  :: gcomp
     integer, intent(in)  :: llogunit
