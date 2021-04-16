@@ -219,7 +219,7 @@ contains
     use esmFlds           , only : mapbilnr, mapconsf, mapconsd, mappatch, mappatch_uv3d, mapbilnr_uv3d, mapfcopy
     use esmFlds           , only : mapunset, mapnames, nmappers
     use esmFlds           , only : mapnstod, mapnstod_consd, mapnstod_consf, mapnstod_consd
-    use esmFlds           , only : mapfillv_bilnr, mapbilnr_nstod, mapconsf_aofrc
+    use esmFlds           , only : mapfillv_bilnr, mapbilnr_nstod, mapconsf_aofrac
     use esmFlds           , only : ncomps, compatm, compice, compocn, compname
     use esmFlds           , only : coupling_mode, dststatus_print
     use esmFlds           , only : atm_name
@@ -382,12 +382,12 @@ contains
             unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
             rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
-    else if (mapindex == mapconsf_aofrc) then
+    else if (mapindex == mapconsf_aofrac) then
        if (.not. ESMF_RouteHandleIsCreated(routehandles(mapconsf))) then
           if (mastertask) then
              write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
           end if
-          call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mapconsf_aofrc), &
+          call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mapconsf_aofrac), &
                srcMaskValues=(/srcMaskValue/), &
                dstMaskValues=(/dstMaskValue/), &
                regridmethod=ESMF_REGRIDMETHOD_CONSERVE, &
@@ -403,7 +403,7 @@ contains
           if (mastertask) then
              write(logunit,'(A)') trim(subname)//' copying RH(mapconsf) to '//trim(mapname)//' for '//trim(string)
           end if
-          routehandles(mapconsf_aofrc) = ESMF_RouteHandleCreate(routehandles(mapconsf), rc=rc)
+          routehandles(mapconsf_aofrac) = ESMF_RouteHandleCreate(routehandles(mapconsf), rc=rc)
           if (chkerr(rc,__LINE__,u_FILE_u)) return
        end if
     else if (mapindex == mapconsd .or. mapindex == mapnstod_consd) then

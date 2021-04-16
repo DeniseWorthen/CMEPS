@@ -61,23 +61,23 @@ module esmflds
   integer , public, parameter :: nmappers          = 17
 
   character(len=*) , public, parameter :: mapnames(nmappers) = &
-       (/'bilnr      ',&
-         'consf      ',&
-         'consd      ',&
-         'patch      ',&
-         'fcopy      ',&
-         'nstod      ',&
-         'nstod_consd',&
-         'nstod_consf',&
-         'patch_uv3d ',&
-         'bilnr_uv3d ',&
-         'rof2ocn_ice',&
-         'rof2ocn_liq',&
-         'glc2ocn_ice',&
-         'glc2ocn_liq',&
-         'fillv_bilnr',&
-         'bilnr_nstod',&
-         'consf_aofrc'/)
+       (/'bilnr       ',&
+         'consf       ',&
+         'consd       ',&
+         'patch       ',&
+         'fcopy       ',&
+         'nstod       ',&
+         'nstod_consd ',&
+         'nstod_consf ',&
+         'patch_uv3d  ',&
+         'bilnr_uv3d  ',&
+         'rof2ocn_ice ',&
+         'rof2ocn_liq ',&
+         'glc2ocn_ice ',&
+         'glc2ocn_liq ',&
+         'fillv_bilnr ',&
+         'bilnr_nstod ',&
+         'consf_aofrac'/)
 
   !-----------------------------------------------
   ! Set coupling mode
