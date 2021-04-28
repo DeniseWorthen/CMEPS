@@ -316,7 +316,7 @@ contains
        fldname = trim(flds(n))
        call addfld(fldListFr(compatm)%flds, trim(fldname))
        call addfld(fldListTo(compice)%flds, trim(fldname))
-       call addmap(fldListFr(compatm)%flds, trim(fldname), compice, maptype,  'one', 'unset')
+       call addmap(fldListFr(compatm)%flds, trim(fldname), compice, maptype, 'one', 'unset')
        call addmrg(fldListTo(compice)%flds, trim(fldname), mrg_from=compatm, mrg_fld=trim(fldname), mrg_type='copy')
     end do
     deallocate(flds)
