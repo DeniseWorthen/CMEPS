@@ -347,7 +347,6 @@ contains
        call med_map_field(field_src, field_dst, is_local%wrap%RH(compocn,compatm,:), maptype, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
 
-      !TODO: Required?
       ! Set 'aofrac' in FBfrac(compatm)
        if (trim(coupling_mode) == 'nems_orig' .or. trim(coupling_mode) == 'nems_frac') then
           call fldbun_getdata1d(is_local%wrap%FBImp(compatm,compatm), 'Sa_ofrac', Sa_ofrac, rc)
