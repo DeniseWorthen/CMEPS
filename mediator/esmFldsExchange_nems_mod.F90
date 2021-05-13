@@ -29,7 +29,7 @@ contains
     use esmFlds               , only : addmap => med_fldList_AddMap
     use esmFlds               , only : addmrg => med_fldList_AddMrg
     use esmflds               , only : compmed, compatm, compocn, compice, comprof, ncomps
-    use esmflds               , only : mapbilnr, mapconsf, mapconsd, mappatch
+    use esmflds               , only : mapbilnr, mapconsf, mapconsd, mappatch, mapbilnr_nstod
     use esmflds               , only : mapfcopy, mapnstod, mapnstod_consd, mapnstod_consf
     use esmflds               , only : coupling_mode, mapnames
     use esmflds               , only : fldListTo, fldListFr, fldListMed_aoflux, fldListMed_ocnalb
