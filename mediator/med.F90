@@ -2018,10 +2018,10 @@ contains
             if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
             ! Create mesh info data
-            call ESMF_FieldBundleGet(is_local%wrap%FBImp(n1,n1), fieldCount=fieldCount, rc=rc) 
+            call ESMF_FieldBundleGet(is_local%wrap%FBImp(n1,n1), fieldCount=fieldCount, rc=rc)
             if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-            if (fieldCount == 0) then           
+            if (fieldCount == 0) then
               if (mastertask) then
                 write(logunit,*) trim(subname)//' '//trim(compname(n1))//' import FB field count is = ', fieldCount
                 write(logunit,*) trim(subname)//' '//trim(compname(n1))//' trying to use export FB'
@@ -2057,7 +2057,7 @@ contains
                ! to provide mesh information
                call State_GetNumFields(is_local%wrap%NStateImp(n2), fieldCount, rc=rc)
                if (ChkErr(rc,__LINE__,u_FILE_u)) return
-               if (fieldCount == 0) then 
+               if (fieldCount == 0) then
                  call FB_init(is_local%wrap%FBImp(n1,n2), is_local%wrap%flds_scalar_name, &
                       STgeom=is_local%wrap%NStateExp(n2), &
                       STflds=is_local%wrap%NStateImp(n1), &
