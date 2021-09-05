@@ -1676,12 +1676,15 @@ contains
             if (ungriddedCount > 0) then
                call ESMF_AttributeGet(fieldList(n), name="UngriddedLBound", convention="NUOPC", &
                     purpose="Instance", valueList=ungriddedLBound, rc=rc)
+               if (ChkErr(rc,__LINE__,u_FILE_u)) return
                call ESMF_AttributeGet(fieldList(n), name="UngriddedUBound", convention="NUOPC", &
                     purpose="Instance", valueList=ungriddedUBound, rc=rc)
+               if (ChkErr(rc,__LINE__,u_FILE_u)) return
             endif
 
             call ESMF_FieldEmptyComplete(fieldList(n), typekind=ESMF_TYPEKIND_R8, gridToFieldMap=gridToFieldMap, &
                  ungriddedLbound=ungriddedLbound, ungriddedUbound=ungriddedUbound, rc=rc)
+            if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
             deallocate(gridToFieldMap, ungriddedLbound, ungriddedUbound)
           endif   ! fieldStatus
@@ -2019,10 +2022,10 @@ contains
             if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
             ! Create mesh info data
-            call ESMF_FieldBundleGet(is_local%wrap%FBImp(n1,n1), fieldCount=fieldCount, rc=rc) 
+            call ESMF_FieldBundleGet(is_local%wrap%FBImp(n1,n1), fieldCount=fieldCount, rc=rc)
             if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-            if (fieldCount == 0) then           
+            if (fieldCount == 0) then
               if (mastertask) then
                 write(logunit,*) trim(subname)//' '//trim(compname(n1))//' import FB field count is = ', fieldCount
                 write(logunit,*) trim(subname)//' '//trim(compname(n1))//' trying to use export FB'
@@ -2032,11 +2035,12 @@ contains
               end if
               call med_meshinfo_create(is_local%wrap%FBExp(n1), &
                    is_local%wrap%mesh_info(n1), is_local%wrap%FBArea(n1), rc=rc)
+              if (ChkErr(rc,__LINE__,u_FILE_u)) return
             else
               call med_meshinfo_create(is_local%wrap%FBImp(n1,n1), &
                    is_local%wrap%mesh_info(n1), is_local%wrap%FBArea(n1), rc=rc)
+              if (ChkErr(rc,__LINE__,u_FILE_u)) return
             end if
-            if (ChkErr(rc,__LINE__,u_FILE_u)) return
          end if
 
          ! The following are FBImp and FBImpAccum mapped to different grids.
@@ -2057,7 +2061,7 @@ contains
                ! to provide mesh information
                call State_GetNumFields(is_local%wrap%NStateImp(n2), fieldCount, rc=rc)
                if (ChkErr(rc,__LINE__,u_FILE_u)) return
-               if (fieldCount == 0) then 
+               if (fieldCount == 0) then
                  call FB_init(is_local%wrap%FBImp(n1,n2), is_local%wrap%flds_scalar_name, &
                       STgeom=is_local%wrap%NStateExp(n2), &
                       STflds=is_local%wrap%NStateImp(n1), &
