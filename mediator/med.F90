@@ -1591,7 +1591,7 @@ contains
       type(ESMF_Mesh)             :: mesh
       type(ESMF_Field)            :: meshField
       type(ESMF_Field),pointer    :: fieldList(:) => null()
-      type(ESMF_FieldStatus_Flag) :: fieldStatus
+      type(ESMF_FieldStatus_Flag) :: fieldStatus, fieldStatus2
       type(ESMF_GeomType_Flag)    :: geomtype
       integer                     :: gridToFieldMapCount, ungriddedCount
       integer, allocatable        :: gridToFieldMap(:)
@@ -1609,89 +1609,106 @@ contains
       if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
       if (fieldCount > 0) then
-        nullify(fieldList)
-        call NUOPC_getStateMemberLists(State, fieldList=fieldList, rc=rc)
-        if (ChkErr(rc,__LINE__,u_FILE_u)) return
+         nullify(fieldList)
+         call NUOPC_getStateMemberLists(State, fieldList=fieldList, rc=rc)
+         if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-        meshcreated = .false.
-        do n=1, fieldCount
+         meshcreated = .false.
+         do n=1, fieldCount
 
-          call ESMF_FieldGet(fieldList(n), status=fieldStatus, name=fieldName, &
-            geomtype=geomtype, rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+            call ESMF_FieldGet(fieldList(n), status=fieldStatus, name=fieldName, geomtype=geomtype, rc=rc)
+            if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-          if (geomtype == ESMF_GEOMTYPE_GRID .and. fieldName /= is_local%wrap%flds_scalar_name) then
-            ! Grab grid
-            if (dbug_flag > 1) then
-               call Field_GeomPrint(fieldList(n),trim(fieldName)//'_premesh',rc)
+            ! Input fields contains grid - need to convert to mesh
+            if (geomtype == ESMF_GEOMTYPE_GRID .and. fieldName /= is_local%wrap%flds_scalar_name) then
+
+               ! Grab grid
+               if (dbug_flag > 1) then
+                  call Field_GeomPrint(fieldList(n),trim(fieldName)//'_premesh',rc)
+                  if (ChkErr(rc,__LINE__,u_FILE_u)) return
+               end if
+               call ESMF_FieldGet(fieldList(n), grid=grid, rc=rc)
                if (ChkErr(rc,__LINE__,u_FILE_u)) return
             end if
             call ESMF_FieldGet(fieldList(n), grid=grid, rc=rc)
             if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-            ! Convert grid to mesh
-            if (.not. meshcreated) then
-               if (dbug_flag > 20) then
-                 call med_grid_write(grid, trim(fieldName)//'_premesh.nc', rc)
-                 if (ChkErr(rc,__LINE__,u_FILE_u)) return
+               ! Convert grid to mesh
+               if (.not. meshcreated) then
+                  if (dbug_flag > 20) then
+                     call med_grid_write(grid, trim(fieldName)//'_premesh.nc', rc)
+                     if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                  end if
+                  mesh = ESMF_MeshCreate(grid, rc=rc)
+                  if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                  meshcreated = .true.
+                  if (dbug_flag > 20) then
+                     call ESMF_MeshWrite(mesh, filename=trim(fieldName)//'_postmesh', rc=rc)
+                     if (chkerr(rc,__LINE__,u_FILE_u)) return
+                  end if
                end if
 
-               mesh = ESMF_MeshCreate(grid, rc=rc)
+               ! Create field on mesh
+               meshField = ESMF_FieldCreate(mesh, typekind=ESMF_TYPEKIND_R8, &
+                    meshloc=ESMF_MESHLOC_ELEMENT, name=fieldName, rc=rc)
                if (ChkErr(rc,__LINE__,u_FILE_u)) return
                meshcreated = .true.
 
-               if (dbug_flag > 20) then
-                 call ESMF_MeshWrite(mesh, filename=trim(fieldName)//'_postmesh', rc=rc)
-                 if (chkerr(rc,__LINE__,u_FILE_u)) return
-               end if
+               ! Swap grid for mesh, at this point, only connected fields are in the state
+               call NUOPC_Realize(State, field=meshField, rc=rc)
+               if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+            call ESMF_FieldGet(meshField, status=fieldStatus2, rc=rc)
+            if (fieldStatus2==ESMF_FIELDSTATUS_COMPLETE) call ESMF_LogWrite('fieldstat2 complete',ESMF_LOGMSG_INFO)
+            call Field_GeomPrint(meshField, trim(subname)//':'//trim(fieldName), rc=rc)
+            if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+               ! Allocate memory for field
+               !if (fieldStatus==ESMF_FIELDSTATUS_GRIDSET) then
+               !   call ESMF_LogWrite(subname//" is allocating field memory for field "//trim(fieldName), &
+               !        ESMF_LOGMSG_INFO)
+               !   !call ESMF_FieldEmptyComplete(fieldList(n), typekind=ESMF_TYPEKIND_R8, rc=rc)
+               !   !if (ChkErr(rc,__LINE__,u_FILE_u)) return
+               !end if
+
+            ! Input fields contain mesh
+            else
+
+               if (fieldStatus==ESMF_FIELDSTATUS_GRIDSET) then
+                  call ESMF_AttributeGet(fieldList(n), name="GridToFieldMap", convention="NUOPC", &
+                       purpose="Instance", itemCount=gridToFieldMapCount, rc=rc)
+                  if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                  allocate(gridToFieldMap(gridToFieldMapCount))
+                  call ESMF_AttributeGet(fieldList(n), name="GridToFieldMap", convention="NUOPC", &
+                       purpose="Instance", valueList=gridToFieldMap, rc=rc)
+                  if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                  ungriddedCount=0  ! initialize in case it was not set
+                  call ESMF_AttributeGet(fieldList(n), name="UngriddedLBound", convention="NUOPC", &
+                       purpose="Instance", itemCount=ungriddedCount,  isPresent=isPresent, rc=rc)
+                  if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                  allocate(ungriddedLBound(ungriddedCount), ungriddedUBound(ungriddedCount))
+                  if (ungriddedCount > 0) then
+                     call ESMF_AttributeGet(fieldList(n), name="UngriddedLBound", convention="NUOPC", &
+                          purpose="Instance", valueList=ungriddedLBound, rc=rc)
+                     call ESMF_AttributeGet(fieldList(n), name="UngriddedUBound", convention="NUOPC", &
+                          purpose="Instance", valueList=ungriddedUBound, rc=rc)
+                  endif
+                  call ESMF_FieldEmptyComplete(fieldList(n), typekind=ESMF_TYPEKIND_R8, gridToFieldMap=gridToFieldMap, &
+                       ungriddedLbound=ungriddedLbound, ungriddedUbound=ungriddedUbound, rc=rc)
+                  if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                  deallocate(gridToFieldMap, ungriddedLbound, ungriddedUbound)
+               end if ! fieldStatus
             end if
 
-            meshField = ESMF_FieldCreate(mesh, typekind=ESMF_TYPEKIND_R8, &
-                 meshloc=ESMF_MESHLOC_ELEMENT, name=fieldName, rc=rc)
-            if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-            ! Swap grid for mesh, at this point, only connected fields are in the state
-            call NUOPC_Realize(State, field=meshField, rc=rc)
-            if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          endif
-
-          if (fieldStatus==ESMF_FIELDSTATUS_GRIDSET) then
-            call ESMF_LogWrite(subname//" is allocating field memory for field "//trim(fieldName), &
-                 ESMF_LOGMSG_INFO)
-
-            call ESMF_AttributeGet(fieldList(n), name="GridToFieldMap", convention="NUOPC", &
-                 purpose="Instance", itemCount=gridToFieldMapCount, rc=rc)
-            if (ChkErr(rc,__LINE__,u_FILE_u)) return
-            allocate(gridToFieldMap(gridToFieldMapCount))
-            call ESMF_AttributeGet(fieldList(n), name="GridToFieldMap", convention="NUOPC", &
-                 purpose="Instance", valueList=gridToFieldMap, rc=rc)
-            if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-            ungriddedCount=0  ! initialize in case it was not set
-            call ESMF_AttributeGet(fieldList(n), name="UngriddedLBound", convention="NUOPC", &
-                 purpose="Instance", itemCount=ungriddedCount,  isPresent=isPresent, rc=rc)
+            ! Print field info
+            call Field_GeomPrint(fieldlist(n), trim(subname)//':'//trim(fieldName), rc=rc)
             if (ChkErr(rc,__LINE__,u_FILE_u)) return
             allocate(ungriddedLBound(ungriddedCount), ungriddedUBound(ungriddedCount))
 
-            if (ungriddedCount > 0) then
-               call ESMF_AttributeGet(fieldList(n), name="UngriddedLBound", convention="NUOPC", &
-                    purpose="Instance", valueList=ungriddedLBound, rc=rc)
-               call ESMF_AttributeGet(fieldList(n), name="UngriddedUBound", convention="NUOPC", &
-                    purpose="Instance", valueList=ungriddedUBound, rc=rc)
-            endif
+         enddo ! end of loop over fields
+         deallocate(fieldList)
 
-            call ESMF_FieldEmptyComplete(fieldList(n), typekind=ESMF_TYPEKIND_R8, gridToFieldMap=gridToFieldMap, &
-                 ungriddedLbound=ungriddedLbound, ungriddedUbound=ungriddedUbound, rc=rc)
-
-            deallocate(gridToFieldMap, ungriddedLbound, ungriddedUbound)
-          endif   ! fieldStatus
-
-          call Field_GeomPrint(fieldList(n), trim(subname)//':'//trim(fieldName), rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-        enddo
-        deallocate(fieldList)
-      endif
+      endif ! end of fieldcount< 0
 
       if (profile_memory) call ESMF_VMLogMemInfo("Leaving "//trim(subname))
       call ESMF_LogWrite(trim(subname)//": done", ESMF_LOGMSG_INFO)
