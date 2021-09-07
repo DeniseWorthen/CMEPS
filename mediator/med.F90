@@ -1629,9 +1629,6 @@ contains
                end if
                call ESMF_FieldGet(fieldList(n), grid=grid, rc=rc)
                if (ChkErr(rc,__LINE__,u_FILE_u)) return
-            end if
-            call ESMF_FieldGet(fieldList(n), grid=grid, rc=rc)
-            if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
                ! Convert grid to mesh
                if (.not. meshcreated) then
