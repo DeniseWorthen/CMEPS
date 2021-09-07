@@ -1577,7 +1577,7 @@ contains
       use ESMF  , only : ESMF_SUCCESS, ESMF_LogWrite, ESMF_LOGMSG_INFO, ESMF_FieldGet, ESMF_FieldEmptyComplete
       use ESMF  , only : ESMF_GeomType_Flag, ESMF_FieldCreate, ESMF_MeshCreate, ESMF_GEOMTYPE_GRID
       use ESMF  , only : ESMF_MeshLoc_Element, ESMF_TYPEKIND_R8, ESMF_FIELDSTATUS_GRIDSET
-      use ESMF  , only : ESMF_AttributeGet, ESMF_MeshWrite
+      use ESMF  , only : ESMF_AttributeGet, ESMF_MeshWrite, ESMF_FIELDSTATUS_COMPLETE
       use NUOPC , only : NUOPC_getStateMemberLists, NUOPC_Realize
 
       ! input/output variables
@@ -1652,7 +1652,6 @@ contains
                meshField = ESMF_FieldCreate(mesh, typekind=ESMF_TYPEKIND_R8, &
                     meshloc=ESMF_MESHLOC_ELEMENT, name=fieldName, rc=rc)
                if (ChkErr(rc,__LINE__,u_FILE_u)) return
-               meshcreated = .true.
 
                ! Swap grid for mesh, at this point, only connected fields are in the state
                call NUOPC_Realize(State, field=meshField, rc=rc)
@@ -1703,7 +1702,6 @@ contains
             ! Print field info
             call Field_GeomPrint(fieldlist(n), trim(subname)//':'//trim(fieldName), rc=rc)
             if (ChkErr(rc,__LINE__,u_FILE_u)) return
-            allocate(ungriddedLBound(ungriddedCount), ungriddedUBound(ungriddedCount))
 
          enddo ! end of loop over fields
          deallocate(fieldList)
