@@ -311,9 +311,10 @@ contains
     ! when waves are passing through connectors
     if (is_local%wrap%comp_present(compwav)) then
        ! to ocn: partitioned stokes drift from wav
-       allocate(flds(6))
+       allocate(flds(7))
        flds = (/'Sw_ustokes1', 'Sw_ustokes2', 'Sw_ustokes3', &
-                'Sw_vstokes1', 'Sw_vstokes2', 'Sw_vstokes3'/)
+                'Sw_vstokes1', 'Sw_vstokes2', 'Sw_vstokes3', &
+                'Sw_lamult  '/)
        do n = 1,size(flds)
           fldname = trim(flds(n))
           call addfld(fldListTo(compocn)%flds, trim(fldname))
