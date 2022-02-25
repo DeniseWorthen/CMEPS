@@ -415,8 +415,9 @@ contains
        ! to wav: zonal sea water velocity from ocn
        ! to wav: meridional sea water velocity from ocn
        ! to wav: surface temperature from ocn
-       allocate(flds(3))
-       flds = (/'So_u', 'So_v', 'So_t'/)
+       allocate(flds(4))
+       flds = (/'So_u      ', 'So_v      ', &
+                'So_bldepth', 'So_t      '/)
        do n = 1,size(flds)
           fldname = trim(flds(n))
           call addfld(fldListTo(compwav)%flds, trim(fldname))
