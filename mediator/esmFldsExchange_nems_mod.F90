@@ -585,6 +585,20 @@ contains
     end do
     deallocate(flds)
 
+    if (phase == 'advertise') then
+       if (is_local%wrap%comp_present(compice) .and. is_local%wrap%comp_present(compwav)) then
+          call addfld(fldListFr(compwav)%flds, 'Sw_elevation_spectrum')
+          call addfld(fldListTo(compice)%flds, 'Sw_elevation_spectrum')
+       end if
+    else
+       if ( fldchk(is_local%wrap%FBExp(compice)        , 'Sw_elevation_spectrum', rc=rc) .and. &
+            fldchk(is_local%wrap%FBImp(compwav,compwav), 'Sw_elevation_spectrum', rc=rc)) then
+            call addmap(fldListFr(compwav)%flds, 'Sw_elevation_spectrum', compice, mapfcopy, 'unset', 'unset')
+             call addmrg(fldListTo(compice)%flds, 'Sw_elevation_spectrum', &
+                  mrg_from=compwav, mrg_fld='Sw_elevation_spectrum', mrg_type='copy')
+       end if
+    end if
+
     !=====================================================================
     ! FIELDS TO WAV (compwav)
     !=====================================================================
@@ -614,12 +628,20 @@ contains
         if (is_local%wrap%comp_present(compice) .and. is_local%wrap%comp_present(compwav)) then
            call addfld(fldListFr(compice)%flds, 'Si_ifrac')
            call addfld(fldListTo(compwav)%flds, 'Si_ifrac')
+           call addfld(fldListFr(compice)%flds, 'Si_floediam')
+           call addfld(fldListTo(compwav)%flds, 'Si_floediam')
+           call addfld(fldListFr(compice)%flds, 'Si_thick')
+           call addfld(fldListTo(compwav)%flds, 'Si_thick')
         end if
      else
         if ( fldchk(is_local%wrap%FBexp(compwav)        , 'Si_ifrac', rc=rc) .and. &
              fldchk(is_local%wrap%FBImp(compice,compice), 'Si_ifrac', rc=rc)) then
             call addmap(fldListFr(compice)%flds, 'Si_ifrac', compwav, mapfcopy , 'unset', 'unset')
             call addmrg(fldListTo(compwav)%flds, 'Si_ifrac', mrg_from=compice, mrg_fld='Si_ifrac', mrg_type='copy')
+            call addmap(fldListFr(compice)%flds, 'Si_floediam', compwav, mapfcopy , 'unset', 'unset')
+            call addmrg(fldListTo(compwav)%flds, 'Si_floediam', mrg_from=compice, mrg_fld='Si_floediam', mrg_type='copy')
+            call addmap(fldListFr(compice)%flds, 'Si_thick', compwav, mapfcopy , 'unset', 'unset')
+            call addmrg(fldListTo(compwav)%flds, 'Si_thick', mrg_from=compice, mrg_fld='Si_thick', mrg_type='copy')
         end if
      end if
 
