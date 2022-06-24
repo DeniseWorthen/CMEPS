@@ -657,7 +657,7 @@ contains
     else
        if ( fldchk(is_local%wrap%FBExp(compice)        , 'Sw_elevation_spectrum', rc=rc) .and. &
             fldchk(is_local%wrap%FBImp(compwav,compwav), 'Sw_elevation_spectrum', rc=rc)) then
-            call addmap(fldListFr(compwav)%flds, 'Sw_elevation_spectrum', compice, mapfcopy, 'unset', 'unset')
+            call addmap(fldListFr(compwav)%flds, 'Sw_elevation_spectrum', compice, mapbilnr_nstod, 'unset', 'unset')
             call addmrg(fldListTo(compice)%flds, 'Sw_elevation_spectrum', &
                   mrg_from=compwav, mrg_fld='Sw_elevation_spectrum', mrg_type='copy')
        end if
