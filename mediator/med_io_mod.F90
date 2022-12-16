@@ -899,8 +899,8 @@ contains
     if (coordsys == ESMF_COORDSYS_CART) then
        coordvarnames(1) = trim(lpre)//'_x'
        coordvarnames(2) = trim(lpre)//'_y'
-       coordnames = (/'x-dimension', 'y-dimension'/)
-       coordunits = (/'1','1'/)
+       coordnames = (/'x-coordinate', 'y-coordinate'/)
+       coordunits = (/'unitless','unitless'/)
     else
        coordvarnames(1) = trim(lpre)//'_lon'
        coordvarnames(2) = trim(lpre)//'_lat'
