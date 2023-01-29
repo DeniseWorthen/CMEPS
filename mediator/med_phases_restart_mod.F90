@@ -139,6 +139,7 @@ contains
     use med_io_mod , only : med_io_close, med_io_date2yyyymmdd, med_io_sec2hms
     use med_phases_history_mod, only : auxcomp
     use med_constants_mod     , only : SecPerDay => med_constants_SecPerDay
+    use med_internalstate_mod , only : coupling_mode
 
     ! Input/output variables
     type(ESMF_GridComp)  :: gcomp
@@ -166,6 +167,7 @@ contains
     integer                    :: next_tod       ! Starting time-of-day (s)
     integer                    :: nx,ny          ! global grid size
     integer                    :: yr,mon,day,sec ! time units
+    integer                    :: hr, mn         ! time units
     real(R8)                   :: days_since     ! Time interval since start time
     integer                    :: unitn          ! unit number
     character(ESMF_MAXSTR)     :: time_units     ! units of time variable
@@ -300,8 +302,17 @@ contains
        ! the timestep and is preferred for restart file names
        !---------------------------------------
 
-       write(restart_file,"(6a)") trim(restart_dir)//trim(case_name),'.cpl', trim(cpl_inst_tag),'.r.',&
-            trim(nexttimestr),'.nc'
+       if (coupling_mode(1:4) == 'nems' .or. coupling_mode(1:4) == 'hafs') then
+          ! retrieve time units used to construct an alternate timestr
+          call ESMF_TimeGet(nexttime, yy=yr, mm=mon, dd=day, h=hr, m=mn, s=sec, rc=rc)
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+          write(nexttimestr,'(i4.4,2(i2.2),a,3(i2.2))') yr, mon, day,".", hr, mn, sec
+          write(restart_file,"(6a)") trim(restart_dir)//trim(nexttimestr),'.',trim(case_name),'.cpl', &
+               trim(cpl_inst_tag),'.r.nc'
+       else
+          write(restart_file,"(6a)") trim(restart_dir)//trim(case_name),'.cpl', trim(cpl_inst_tag),'.r.',&
+               trim(nexttimestr),'.nc'
+       end if
 
        if (mastertask) then
           restart_pfile = "rpointer.cpl"//cpl_inst_tag

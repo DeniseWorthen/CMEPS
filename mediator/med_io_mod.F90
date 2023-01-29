@@ -435,7 +435,7 @@ contains
     else
        pio_rearr_comm_enable_isend_comp2io = .false.
     end if
-   
+
     ! pio_rearr_comm_max_pend_req_comp2io
     call NUOPC_CompAttributeGet(gcomp, name='pio_rearr_comm_max_pend_req_comp2io', value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -576,7 +576,7 @@ contains
           if(pio_iotype == PIO_IOTYPE_NETCDF .or. pio_iotype == PIO_IOTYPE_PNETCDF) then
              nmode = ior(nmode,pio_ioformat)
           endif
-          
+
           rcode = pio_createfile(io_subsystem, io_file(lfile_ind), pio_iotype, trim(filename), nmode)
           if (iam==0) write(logunit,'(a)') trim(subname) //' creating file '// trim(filename)
           rcode = pio_put_att(io_file(lfile_ind),pio_global,"file_version",version)
@@ -1083,7 +1083,7 @@ contains
           else
              itemc = trim(fieldNameList(k))
           end if
- 
+
           call FB_getFldPtr(FB, itemc, &
                fldptr1=fldptr1, fldptr2=fldptr2, rank=rank, rc=rc)
           if (chkerr(rc,__LINE__,u_FILE_u)) return
@@ -1812,8 +1812,13 @@ contains
        deallocate(dof)
 
        deallocate(minIndexPTile, maxIndexPTile)
-
-    end if ! end if rcode check
+   else
+      call ESMF_LogWrite(trim(subname)//": "//trim(name1)//" is not present, aborting ", ESMF_LOGMSG_INFO)
+      rc = ESMF_FAILURE
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=u_FILE_u)) then
+         call ESMF_Finalize(endflag=ESMF_END_ABORT)
+      end if
+   end if ! end if rcode check
 
   end subroutine med_io_read_init_iodesc
 
