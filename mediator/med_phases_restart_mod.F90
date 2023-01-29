@@ -265,6 +265,7 @@ contains
        endif
        call ESMF_TimeGet(nexttime, yy=yr, mm=mon, dd=day, s=sec, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       ! nexttimestr will be over-written below for UFS applications
        write(nexttimestr,'(i4.4,a,i2.2,a,i2.2,a,i5.5)') yr,'-',mon,'-',day,'-',sec
        if (dbug_flag > 1) then
           call ESMF_LogWrite(trim(subname)//": nexttime = "//trim(nexttimestr), ESMF_LOGMSG_INFO)
@@ -303,7 +304,6 @@ contains
        !---------------------------------------
 
        if (coupling_mode(1:4) == 'nems' .or. coupling_mode(1:4) == 'hafs') then
-          ! retrieve time units used to construct an alternate timestr
           call ESMF_TimeGet(nexttime, yy=yr, mm=mon, dd=day, h=hr, m=mn, s=sec, rc=rc)
           if (ChkErr(rc,__LINE__,u_FILE_u)) return
           write(nexttimestr,'(i4.4,2(i2.2),a,3(i2.2))') yr, mon, day,".", hr, mn, sec

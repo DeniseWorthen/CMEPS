@@ -13,7 +13,7 @@ module med_io_mod
   use NUOPC                 , only : NUOPC_FieldDictionaryGetEntry
   use NUOPC                 , only : NUOPC_FieldDictionaryHasEntry
   use pio                   , only : file_desc_t, iosystem_desc_t
-  use med_internalstate_mod , only : logunit, med_id
+  use med_internalstate_mod , only : logunit, med_id, mastertask
   use med_constants_mod     , only : dbug_flag    => med_constants_dbug_flag
   use med_methods_mod       , only : FB_getFieldN => med_methods_FB_getFieldN
   use med_methods_mod       , only : FB_getFldPtr => med_methods_FB_getFldPtr
@@ -1812,13 +1812,11 @@ contains
        deallocate(dof)
 
        deallocate(minIndexPTile, maxIndexPTile)
-   else
-      call ESMF_LogWrite(trim(subname)//": "//trim(name1)//" is not present, aborting ", ESMF_LOGMSG_INFO)
-      rc = ESMF_FAILURE
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=u_FILE_u)) then
-         call ESMF_Finalize(endflag=ESMF_END_ABORT)
-      end if
-   end if ! end if rcode check
+    else
+       if(mastertask) write(logunit,*) trim(subname),' ERROR: '//trim(name1)//' is not present, aborting '
+       call ESMF_LogWrite(trim(subname)//' ERROR: '//trim(name1)//' is not present, aborting ', ESMF_LOGMSG_INFO)
+       rc = ESMF_FAILURE
+    end if ! end if rcode check
 
   end subroutine med_io_read_init_iodesc
 
