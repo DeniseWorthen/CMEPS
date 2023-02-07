@@ -51,7 +51,6 @@ module MED
   use esmFldsExchange_nems_mod , only : esmFldsExchange_nems
   use esmFldsExchange_cesm_mod , only : esmFldsExchange_cesm
   use esmFldsExchange_hafs_mod , only : esmFldsExchange_hafs
-  use med_internalstate_mod    , only : test_interp
   use med_phases_profile_mod   , only : med_phases_profile_finalize
 
   implicit none
@@ -806,9 +805,6 @@ contains
        write(logunit,*) '========================================================'
        write(logunit,*)
     end if
-    call NUOPC_CompAttributeGet(gcomp, name='test_interp', value=test_interp, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_LogWrite('test_interp = '// trim(test_interp), ESMF_LOGMSG_INFO)
 
     ! Initialize memory for fldlistTo and fldlistFr - this is need for the calls below for the
     ! advertise phase
@@ -1346,6 +1342,7 @@ contains
     nullify(is_local%wrap)
     call ESMF_GridCompGetInternalState(gcomp, is_local, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
     do n1 = 1,ncomps
       ! Finish initializing import states and reset state data to spval_init
       if (ESMF_StateIsCreated(is_local%wrap%NStateImp(n1),rc=rc)) then
@@ -1470,10 +1467,10 @@ contains
                end if
                call Field_GeomPrint(meshField, trim(subname)//':'//trim(fieldName), rc=rc)
                if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
             else
 
                ! Input fields contain mesh
-
                if (fieldStatus==ESMF_FIELDSTATUS_GRIDSET) then
                   call ESMF_AttributeGet(fieldList(n), name="GridToFieldMap", convention="NUOPC", &
                        purpose="Instance", itemCount=gridToFieldMapCount, rc=rc)

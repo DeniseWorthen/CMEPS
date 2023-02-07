@@ -32,7 +32,7 @@ contains
     use med_internalstate_mod , only : mapconsf_aofrac, mapbilnr_nstod
     use med_internalstate_mod , only : coupling_mode, mapnames
     use esmFlds               , only : med_fldList_type
-    use esmflds               , only : test_interp
+    use med_internalstate_mod , only : test_interp
     use esmFlds               , only : addfld_to => med_fldList_addfld_to
     use esmFlds               , only : addmrg_to => med_fldList_addmrg_to
     use esmFlds               , only : addfld_from => med_fldList_addfld_from
