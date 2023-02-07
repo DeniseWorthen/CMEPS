@@ -19,14 +19,6 @@ module med_methods_mod
   implicit none
   private
 
-  interface med_methods_FB_accum ; module procedure &
-    med_methods_FB_accumFB2FB
-  end interface
-
-  interface med_methods_FB_copy ; module procedure &
-    med_methods_FB_copyFB2FB
-  end interface
-
   interface med_methods_FieldPtr_compare ; module procedure &
     med_methods_FieldPtr_compare1, &
     med_methods_FieldPtr_compare2
@@ -76,10 +68,9 @@ module med_methods_mod
   private med_methods_Mesh_Print
   private med_methods_Grid_Print
   private med_methods_Field_GetFldPtr
-  private med_methods_FB_copyFB2FB
-  private med_methods_FB_accumFB2FB
+#ifdef DIAGNOSE
   private med_methods_Array_diagnose
-
+#endif
 !-----------------------------------------------------------------------------
 contains
 !-----------------------------------------------------------------------------
@@ -112,12 +103,10 @@ contains
     integer            :: lrank
     integer            :: fieldCount
     integer            :: ungriddedCount
-    integer            :: gridToFieldMapCount
     integer            :: ungriddedLBound(1)
     integer            :: ungriddedUBound(1)
-    integer            :: gridToFieldMap(1)
-    real(R8), pointer  :: dataptr1d(:) => null()
-    real(R8), pointer  :: dataptr2d(:,:) => null()
+    real(R8), pointer  :: dataptr1d(:)
+    real(R8), pointer  :: dataptr2d(:,:)
     character(ESMF_MAXSTR), allocatable :: lfieldNameList(:)
     character(len=*), parameter :: subname='(med_methods_FB_init_pointer)'
     ! ----------------------------------------------
@@ -175,13 +164,12 @@ contains
                 return
              end if
 
-             ! set ungridded dimensions and GridToFieldMap for field
+             ! set ungridded dimensions for field
              call ESMF_AttributeGet(lfield, name="UngriddedLBound", convention="NUOPC", &
                   purpose="Instance", valueList=ungriddedLBound, rc=rc)
+             if (chkerr(rc,__LINE__,u_FILE_u)) return
              call ESMF_AttributeGet(lfield, name="UngriddedUBound", convention="NUOPC", &
                   purpose="Instance", valueList=ungriddedUBound, rc=rc)
-             call ESMF_AttributeGet(lfield, name="GridToFieldMap", convention="NUOPC", &
-                  purpose="Instance", valueList=gridToFieldMap, rc=rc)
              if (chkerr(rc,__LINE__,u_FILE_u)) return
 
              ! get 2d pointer for field
@@ -191,7 +179,7 @@ contains
              ! create new field with an ungridded dimension
              newfield = ESMF_FieldCreate(lmesh, dataptr2d, ESMF_INDEX_DELOCAL, &
                   meshloc=meshloc, name=lfieldNameList(n), &
-                  ungriddedLbound=ungriddedLbound, ungriddedUbound=ungriddedUbound, gridToFieldMap=gridtoFieldMap, rc=rc)
+                  ungriddedLbound=ungriddedLbound, ungriddedUbound=ungriddedUbound, gridToFieldMap=(/2/), rc=rc)
              if (chkerr(rc,__LINE__,u_FILE_u)) return
 
           else if (lrank == 1) then
@@ -255,19 +243,16 @@ contains
     integer               , intent(out)          :: rc
 
     ! local variables
-    integer                :: i,j,n,n1
+    integer                :: n,n1
     integer                :: fieldCount,fieldCountgeom
-    logical                :: found
     character(ESMF_MAXSTR) :: lname
     type(ESMF_Field)       :: field,lfield
     type(ESMF_Mesh)        :: lmesh
-    type(ESMF_StaggerLoc)  :: staggerloc
     type(ESMF_MeshLoc)     :: meshloc
     integer                :: ungriddedCount
+    integer                :: ungriddedCount_in
     integer, allocatable   :: ungriddedLBound(:)
     integer, allocatable   :: ungriddedUBound(:)
-    integer                :: gridToFieldMapCount
-    integer, allocatable   :: gridToFieldMap(:)
     logical                :: isPresent
     character(ESMF_MAXSTR), allocatable :: lfieldNameList(:)
     character(len=*), parameter :: subname='(med_methods_FB_init)'
@@ -367,7 +352,7 @@ contains
       call ESMF_StateGet(STgeom, itemNameList=lfieldNameList, rc=rc)
       if (chkerr(rc,__LINE__,u_FILE_u)) return
       if (dbug_flag > 5) then
-         call ESMF_LogWrite(trim(subname)//":"//trim(lname)//" fieldNameList from STflds", ESMF_LOGMSG_INFO)
+         call ESMF_LogWrite(trim(subname)//":"//trim(lname)//" fieldNameList from STgeom", ESMF_LOGMSG_INFO)
       end if
     else
        call ESMF_LogWrite(trim(subname)//": ERROR fieldNameList, FBflds, STflds, FBgeom, or STgeom must be passed", &
@@ -384,7 +369,7 @@ contains
       if (trim(lfieldnamelist(n)) == trim(flds_scalar_name) .or. &
           trim(lfieldnamelist(n)) == '') then
         do n1 = n, fieldCount-1
-          lfieldnamelist(n1) = lfieldnamelist(n1+1)
+           lfieldnamelist(n1) = lfieldnamelist(n1+1)
         enddo
         fieldCount = fieldCount - 1
       endif
@@ -453,7 +438,7 @@ contains
 
              ! ungridded dimensions might be present in the input states or field bundles
              if (present(FBflds)) then
-                call med_methods_FB_getFieldN(FBflds, n, lfield, rc=rc)
+                call ESMF_FieldBundleGet(FBflds, fieldName=lfieldnamelist(n), field=lfield, rc=rc)
                 if (chkerr(rc,__LINE__,u_FILE_u)) return
              elseif (present(STflds)) then
                 call med_methods_State_getNameN(STflds, n, lname, rc)
@@ -463,10 +448,14 @@ contains
              end if
 
              ! Determine ungridded lower and upper bounds for lfield
-             ungriddedCount=0  ! initialize in case it was not set
-             call ESMF_AttributeGet(lfield, name="UngriddedLBound", convention="NUOPC", &
-                  purpose="Instance", itemCount=ungriddedCount,  isPresent=isPresent, rc=rc)
+             call ESMF_AttributeGet(lfield, name="UngriddedUBound", convention="NUOPC", &
+                  purpose="Instance", itemCount=ungriddedCount_in,  isPresent=isPresent, rc=rc)
              if (chkerr(rc,__LINE__,u_FILE_u)) return
+             if (isPresent) then
+                ungriddedCount = ungriddedCount_in
+             else
+                ungriddedCount=0  ! initialize in case it was not set
+             end if
 
              ! Create the field on a lmesh
              if (ungriddedCount > 0) then
@@ -474,23 +463,16 @@ contains
                 allocate(ungriddedLBound(ungriddedCount), ungriddedUBound(ungriddedCount))
                 call ESMF_AttributeGet(lfield, name="UngriddedLBound", convention="NUOPC", &
                      purpose="Instance", valueList=ungriddedLBound, rc=rc)
+                if (chkerr(rc,__LINE__,u_FILE_u)) return
                 call ESMF_AttributeGet(lfield, name="UngriddedUBound", convention="NUOPC", &
                      purpose="Instance", valueList=ungriddedUBound, rc=rc)
-
-                call ESMF_AttributeGet(lfield, name="GridToFieldMap", convention="NUOPC", &
-                     purpose="Instance", itemCount=gridToFieldMapCount, rc=rc)
-                if (chkerr(rc,__LINE__,u_FILE_u)) return
-                allocate(gridToFieldMap(gridToFieldMapCount))
-                call ESMF_AttributeGet(lfield, name="GridToFieldMap", convention="NUOPC", &
-                     purpose="Instance", valueList=gridToFieldMap, rc=rc)
                 if (chkerr(rc,__LINE__,u_FILE_u)) return
 
                 field = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_R8, meshloc=meshloc, name=lfieldNameList(n), &
-                     ungriddedLbound=ungriddedLbound, ungriddedUbound=ungriddedUbound, &
-                     gridToFieldMap=gridToFieldMap)
+                     ungriddedLbound=ungriddedLbound, ungriddedUbound=ungriddedUbound, gridToFieldMap=(/2/))
                 if (chkerr(rc,__LINE__,u_FILE_u)) return
 
-                deallocate( ungriddedLbound, ungriddedUbound, gridToFieldMap)
+                deallocate( ungriddedLbound, ungriddedUbound)
              else
                 ! No ungridded dimensions in field
                 field = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_R8, meshloc=meshloc, name=lfieldNameList(n), rc=rc)
@@ -545,7 +527,7 @@ contains
 
     ! local variables
     integer                         :: fieldCount
-    character(ESMF_MAXSTR) ,pointer :: lfieldnamelist(:) => null()
+    character(ESMF_MAXSTR) ,pointer :: lfieldnamelist(:)
     character(len=*),parameter      :: subname='(med_methods_FB_getNameN)'
     ! ----------------------------------------------
 
@@ -629,7 +611,7 @@ contains
 
     ! local variables
     integer                         :: fieldCount
-    character(ESMF_MAXSTR) ,pointer :: lfieldnamelist(:) => null()
+    character(ESMF_MAXSTR) ,pointer :: lfieldnamelist(:)
     character(len=*),parameter      :: subname='(med_methods_State_getNameN)'
     ! ----------------------------------------------
 
@@ -675,9 +657,7 @@ contains
     integer         , intent(out)   :: rc
 
     ! local variables
-    integer                            :: n,itemCount
-    type(ESMF_Field), pointer          :: fieldList(:) => null()
-    type(ESMF_StateItem_Flag), pointer :: itemTypeList(:) => null()
+    type(ESMF_Field), pointer          :: fieldList(:)
     character(len=*),parameter         :: subname='(med_methods_State_getNumFields)'
     ! ----------------------------------------------
 
@@ -717,14 +697,14 @@ contains
     integer                , intent(out)          :: rc
 
     ! local variables
-    integer                         :: i,j,n
+    integer                         :: n
     integer                         :: fieldCount
-    character(ESMF_MAXSTR) ,pointer :: lfieldnamelist(:) => null()
+    character(ESMF_MAXSTR) ,pointer :: lfieldnamelist(:)
     real(R8)                        :: lvalue
     type(ESMF_Field)                :: lfield
     integer                         :: lrank
-    real(R8), pointer               :: fldptr1(:) => null()
-    real(R8), pointer               :: fldptr2(:,:) => null()
+    real(R8), pointer               :: fldptr1(:)
+    real(R8), pointer               :: fldptr2(:,:)
     character(len=*),parameter      :: subname='(med_methods_FB_reset)'
     ! ----------------------------------------------
 
@@ -795,14 +775,14 @@ contains
     integer          , intent(out)          :: rc
 
     ! local variables
-    integer                         :: i,j,n
+    integer                         :: n
     integer                         :: fieldCount
-    character(ESMF_MAXSTR) ,pointer :: lfieldnamelist(:) => null()
+    character(ESMF_MAXSTR) ,pointer :: lfieldnamelist(:)
     real(R8)                        :: lvalue
     type(ESMF_Field)                :: lfield
     integer                         :: lrank
-    real(R8), pointer               :: fldptr1(:) => null()
-    real(R8), pointer               :: fldptr2(:,:) => null()
+    real(R8), pointer               :: fldptr1(:)
+    real(R8), pointer               :: fldptr2(:,:)
     character(len=*),parameter      :: subname='(med_methods_State_reset)'
     ! ----------------------------------------------
 
@@ -865,9 +845,9 @@ contains
     ! local variables
     integer                         :: i,j,n
     integer                         :: fieldCount, lrank
-    character(ESMF_MAXSTR) ,pointer :: lfieldnamelist(:) => null()
-    real(R8), pointer               :: dataPtr1(:) => null()
-    real(R8), pointer               :: dataPtr2(:,:) => null()
+    character(ESMF_MAXSTR) ,pointer :: lfieldnamelist(:)
+    real(R8), pointer               :: dataPtr1(:)
+    real(R8), pointer               :: dataPtr2(:,:)
     type(ESMF_Field)                :: lfield
     character(len=*),parameter      :: subname='(med_methods_FB_average)'
     ! ----------------------------------------------
@@ -941,12 +921,12 @@ contains
     integer                , intent(out)          :: rc
 
     ! local variables
-    integer                         :: i,j,n
+    integer                         :: n
     integer                         :: fieldCount, lrank
-    character(ESMF_MAXSTR), pointer :: lfieldnamelist(:) => null()
+    character(ESMF_MAXSTR), pointer :: lfieldnamelist(:)
     character(len=CL)               :: lstring
-    real(R8), pointer               :: dataPtr1d(:) => null()
-    real(R8), pointer               :: dataPtr2d(:,:) => null()
+    real(R8), pointer               :: dataPtr1d(:)
+    real(R8), pointer               :: dataPtr2d(:,:)
     type(ESMF_Field)                :: lfield
     character(len=*), parameter     :: subname='(med_methods_FB_diagnose)'
     ! ----------------------------------------------
@@ -1011,7 +991,7 @@ contains
   end subroutine med_methods_FB_diagnose
 
   !-----------------------------------------------------------------------------
-
+#ifdef DIAGNOSE
   subroutine med_methods_Array_diagnose(array, string, rc)
 
     ! ----------------------------------------------
@@ -1027,7 +1007,7 @@ contains
 
     ! local variables
     character(len=CS) :: lstring
-    real(R8), pointer :: dataPtr3d(:,:,:) => null()
+    real(R8), pointer :: dataPtr3d(:,:,:)
     character(len=*),parameter  :: subname='(med_methods_Array_diagnose)'
     ! ----------------------------------------------
 
@@ -1059,7 +1039,7 @@ contains
     endif
 
   end subroutine med_methods_Array_diagnose
-
+#endif
   !-----------------------------------------------------------------------------
 
   subroutine med_methods_State_diagnose(State, string, rc)
@@ -1075,12 +1055,12 @@ contains
     integer         , intent(out)          :: rc
 
     ! local variables
-    integer                         :: i,j,n
+    integer                         :: n
     integer                         :: fieldCount, lrank
-    character(ESMF_MAXSTR) ,pointer :: lfieldnamelist(:) => null()
+    character(ESMF_MAXSTR) ,pointer :: lfieldnamelist(:)
     character(len=CS)               :: lstring
-    real(R8), pointer               :: dataPtr1d(:) => null()
-    real(R8), pointer               :: dataPtr2d(:,:) => null()
+    real(R8), pointer               :: dataPtr1d(:)
+    real(R8), pointer               :: dataPtr2d(:,:)
     type(ESMF_Field)                :: lfield
     character(len=*),parameter      :: subname='(med_methods_State_diagnose)'
     ! ----------------------------------------------
@@ -1158,10 +1138,9 @@ contains
     integer         , intent(out)          :: rc
 
     ! local variables
-    integer           :: lrank
     character(len=CS) :: lstring
-    real(R8), pointer :: dataPtr1d(:) => null()
-    real(R8), pointer :: dataPtr2d(:,:) => null()
+    real(R8), pointer :: dataPtr1d(:)
+    real(R8), pointer :: dataPtr2d(:,:)
     type(ESMF_Field)  :: lfield
     integer           :: ungriddedUBound(1)     ! currently the size must equal 1 for rank 2 fields
     character(len=*),parameter :: subname='(med_methods_FB_Field_diagnose)'
@@ -1227,8 +1206,8 @@ contains
     ! local variables
     integer                    :: lrank
     character(len=CS)          :: lstring
-    real(R8), pointer          :: dataPtr1d(:) => null()
-    real(R8), pointer          :: dataPtr2d(:,:) => null()
+    real(R8), pointer          :: dataPtr1d(:)
+    real(R8), pointer          :: dataPtr2d(:,:)
     character(len=*),parameter :: subname='(med_methods_Field_diagnose)'
     ! ----------------------------------------------
 
@@ -1280,7 +1259,7 @@ contains
 
   !-----------------------------------------------------------------------------
 
-  subroutine med_methods_FB_copyFB2FB(FBout, FBin, rc)
+  subroutine med_methods_FB_copy(FBout, FBin, rc)
 
     ! ----------------------------------------------
     ! Copy common field names from FBin to FBout
@@ -1291,7 +1270,7 @@ contains
     type(ESMF_FieldBundle), intent(inout) :: FBout
     type(ESMF_FieldBundle), intent(in)    :: FBin
     integer               , intent(out)   :: rc
-    character(len=*), parameter :: subname='(med_methods_FB_copyFB2FB)'
+    character(len=*), parameter :: subname='(med_methods_FB_copy)'
     ! ----------------------------------------------
 
     call ESMF_LogWrite(trim(subname)//": called", ESMF_LOGMSG_INFO)
@@ -1304,11 +1283,11 @@ contains
       call ESMF_LogWrite(trim(subname)//": done", ESMF_LOGMSG_INFO)
     endif
 
-  end subroutine med_methods_FB_copyFB2FB
+  end subroutine med_methods_FB_copy
 
   !-----------------------------------------------------------------------------
 
-  subroutine med_methods_FB_accumFB2FB(FBout, FBin, copy, rc)
+  subroutine med_methods_FB_accum(FBout, FBin, copy, rc)
 
     ! ----------------------------------------------
     ! Accumulate common field names from FBin to FBout
@@ -1326,15 +1305,15 @@ contains
     ! local variables
     integer                         :: i,j,n
     integer                         :: fieldCount, lranki, lranko
-    character(ESMF_MAXSTR) ,pointer :: lfieldnamelist(:) => null()
+    character(ESMF_MAXSTR) ,pointer :: lfieldnamelist(:)
     logical                         :: exists
     logical                         :: lcopy
-    real(R8), pointer               :: dataPtri1(:) => null()
-    real(R8), pointer               :: dataPtro1(:) => null()
-    real(R8), pointer               :: dataPtri2(:,:) => null()
-    real(R8), pointer               :: dataPtro2(:,:) => null()
+    real(R8), pointer               :: dataPtri1(:)
+    real(R8), pointer               :: dataPtro1(:)
+    real(R8), pointer               :: dataPtri2(:,:)
+    real(R8), pointer               :: dataPtro2(:,:)
     type(ESMF_Field)                :: lfield
-    character(len=*), parameter     :: subname='(med_methods_FB_accumFB2FB)'
+    character(len=*), parameter     :: subname='(med_methods_FB_accum)'
     ! ----------------------------------------------
 
     if (dbug_flag > 10) then
@@ -1427,7 +1406,7 @@ contains
       call ESMF_LogWrite(trim(subname)//": done", ESMF_LOGMSG_INFO)
     endif
 
-  end subroutine med_methods_FB_accumFB2FB
+  end subroutine med_methods_FB_accum
 
   !-----------------------------------------------------------------------------
 
@@ -1755,8 +1734,7 @@ contains
     ! local variables
     type(ESMF_Field)                :: lfield
     integer                         :: fieldcount
-    character(ESMF_MAXSTR) ,pointer :: lfieldnamelist(:) => null()
-    character(ESMF_MAXSTR)          :: name
+    character(ESMF_MAXSTR) ,pointer :: lfieldnamelist(:)
     character(len=*),parameter  :: subname='(med_methods_State_GeomPrint)'
     ! ----------------------------------------------
 
@@ -1840,8 +1818,8 @@ contains
     type(ESMF_Grid)          :: lgrid
     type(ESMF_Mesh)          :: lmesh
     integer                  :: lrank
-    real(R8), pointer        :: dataPtr1(:) => null()
-    real(R8), pointer        :: dataPtr2(:,:) => null()
+    real(R8), pointer        :: dataPtr1(:)
+    real(R8), pointer        :: dataPtr2(:,:)
     type(ESMF_GeomType_Flag) :: geomtype
     character(len=*),parameter  :: subname='(med_methods_Field_GeomPrint)'
     ! ----------------------------------------------
@@ -2079,15 +2057,15 @@ contains
     integer                    :: localDeCount
     integer                    :: DeCount
     integer                    :: dimCount, tileCount
-    integer                    :: staggerlocCount, arbdimCount, rank
+    integer                    :: rank
     type(ESMF_StaggerLoc)      :: staggerloc
     type(ESMF_TypeKind_Flag)   :: coordTypeKind
     character(len=32)          :: staggerstr
     integer, allocatable       :: minIndexPTile(:,:), maxIndexPTile(:,:)
-    real, pointer              :: fldptrR41D(:) => null()
-    real, pointer              :: fldptrR42D(:,:) => null()
-    real(R8), pointer          :: fldptrR81D(:) => null()
-    real(R8), pointer          :: fldptrR82D(:,:) => null()
+    real, pointer              :: fldptrR41D(:)
+    real, pointer              :: fldptrR42D(:,:)
+    real(R8), pointer          :: fldptrR81D(:)
+    real(R8), pointer          :: fldptrR82D(:,:)
     integer                    :: n1,n2,n3
     character(len=*),parameter :: subname='(med_methods_Grid_Print)'
     ! ----------------------------------------------
@@ -2283,10 +2261,10 @@ contains
     integer,          intent(inout)  :: rc
 
     ! local variables
-    integer           :: mytask, ierr, len, icount
+    integer           :: mytask, icount
     type(ESMF_VM)     :: vm
     type(ESMF_Field)  :: field
-    real(R8), pointer :: farrayptr(:,:) => null()
+    real(R8), pointer :: farrayptr(:,:)
     real(r8)          :: tmp(1)
     character(len=*), parameter :: subname='(med_methods_State_GetScalar)'
     ! ----------------------------------------------
@@ -2350,7 +2328,7 @@ contains
     integer           :: mytask
     type(ESMF_Field)  :: field
     type(ESMF_VM)     :: vm
-    real(R8), pointer :: farrayptr(:,:) => null()
+    real(R8), pointer :: farrayptr(:,:)
     character(len=*), parameter :: subname='(med_methods_State_SetScalar)'
     ! ----------------------------------------------
 
@@ -2504,7 +2482,7 @@ contains
 
     ! local variables
     integer                   :: fieldCount
-    type(ESMF_Field), pointer :: fieldlist(:) => null()
+    type(ESMF_Field), pointer :: fieldlist(:)
     ! ----------------------------------------------
     rc = ESMF_SUCCESS
 

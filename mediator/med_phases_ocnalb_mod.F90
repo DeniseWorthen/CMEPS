@@ -6,11 +6,12 @@ module med_phases_ocnalb_mod
   use med_utils_mod         , only : chkerr          => med_utils_chkerr
   use med_methods_mod       , only : FB_diagnose     => med_methods_FB_diagnose
   use med_methods_mod       , only : State_GetScalar => med_methods_State_GetScalar
-  use esmFlds               , only : mapconsf, mapnames, compatm, compocn
+  use med_internalstate_mod , only : mapconsf, mapnames, compatm, compocn
   use perf_mod              , only : t_startf, t_stopf
 #ifdef CESMCOUPLED
   use shr_orb_mod           , only : shr_orb_cosz, shr_orb_decl
   use shr_orb_mod           , only : shr_orb_params, SHR_ORB_UNDEF_INT, SHR_ORB_UNDEF_REAL
+  use shr_log_mod           , only : shr_log_unit
 #endif
 
   implicit none
@@ -25,10 +26,11 @@ module med_phases_ocnalb_mod
   !--------------------------------------------------------------------------
   ! Private interfaces
   !--------------------------------------------------------------------------
-
+#ifdef CESMCOUPLED
   private med_phases_ocnalb_init
-  private med_phases_ocnalb_orbital_init
   private med_phases_ocnalb_orbital_update
+  private med_phases_ocnalb_orbital_init
+#endif
 
   !--------------------------------------------------------------------------
   ! Private data
@@ -48,14 +50,14 @@ module med_phases_ocnalb_mod
   ! Conversion from degrees to radians
   character(*),parameter :: u_FILE_u = &
        __FILE__
-
+#ifdef CESMCOUPLED
   character(len=CL)      :: orb_mode        ! attribute - orbital mode
   integer                :: orb_iyear       ! attribute - orbital year
   integer                :: orb_iyear_align ! attribute - associated with model year
   real(R8)               :: orb_obliq       ! attribute - obliquity in degrees
   real(R8)               :: orb_mvelp       ! attribute - moving vernal equinox longitude
   real(R8)               :: orb_eccen       ! attribute and update-  orbital eccentricity
-
+#endif
   character(len=*) , parameter :: orb_fixed_year       = 'fixed_year'
   character(len=*) , parameter :: orb_variable_year    = 'variable_year'
   character(len=*) , parameter :: orb_fixed_parameters = 'fixed_parameters'
@@ -63,7 +65,7 @@ module med_phases_ocnalb_mod
 !===============================================================================
 contains
 !===============================================================================
-
+#ifdef CESMCOUPLED
   subroutine med_phases_ocnalb_init(gcomp, ocnalb, rc)
 
     !-----------------------------------------------------------------------
@@ -90,15 +92,13 @@ contains
     type(ESMF_Mesh)          :: lmesh
     integer                  :: n
     integer                  :: lsize
-    integer                  :: dimCount
     integer                  :: spatialDim
     integer                  :: numOwnedElements
     type(InternalState)      :: is_local
-    real(R8), pointer        :: ownedElemCoords(:) => null()
+    real(R8), pointer        :: ownedElemCoords(:)
     character(len=CL)        :: tempc1,tempc2
-    logical                  :: mastertask
     integer                  :: fieldCount
-    type(ESMF_Field), pointer :: fieldlist(:) => null()
+    type(ESMF_Field), pointer :: fieldlist(:)
     character(*), parameter  :: subname = '(med_phases_ocnalb_init) '
     !-----------------------------------------------------------------------
 
@@ -192,7 +192,7 @@ contains
     call t_stopf('MED:'//subname)
 
   end subroutine med_phases_ocnalb_init
-
+#endif
   !===============================================================================
 
   subroutine med_phases_ocnalb_run(gcomp, rc)
@@ -210,12 +210,12 @@ contains
     use ESMF          , only : ESMF_FieldBundleGet, ESMF_FieldBundleIsCreated
     use ESMF          , only : operator(+)
     use NUOPC         , only : NUOPC_CompAttributeGet
-    use shr_const_mod , only : shr_const_pi
+    use med_constants_mod , only : shr_const_pi
 
     ! input/output variables
     type(ESMF_GridComp)  :: gcomp
     integer, intent(out) :: rc
-
+#ifdef CESMCOUPLED
     ! local variables
     type(ocnalb_type), save :: ocnalb
     type(ESMF_VM)           :: vm
@@ -225,19 +225,18 @@ contains
     type(InternalState)     :: is_local
     type(ESMF_Clock)        :: clock
     type(ESMF_Time)         :: currTime
-    type(ESMF_Time)         :: nextTime
     type(ESMF_TimeInterval) :: timeStep
     character(CL)           :: cvalue
     character(CS)           :: starttype        ! config start type
     character(CL)           :: runtype          ! initial, continue, hybrid, branch
     logical                 :: flux_albav       ! flux avg option
     real(R8)                :: nextsw_cday      ! calendar day of next atm shortwave
-    real(R8), pointer       :: ofrac(:) => null()
-    real(R8), pointer       :: ofrad(:) => null()
-    real(R8), pointer       :: ifrac(:) => null()
-    real(R8), pointer       :: ifrad(:) => null()
+    real(R8), pointer       :: ofrac(:)
+    real(R8), pointer       :: ofrad(:)
+    real(R8), pointer       :: ifrac(:)
+    real(R8), pointer       :: ifrad(:)
     integer                 :: lsize            ! local size
-    integer                 :: n,i              ! indices
+    integer                 :: n                ! indices
     real(R8)                :: rlat             ! gridcell latitude in radians
     real(R8)                :: rlon             ! gridcell longitude in radians
     real(R8)                :: cosz             ! Cosine of solar zenith angle
@@ -254,7 +253,7 @@ contains
     logical                 :: first_call = .true.
     character(len=*)  , parameter :: subname='(med_phases_ocnalb_run)'
     !---------------------------------------
-
+#endif
     rc = ESMF_SUCCESS
 
 #ifndef CESMCOUPLED
@@ -263,7 +262,7 @@ contains
 
 #else
 
-    ! Determine master task
+    ! Determine main task
     call ESMF_GridCompGet(gcomp, vm=vm, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     call ESMF_VMGet(vm, localPet=iam, rc=rc)
@@ -442,8 +441,8 @@ contains
   end subroutine med_phases_ocnalb_run
 
 !===============================================================================
-
-  subroutine med_phases_ocnalb_orbital_init(gcomp, logunit, mastertask, rc)
+#ifdef CESMCOUPLED
+  subroutine med_phases_ocnalb_orbital_init(gcomp, logunit, maintask, rc)
 
     !----------------------------------------------------------
     ! Obtain orbital related values
@@ -457,10 +456,11 @@ contains
     ! input/output variables
     type(ESMF_GridComp)                 :: gcomp
     integer             , intent(in)    :: logunit         ! output logunit
-    logical             , intent(in)    :: mastertask
+    logical             , intent(in)    :: maintask
     integer             , intent(out)   :: rc              ! output error
 
     ! local variables
+
     character(len=CL) :: msgstr          ! temporary
     character(len=CL) :: cvalue          ! temporary
     character(len=*) , parameter :: subname = "(med_phases_ocnalb_orbital_init)"
@@ -468,7 +468,6 @@ contains
 
     rc = ESMF_SUCCESS
 
-#ifdef CESMCOUPLED
     ! Determine orbital attributes from input
     call NUOPC_CompAttributeGet(gcomp, name="orb_mode", value=cvalue, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
@@ -538,13 +537,11 @@ contains
        rc = ESMF_FAILURE
        return  ! bail out
     endif
-#endif
-
   end subroutine med_phases_ocnalb_orbital_init
 
   !===============================================================================
 
-  subroutine med_phases_ocnalb_orbital_update(clock, logunit,  mastertask, eccen, obliqr, lambm0, mvelpp, rc)
+  subroutine med_phases_ocnalb_orbital_update(clock, logunit,  maintask, eccen, obliqr, lambm0, mvelpp, rc)
 
     !----------------------------------------------------------
     ! Update orbital settings
@@ -556,7 +553,7 @@ contains
     ! input/output variables
     type(ESMF_Clock) , intent(in)    :: clock
     integer          , intent(in)    :: logunit
-    logical          , intent(in)    :: mastertask
+    logical          , intent(in)    :: maintask
     real(R8)         , intent(inout) :: eccen  ! orbital eccentricity
     real(R8)         , intent(inout) :: obliqr ! Earths obliquity in rad
     real(R8)         , intent(inout) :: lambm0 ! Mean long of perihelion at vernal equinox (radians)
@@ -574,19 +571,18 @@ contains
     !-------------------------------------------
 
     rc = ESMF_SUCCESS
-
-#ifdef CESMCOUPLED
+    lprint = .false.
     if (trim(orb_mode) == trim(orb_variable_year)) then
        call ESMF_ClockGet(clock, CurrTime=CurrTime, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
        call ESMF_TimeGet(CurrTime, yy=year, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
        orb_year = orb_iyear + (year - orb_iyear_align)
-       lprint = mastertask
+       lprint = maintask
     else
        orb_year = orb_iyear
        if (first_time) then
-          lprint = mastertask
+          lprint = maintask
           first_time = .false.
        else
           lprint = .false.
@@ -594,6 +590,7 @@ contains
     end if
 
     eccen = orb_eccen
+    shr_log_unit = logunit
     call shr_orb_params(orb_year, eccen, orb_obliq, orb_mvelp, obliqr, lambm0, mvelpp, lprint)
 
     if ( eccen  == SHR_ORB_UNDEF_REAL .or. obliqr == SHR_ORB_UNDEF_REAL .or. &
@@ -602,9 +599,9 @@ contains
        call ESMF_LogSetError(ESMF_RC_NOT_VALID, msg=msgstr, line=__LINE__, file=__FILE__, rcToReturn=rc)
        return  ! bail out
     endif
-#endif
 
   end subroutine med_phases_ocnalb_orbital_update
+#endif
 
 !===============================================================================
 
