@@ -107,6 +107,7 @@ module med_internalstate_mod
   end type packed_data_type
 
   logical, public :: dststatus_print = .false.
+  character(len=CS), public :: test_interp
 
   ! Mesh info
   type, public ::  mesh_info_type

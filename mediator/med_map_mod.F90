@@ -259,7 +259,7 @@ contains
                       if (chkerr(rc,__LINE__,u_FILE_u)) return
                       if (maintask) then
                          write(logunit,'(a)') trim(subname)//' created field_NormOne for '&
-                              //compname(n1)//'->'//compname(n2)//' with mapping '//trim(mapnames(mapindex))
+                              //trim(compname(n1))//'->'//trim(compname(n2))//' with mapping '//trim(mapnames(mapindex))
                       end if
                    end if
                 end do ! end of loop over map_indiex mappers
@@ -410,6 +410,9 @@ contains
     if (trim(coupling_mode(1:4)) == 'nems') then
        if (n1 == compatm .and. n2 == complnd) then
           srcMaskValue = ispval_mask
+          dstMaskValue = ispval_mask
+       end if
+       if (n1 == compocn .and. n2 == compatm) then
           dstMaskValue = ispval_mask
        end if
     end if

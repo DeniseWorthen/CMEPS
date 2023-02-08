@@ -806,8 +806,12 @@ contains
        write(logunit,*) '========================================================'
        write(logunit,*)
     end if
-    call NUOPC_CompAttributeGet(gcomp, name='test_interp', value=test_interp, rc=rc)
+    test_interp = 'none'
+    call NUOPC_CompAttributeGet(gcomp, name='test_interp', value=test_interp, isPresent=isPresent, isSet=isSet, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
+    !if (isPresent .and. isSet) then
+    !   test_interp = trim(test_interp)
+    !end if
     call ESMF_LogWrite('test_interp = '// trim(test_interp), ESMF_LOGMSG_INFO)
 
     ! Initialize memory for fldlistTo and fldlistFr - this is need for the calls below for the
@@ -1019,7 +1023,7 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !------------------
-    ! Recieve Grids
+    ! Receive Grids
     !------------------
 
     do n1 = 1,ncomps
@@ -2486,7 +2490,7 @@ contains
       ! Destroy arraybundle
       call ESMF_ArrayBundleDestroy(arrayBundle, rc=rc)
       if (chkerr(rc,__LINE__,u_FILE_u)) return
-    end if
+   end if
 
   end subroutine med_grid_write
 
