@@ -415,6 +415,10 @@ contains
                   fldchk(is_local%wrap%FBImp(compatm,compatm), trim(aflds(n)), rc=rc)) then
                 call addmap_from(compice, trim(iflds(n)), compocn, mapfcopy, 'unset', 'unset')
                 call addmap_from(compatm, trim(aflds(n)), compocn, mapconsf_aofrac, 'aofrac', 'unset')
+                call addmrg_to(compocn, trim(oflds(n)), &
+                     mrg_from=compice, mrg_fld=trim(iflds(n)), mrg_type='merge', mrg_fracname='ifrac')
+                call addmrg_to(compocn, trim(oflds(n)), &
+                     mrg_from=compatm, mrg_fld=trim(aflds(n)), mrg_type='merge', mrg_fracname='ofrac')
              end if
           end if
        end do
