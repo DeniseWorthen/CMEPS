@@ -119,8 +119,7 @@ contains
     ! auto merges to ocn
     if ( trim(coupling_mode) == 'cesm' .or. &
          trim(coupling_mode) == 'nems_orig_data' .or. &
-         trim(coupling_mode) == 'nems_frac_aoflux' .or. &
-         trim(coupling_mode) == 'hafs') then
+         trim(coupling_mode) == 'nems_frac_aoflux') then
        call med_merge_auto(&
             is_local%wrap%med_coupling_active(:,compocn), &
             is_local%wrap%FBExp(compocn), &
@@ -131,6 +130,7 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     else if (trim(coupling_mode) == 'nems_frac' .or. &
              trim(coupling_mode) == 'nems_orig' .or. &
+             trim(coupling_mode) == 'hafs'      .or. &
              trim(coupling_mode) == 'nems_frac_aoflux_sbs') then
        call med_merge_auto(&
             is_local%wrap%med_coupling_active(:,compocn), &
