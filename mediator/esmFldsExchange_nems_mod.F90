@@ -451,6 +451,8 @@ contains
           if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Faxa_sen', rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_sen', rc=rc)) then
              call addmap_from(compatm, 'Faxa_sen', compocn, mapconsf_aofrac, 'aofrac', 'unset')
+             call addmrg_to(compocn, 'Faxa_sen', &
+                  mrg_from=compatm, mrg_fld='Faxa_sen', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
        end if
 

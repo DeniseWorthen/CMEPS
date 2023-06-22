@@ -676,11 +676,6 @@ contains
        call med_merge_field(is_local%wrap%FBExp(compocn),      'Faxa_evap', &
             FBinA=is_local%wrap%FBImp(compatm,compocn), fnameA='Faxa_lat' , wgtA=customwgt, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-       customwgt(:) = -ofrac(:)
-       call med_merge_field(is_local%wrap%FBExp(compocn),      'Faxa_sen',  &
-            FBinA=is_local%wrap%FBImp(compatm,compocn), fnameA='Faxa_sen', wgtA=customwgt, rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
     end if
 
     ! netsw_for_ocn = [downsw_from_atm*(1-ice_fraction)*(1-ocn_albedo)] + [pensw_from_ice*(ice_fraction)]
