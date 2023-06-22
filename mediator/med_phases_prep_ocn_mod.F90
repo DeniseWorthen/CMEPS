@@ -643,7 +643,6 @@ contains
     real(R8), pointer   :: ifrac(:)
     real(R8), pointer   :: ofrac(:)
     integer             :: lsize
-    real(R8)        , parameter    :: const_lhvap = 2.501e6_R8  ! latent heat of evaporation ~ J/kg
     character(len=*), parameter    :: subname='(med_phases_prep_ocn_custom_nems)'
     !---------------------------------------
 
@@ -668,15 +667,6 @@ contains
 
     lsize = size(ofrac)
     allocate(customwgt(lsize))
-
-    if (trim(coupling_mode) == 'nems_orig' .or. &
-        trim(coupling_mode) == 'nems_frac' .or. &
-        trim(coupling_mode) == 'nems_frac_aoflux_sbs') then
-       customwgt(:) = -ofrac(:) / const_lhvap
-       call med_merge_field(is_local%wrap%FBExp(compocn),      'Faxa_evap', &
-            FBinA=is_local%wrap%FBImp(compatm,compocn), fnameA='Faxa_lat' , wgtA=customwgt, rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    end if
 
     ! netsw_for_ocn = [downsw_from_atm*(1-ice_fraction)*(1-ocn_albedo)] + [pensw_from_ice*(ice_fraction)]
     customwgt(:) = ofrac(:) * (1.0_R8 - 0.06_R8)
