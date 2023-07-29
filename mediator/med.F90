@@ -49,6 +49,7 @@ module MED
   use esmFlds                  , only : med_fldList_Document_Mapping, med_fldList_Document_Merging
   use esmFlds                  , only : med_fldList_GetfldListFr, med_fldList_GetfldListTo, med_fldList_Realize
   use esmFldsExchange_nems_mod , only : esmFldsExchange_nems
+  use esmFldsExchange_ufs_mod  , only : esmFldsExchange_ufs
   use esmFldsExchange_cesm_mod , only : esmFldsExchange_cesm
   use esmFldsExchange_hafs_mod , only : esmFldsExchange_hafs
   use med_phases_profile_mod   , only : med_phases_profile_finalize
@@ -813,12 +814,15 @@ contains
     ! advertise phase
     call med_fldlist_init1(ncomps)
 
+    !! HERE
     if (trim(coupling_mode) == 'cesm') then
        call esmFldsExchange_cesm(gcomp, phase='advertise', rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     else if (trim(coupling_mode(1:4)) == 'nems') then
        call esmFldsExchange_nems(gcomp, phase='advertise', rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    else if (trim(coupling_mode(1:3) == 'ufs') then
+       call esmFldsExchange_ufs(gcomp, phase='initialize', rc=rc)
     else if (trim(coupling_mode(1:4)) == 'hafs') then
        call esmFldsExchange_hafs(gcomp, phase='advertise', rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -933,7 +937,6 @@ contains
           write(logunit,*) ' Fields will NOT be checked for NaN values when passed from mediator to component'
        endif
     endif
-
 
     if (profile_memory) call ESMF_VMLogMemInfo("Leaving "//trim(subname))
     call ESMF_LogWrite(trim(subname)//": done", ESMF_LOGMSG_INFO)
@@ -1775,7 +1778,7 @@ contains
       !---------------------------------------
 
       ! NOTE: this section must be done BEFORE the second call to esmFldsExchange
-      ! Create field bundles for mediator ocean albedo computation
+      ! Create field bundles for mediator atm/ocean computation
       fieldCount = med_fldList_GetNumFlds(med_fldList_getaofluxfldList())
       if ( fieldCount > 0 ) then
          if ( is_local%wrap%med_coupling_active(compocn,compatm) .or. &
@@ -1792,6 +1795,7 @@ contains
          end if
       end if
 
+      !! HERE
       !---------------------------------------
       ! Second call to esmFldsExchange_xxx
       ! Determine mapping and merging info for field exchanges in mediator
@@ -1804,7 +1808,9 @@ contains
          call esmFldsExchange_cesm(gcomp, phase='initialize', rc=rc)
          if (ChkErr(rc,__LINE__,u_FILE_u)) return
       else if (trim(coupling_mode(1:4)) == 'nems') then
-       call esmFldsExchange_nems(gcomp, phase='initialize', rc=rc)
+         call esmFldsExchange_nems(gcomp, phase='initialize', rc=rc)
+      else if (trim(coupling_mode(1:3) == 'ufs') then
+         call esmFldsExchange_ufs(gcomp, phase='initialize', rc=rc)
       else if (trim(coupling_mode) == 'hafs') then
          call esmFldsExchange_hafs(gcomp, phase='initialize', rc=rc)
          if (ChkErr(rc,__LINE__,u_FILE_u)) return
