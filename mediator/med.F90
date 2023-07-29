@@ -820,9 +820,8 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     else if (trim(coupling_mode(1:4)) == 'nems') then
        call esmFldsExchange_nems(gcomp, phase='advertise', rc=rc)
+       !call esmFldsExchange_ufs(gcomp, phase='advertise', rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    else if (trim(coupling_mode(1:3) == 'ufs') then
-       call esmFldsExchange_ufs(gcomp, phase='initialize', rc=rc)
     else if (trim(coupling_mode(1:4)) == 'hafs') then
        call esmFldsExchange_hafs(gcomp, phase='advertise', rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -1809,8 +1808,8 @@ contains
          if (ChkErr(rc,__LINE__,u_FILE_u)) return
       else if (trim(coupling_mode(1:4)) == 'nems') then
          call esmFldsExchange_nems(gcomp, phase='initialize', rc=rc)
-      else if (trim(coupling_mode(1:3) == 'ufs') then
-         call esmFldsExchange_ufs(gcomp, phase='initialize', rc=rc)
+         !call esmFldsExchange_ufs(gcomp, phase='initialize', rc=rc)
+         if (ChkErr(rc,__LINE__,u_FILE_u)) return
       else if (trim(coupling_mode) == 'hafs') then
          call esmFldsExchange_hafs(gcomp, phase='initialize', rc=rc)
          if (ChkErr(rc,__LINE__,u_FILE_u)) return
