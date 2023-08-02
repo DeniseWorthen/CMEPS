@@ -48,6 +48,7 @@ module med_internalstate_mod
 
   ! Coupling mode
   character(len=CS), public :: coupling_mode ! valid values are [cesm,nems_orig,nems_frac,nems_orig_data,hafs,nems_frac_aoflux,nems_frac_aoflux_sbs]
+  logical, public :: use_ufsX
 
   ! Atmosphere-ocean flux algorithm
   character(len=CS), public :: aoflux_code   ! valid values are [cesm,ccpp]

@@ -43,7 +43,7 @@ module MED
   use med_internalstate_mod    , only : med_internalstate_defaultmasks, logunit, maintask
   use med_internalstate_mod    , only : ncomps, compname
   use med_internalstate_mod    , only : compmed, compatm, compocn, compice, complnd, comprof, compwav, compglc
-  use med_internalstate_mod    , only : coupling_mode, aoflux_code, aoflux_ccpp_suite
+  use med_internalstate_mod    , only : coupling_mode, aoflux_code, aoflux_ccpp_suite, use_ufsX
   use esmFlds                  , only : med_fldList_GetocnalbfldList, med_fldList_type
   use esmFlds                  , only : med_fldList_GetNumFlds, med_fldList_GetFldNames, med_fldList_GetFldInfo
   use esmFlds                  , only : med_fldList_Document_Mapping, med_fldList_Document_Merging
@@ -810,6 +810,15 @@ contains
        write(logunit,*)
     end if
 
+    use_ufsX = .false.
+    call NUOPC_CompAttributeGet(gcomp, name='use_ufsX', value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent .and. isSet) then
+      if (trim(cvalue) == 'true') then
+        use_ufsX = .true.
+      end if
+    end if
+
     ! Initialize memory for fldlistTo and fldlistFr - this is need for the calls below for the
     ! advertise phase
     call med_fldlist_init1(ncomps)
@@ -819,9 +828,13 @@ contains
        call esmFldsExchange_cesm(gcomp, phase='advertise', rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     else if (trim(coupling_mode(1:4)) == 'nems') then
-       call esmFldsExchange_nems(gcomp, phase='advertise', rc=rc)
-       !call esmFldsExchange_ufs(gcomp, phase='advertise', rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (use_ufsX) then
+          call esmFldsExchange_ufs(gcomp, phase='advertise', rc=rc)
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       else
+          call esmFldsExchange_nems(gcomp, phase='advertise', rc=rc)
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       end if
     else if (trim(coupling_mode(1:4)) == 'hafs') then
        call esmFldsExchange_hafs(gcomp, phase='advertise', rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -1807,9 +1820,13 @@ contains
          call esmFldsExchange_cesm(gcomp, phase='initialize', rc=rc)
          if (ChkErr(rc,__LINE__,u_FILE_u)) return
       else if (trim(coupling_mode(1:4)) == 'nems') then
-         call esmFldsExchange_nems(gcomp, phase='initialize', rc=rc)
-         !call esmFldsExchange_ufs(gcomp, phase='initialize', rc=rc)
-         if (ChkErr(rc,__LINE__,u_FILE_u)) return
+         if (use_ufsX) then
+            call esmFldsExchange_ufs(gcomp, phase='initialize', rc=rc)
+            if (ChkErr(rc,__LINE__,u_FILE_u)) return
+         else
+            call esmFldsExchange_nems(gcomp, phase='initialize', rc=rc)
+            if (ChkErr(rc,__LINE__,u_FILE_u)) return
+         end if
       else if (trim(coupling_mode) == 'hafs') then
          call esmFldsExchange_hafs(gcomp, phase='initialize', rc=rc)
          if (ChkErr(rc,__LINE__,u_FILE_u)) return
