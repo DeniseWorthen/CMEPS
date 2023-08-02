@@ -98,8 +98,8 @@ contains
        if (is_local%wrap%comp_present(compocn)) call addfld_from(compocn, 'So_omask')
        if (is_local%wrap%comp_present(complnd)) call addfld_from(complnd, 'Sl_lfrin')
     else
-       if ( fldchk(is_local%wrap%FBexp(compice)        , trim(fldname), rc=rc) .and. &
-            fldchk(is_local%wrap%FBImp(compocn,compocn), trim(fldname), rc=rc)) then
+       if ( fldchk(is_local%wrap%FBexp(compice)        , 'So_omask', rc=rc) .and. &
+            fldchk(is_local%wrap%FBImp(compocn,compocn), 'So_omask', rc=rc)) then
           call addmap_from(compocn, 'So_omask', compice,  mapfcopy, 'unset', 'unset')
        end if
     end if
