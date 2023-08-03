@@ -399,7 +399,7 @@ contains
        allocate(aflds(2))
        allocate(iflds(2))
        oflds = (/'Foxx_taux', 'Foxx_tauy'/)
-       aflds = (/'Faxa_taux', 'Faxa_tauy'/)
+       aflds = (/'Faoa_taux', 'Faoa_tauy'/)
        iflds = (/'Fioi_taux', 'Fioi_tauy'/)
        do n = 1,size(oflds)
           if (phase == 'advertise') then
@@ -444,30 +444,30 @@ contains
        ! to ocn: sensible heat flux
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compocn)) then
-             call addfld_from(compatm, 'Faxa_sen')
-             call addfld_to(compocn, 'Faxa_sen')
+             call addfld_from(compatm, 'Faoa_sen')
+             call addfld_to(compocn, 'Faoa_sen')
           end if
        else
-          if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Faxa_sen', rc=rc) .and. &
-               fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_sen', rc=rc)) then
-             call addmap_from(compatm, 'Faxa_sen', compocn, mapconsf_aofrac, 'aofrac', 'unset')
-             call addmrg_to(compocn, 'Faxa_sen', &
-                  mrg_from=compatm, mrg_fld='Faxa_sen', mrg_type='copy_with_weights', mrg_fracname='ofrac')
+          if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Faoa_sen', rc=rc) .and. &
+               fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faoa_sen', rc=rc)) then
+             call addmap_from(compatm, 'Faoa_sen', compocn, mapconsf_aofrac, 'aofrac', 'unset')
+             call addmrg_to(compocn, 'Faoa_sen', &
+                  mrg_from=compatm, mrg_fld='Faoa_sen', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
        end if
 
        ! to ocn: evaporation water flux
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compocn)) then
-             call addfld_from(compatm, 'Faxa_evap')
-             call addfld_to(compocn, 'Faxa_evap')
+             call addfld_from(compatm, 'Faoa_evap')
+             call addfld_to(compocn, 'Faoa_evap')
           end if
        else
-          if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Faxa_evap', rc=rc) .and. &
-               fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_evap' , rc=rc)) then
-             call addmap_from(compatm, 'Faxa_evap', compocn, mapconsf_aofrac, 'aofrac', 'unset')
-             call addmrg_to(compocn, 'Faxa_evap', &
-                  mrg_from=compatm, mrg_fld='Faxa_evap', mrg_type='copy_with_weights', mrg_fracname='ofrac')
+          if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Faoa_evap', rc=rc) .and. &
+               fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faoa_evap' , rc=rc)) then
+             call addmap_from(compatm, 'Faoa_evap', compocn, mapconsf_aofrac, 'aofrac', 'unset')
+             call addmrg_to(compocn, 'Faoa_evap', &
+                  mrg_from=compatm, mrg_fld='Faoa_evap', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
        end if
     else if (trim(coupling_mode) == 'nems_orig_data' .or. trim(coupling_mode) == 'nems_frac_aoflux') then
