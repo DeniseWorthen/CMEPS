@@ -14,9 +14,10 @@ module med_phases_prep_atm_mod
   use med_methods_mod       , only : FB_diagnose => med_methods_FB_diagnose
   use med_methods_mod       , only : FB_fldchk   => med_methods_FB_FldChk
   use med_methods_mod       , only : FB_getfldptr=> med_methods_FB_GetFldPtr
+  use med_methods_mod       , only : FB_check_for_nans => med_methods_FB_check_for_nans
   use med_merge_mod         , only : med_merge_auto
   use med_map_mod           , only : med_map_field_packed
-  use med_internalstate_mod , only : InternalState, maintask
+  use med_internalstate_mod , only : InternalState, maintask, logunit
   use med_internalstate_mod , only : compatm, compocn, compice, compname, coupling_mode
   use esmFlds               , only : med_fldlist_GetfldListTo, med_fldlist_type
   use perf_mod              , only : t_startf, t_stopf
@@ -114,7 +115,6 @@ contains
     !--- map atm/ocn fluxes from ocn to atm grid if appropriate
     !---------------------------------------
     if (trim(coupling_mode) == 'cesm' .or. &
-        trim(coupling_mode) == 'hafs' .or. &
         trim(coupling_mode) == 'nems_frac_aoflux' .or. &
         trim(coupling_mode) == 'nems_frac_aoflux_sbs') then
        if (is_local%wrap%aoflux_grid == 'ogrid') then
@@ -133,8 +133,7 @@ contains
     !---------------------------------------
     fldList => med_fldList_GetfldListTo(compatm)
     if (trim(coupling_mode) == 'cesm' .or. &
-        trim(coupling_mode) == 'nems_frac_aoflux' .or. &
-        trim(coupling_mode) == 'hafs') then
+        trim(coupling_mode) == 'nems_frac_aoflux') then
        call med_merge_auto(&
             is_local%wrap%med_coupling_active(:,compatm), &
             is_local%wrap%FBExp(compatm), &
@@ -146,6 +145,7 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     else if (trim(coupling_mode) == 'nems_frac' .or. &
              trim(coupling_mode) == 'nems_orig' .or. &
+             trim(coupling_mode) == 'hafs'      .or. &
              trim(coupling_mode) == 'nems_frac_aoflux_sbs') then
        call med_merge_auto(&
             is_local%wrap%med_coupling_active(:,compatm), &
@@ -242,6 +242,10 @@ contains
           dataptr1(n) = dataptr1(n) + global_htot_corr(1)
        end do
     end if
+
+    ! Check for nans in fields export to atm
+    call FB_check_for_nans(is_local%wrap%FBExp(compatm), maintask, logunit, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     if (dbug_flag > 5) then
        call ESMF_LogWrite(trim(subname)//": done", ESMF_LOGMSG_INFO)

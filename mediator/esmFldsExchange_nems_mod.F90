@@ -39,6 +39,8 @@ contains
     use esmFlds               , only : addmap_from => med_fldList_addmap_from
     use esmFlds               , only : addfld_aoflux => med_fldList_addfld_aoflux
     use esmFlds               , only : addmap_aoflux => med_fldList_addmap_aoflux
+    use esmFlds               , only : addfld_ocnalb => med_fldList_addfld_ocnalb
+    use esmFlds               , only : addmap_ocnalb => med_fldList_addmap_ocnalb
 
     ! input/output parameters:
     type(ESMF_GridComp)              :: gcomp
@@ -168,9 +170,12 @@ contains
        deallocate(flds)
     end if
 
-    ! TODO: unused, but required to maintain B4B repro for mediator restarts; should be removed
+    ! Advertise the ocean albedos. These are not sent to the ATM in UFS.
     if (phase == 'advertise') then
-       call addfld_from(compice, 'mean_sw_pen_to_ocn')
+       call addfld_ocnalb('So_avsdr')
+       call addfld_ocnalb('So_avsdf')
+       call addfld_ocnalb('So_anidr')
+       call addfld_ocnalb('So_anidf')
     end if
 
     !=====================================================================
@@ -307,7 +312,7 @@ contains
     else
        if ( fldchk(is_local%wrap%FBexp(compatm)        , 'Sw_z0', rc=rc) .and. &
             fldchk(is_local%wrap%FBImp(compwav,compwav), 'Sw_z0', rc=rc)) then
-          call addmap_from(compwav, 'Sw_z0', compatm, mapnstod_consf, 'one', 'unset')
+          call addmap_from(compwav, 'Sw_z0', compatm, mapbilnr_nstod, 'one', 'unset')
           call addmrg_to(compatm, 'Sw_z0', mrg_from=compwav, mrg_fld='Sw_z0', mrg_type='copy')
        end if
     end if
@@ -331,6 +336,17 @@ contains
              call addmap_from(compatm, 'Sa_pslv', compocn, maptype, 'one', 'unset')
           endif
           call addmrg_to(compocn, 'Sa_pslv', mrg_from=compatm, mrg_fld='Sa_pslv', mrg_type='copy')
+       end if
+    end if
+
+    ! to ocn: swpen thru ice w/o bands
+    if (phase == 'advertise') then
+       if (is_local%wrap%comp_present(compice) .and. is_local%wrap%comp_present(compocn)) then
+          call addfld_from(compice, 'Fioi_swpen')
+       end if
+    else
+       if (fldchk(is_local%wrap%FBImp(compice,compice), 'Fioi_swpen', rc=rc)) then
+          call addmap_from(compice, 'Fioi_swpen', compocn, mapfcopy, 'unset', 'unset')
        end if
     end if
 
@@ -399,7 +415,7 @@ contains
 
     if (trim(coupling_mode) == 'nems_orig' .or. trim(coupling_mode) == 'nems_frac' .or. &
         trim(coupling_mode) == 'nems_frac_aoflux_sbs') then
-       ! to ocn: merge surface stress (custom merge calculation in med_phases_prep_ocn)
+       ! to ocn: merge surface stress
        allocate(oflds(2))
        allocate(aflds(2))
        allocate(iflds(2))
@@ -420,6 +436,10 @@ contains
                   fldchk(is_local%wrap%FBImp(compatm,compatm), trim(aflds(n)), rc=rc)) then
                 call addmap_from(compice, trim(iflds(n)), compocn, mapfcopy, 'unset', 'unset')
                 call addmap_from(compatm, trim(aflds(n)), compocn, mapconsf_aofrac, 'aofrac', 'unset')
+                call addmrg_to(compocn, trim(oflds(n)), &
+                     mrg_from=compice, mrg_fld=trim(iflds(n)), mrg_type='merge', mrg_fracname='ifrac')
+                call addmrg_to(compocn, trim(oflds(n)), &
+                     mrg_from=compatm, mrg_fld=trim(aflds(n)), mrg_type='merge', mrg_fracname='ofrac')
              end if
           end if
        end do
@@ -442,7 +462,7 @@ contains
           end if
        end if
 
-       ! to ocn: merged sensible heat flux (custom merge in med_phases_prep_ocn)
+       ! to ocn: sensible heat flux
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compocn)) then
              call addfld_from(compatm, 'Faxa_sen')
@@ -452,19 +472,23 @@ contains
           if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Faxa_sen', rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_sen', rc=rc)) then
              call addmap_from(compatm, 'Faxa_sen', compocn, mapconsf_aofrac, 'aofrac', 'unset')
+             call addmrg_to(compocn, 'Faxa_sen', &
+                  mrg_from=compatm, mrg_fld='Faxa_sen', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
        end if
 
-       ! to ocn: evaporation water flux (custom merge in med_phases_prep_ocn)
+       ! to ocn: evaporation water flux
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compocn)) then
-             call addfld_from(compatm, 'Faxa_lat')
+             call addfld_from(compatm, 'Faxa_evap')
              call addfld_to(compocn, 'Faxa_evap')
           end if
        else
           if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Faxa_evap', rc=rc) .and. &
-               fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_lat' , rc=rc)) then
-             call addmap_from(compatm, 'Faxa_lat', compocn, mapconsf_aofrac, 'aofrac', 'unset')
+               fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_evap' , rc=rc)) then
+             call addmap_from(compatm, 'Faxa_evap', compocn, mapconsf_aofrac, 'aofrac', 'unset')
+             call addmrg_to(compocn, 'Faxa_evap', &
+                  mrg_from=compatm, mrg_fld='Faxa_evap', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
        end if
     else if (trim(coupling_mode) == 'nems_orig_data' .or. trim(coupling_mode) == 'nems_frac_aoflux') then
@@ -703,7 +727,7 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compwav)        , trim(fldname), rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), trim(fldname), rc=rc)) then
-             call addmap_from(compatm, trim(fldname), compwav, mapnstod_consf, 'one', 'unset')
+             call addmap_from(compatm, trim(fldname), compwav, mapbilnr_nstod, 'one', 'unset')
              call addmrg_to(compwav, trim(fldname), mrg_from=compatm, mrg_fld=trim(fldname), mrg_type='copy')
           end if
        end if
