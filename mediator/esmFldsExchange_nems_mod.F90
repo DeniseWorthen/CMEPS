@@ -169,11 +169,6 @@ contains
        deallocate(flds)
     end if
 
-    ! TODO: unused, but required to maintain B4B repro for mediator restarts; should be removed
-    if (phase == 'advertise') then
-       call addfld_from(compice, 'mean_sw_pen_to_ocn')
-    end if
-
     ! Advertise the ocean albedos. These are not sent to the ATM in UFS.
     if (phase == 'advertise') then
        call addfld_ocnalb('So_avsdr')
@@ -336,6 +331,17 @@ contains
             fldchk(is_local%wrap%FBImp(compatm,compatm), 'Sa_pslv', rc=rc)) then
           call addmap_from(compatm, 'Sa_pslv', compocn, maptype, 'one', 'unset')
           call addmrg_to(compocn, 'Sa_pslv', mrg_from=compatm, mrg_fld='Sa_pslv', mrg_type='copy')
+       end if
+    end if
+
+    ! to ocn: swpen thru ice w/o bands
+    if (phase == 'advertise') then
+       if (is_local%wrap%comp_present(compice) .and. is_local%wrap%comp_present(compocn)) then
+          call addfld_from(compice, 'Fioi_swpen')
+       end if
+    else
+       if (fldchk(is_local%wrap%FBImp(compice,compice), 'Fioi_swpen', rc=rc)) then
+          call addmap_from(compice, 'Fioi_swpen', compocn, mapfcopy, 'unset', 'unset')
        end if
     end if
 

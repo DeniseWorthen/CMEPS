@@ -169,11 +169,6 @@ contains
        deallocate(flds)
     end if
 
-    ! TODO: unused, but required to maintain B4B repro for mediator restarts; should be removed
-    if (phase == 'advertise') then
-       call addfld_from(compice, 'mean_sw_pen_to_ocn')
-    end if
-
     ! Advertise the ocean albedos. These are not sent to the ATM in UFS.
     if (phase == 'advertise') then
        call addfld_ocnalb('So_avsdr')
@@ -339,6 +334,16 @@ contains
        end if
     end if
 
+    ! to ocn: swpen thru ice w/o bands
+    if (phase == 'advertise') then
+       if (is_local%wrap%comp_present(compice) .and. is_local%wrap%comp_present(compocn)) then
+          call addfld_from(compice, 'Fioi_swpen')
+       end if
+    else
+       if (fldchk(is_local%wrap%FBImp(compice,compice), 'Fioi_swpen', rc=rc)) then
+          call addmap_from(compice, 'Fioi_swpen', compocn, mapfcopy, 'unset', 'unset')
+       end if
+    end if
     ! to ocn: from sw from atm and sw net from ice (custom merge in med_phases_prep_ocn)
     ! - downward direct  near-infrared ("n" or "i") incident solar radiation
     ! - downward diffuse near-infrared ("n" or "i") incident solar radiation
