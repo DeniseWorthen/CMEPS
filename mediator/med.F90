@@ -812,9 +812,9 @@ contains
     test_interp = 'none'
     call NUOPC_CompAttributeGet(gcomp, name='test_interp', value=test_interp, isPresent=isPresent, isSet=isSet, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    !if (isPresent .and. isSet) then
-    !   test_interp = trim(test_interp)
-    !end if
+    if (isPresent .and. isSet) then
+       test_interp = trim(test_interp)
+    end if
     call ESMF_LogWrite('test_interp = '// trim(test_interp), ESMF_LOGMSG_INFO)
 
     ! Initialize memory for fldlistTo and fldlistFr - this is need for the calls below for the
