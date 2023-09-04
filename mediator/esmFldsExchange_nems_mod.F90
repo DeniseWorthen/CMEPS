@@ -442,6 +442,7 @@ contains
        deallocate(aflds)
        deallocate(iflds)
 
+       !nems_orig,nems_frac,nems_frac_aoflux_sbs
        ! to ocn: net long wave via auto merge
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compocn)) then
@@ -457,33 +458,35 @@ contains
           end if
        end if
 
+       !nems_orig,nems_frac,nems_frac_aoflux_sbs
        ! to ocn: sensible heat flux
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compocn)) then
-             call addfld_from(compatm, 'Faoa_sen')
-             call addfld_to(compocn, 'Faoa_sen')
+             call addfld_from(compatm, 'Faxa_sen')
+             call addfld_to(compocn, 'Faxa_sen')
           end if
        else
-          if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Faoa_sen', rc=rc) .and. &
-               fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faoa_sen', rc=rc)) then
-             call addmap_from(compatm, 'Faoa_sen', compocn, mapconsf_aofrac, 'aofrac', 'unset')
-             call addmrg_to(compocn, 'Faoa_sen', &
-                  mrg_from=compatm, mrg_fld='Faoa_sen', mrg_type='copy_with_weights', mrg_fracname='ofrac')
+          if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Faxa_sen', rc=rc) .and. &
+               fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_sen', rc=rc)) then
+             call addmap_from(compatm, 'Faxa_sen', compocn, mapconsf_aofrac, 'aofrac', 'unset')
+             call addmrg_to(compocn, 'Faxa_sen', &
+                  mrg_from=compatm, mrg_fld='Faxa_sen', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
        end if
 
+       !nems_orig,nems_frac,nems_frac_aoflux_sbs
        ! to ocn: evaporation water flux
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compocn)) then
-             call addfld_from(compatm, 'Faoa_evap')
-             call addfld_to(compocn, 'Faoa_evap')
+             call addfld_from(compatm, 'Faxa_evap')
+             call addfld_to(compocn, 'Faxa_evap')
           end if
        else
-          if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Faoa_evap', rc=rc) .and. &
-               fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faoa_evap' , rc=rc)) then
-             call addmap_from(compatm, 'Faoa_evap', compocn, mapconsf_aofrac, 'aofrac', 'unset')
-             call addmrg_to(compocn, 'Faoa_evap', &
-                  mrg_from=compatm, mrg_fld='Faoa_evap', mrg_type='copy_with_weights', mrg_fracname='ofrac')
+          if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Faxa_evap', rc=rc) .and. &
+               fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_evap' , rc=rc)) then
+             call addmap_from(compatm, 'Faxa_evap', compocn, mapconsf_aofrac, 'aofrac', 'unset')
+             call addmrg_to(compocn, 'Faxa_evap', &
+                  mrg_from=compatm, mrg_fld='Faxa_evap', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
        end if
     else if (trim(coupling_mode) == 'nems_orig_data' .or. trim(coupling_mode) == 'nems_frac_aoflux') then
@@ -512,6 +515,7 @@ contains
        end do
        deallocate(flds)
 
+       !nems_orig_data,nems_frac_aoflux
        ! to ocn: long wave net via auto merge
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compocn)) then
@@ -531,34 +535,36 @@ contains
           end if
        end if
 
+       !nems_orig_data,nems_frac_aoflux
        ! to ocn: sensible heat flux from mediator via auto merge
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compocn)) then
              call addfld_aoflux('Faox_sen')
-             call addfld_to(compocn, 'Faox_sen')
+             call addfld_to(compocn, 'Foxx_sen')
           end if
        else
-          if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Faox_sen', rc=rc) .and. &
+          if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Foxx_sen', rc=rc) .and. &
                fldchk(is_local%wrap%FBMed_aoflux_o        , 'Faox_sen' , rc=rc)) then
-             call addmrg_to(compocn, 'Faox_sen', &
+             call addmrg_to(compocn, 'Foxx_sen', &
                   mrg_from=compmed, mrg_fld='Faox_sen', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
        end if
 
+       !nems_orig_data,nems_frac_aoflux
        ! to ocn: evaporation water flux from mediator via auto merge
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compocn)) then
              call addfld_aoflux('Faox_evap')
-             call addfld_to(compocn, 'Faox_evap')
+             call addfld_to(compocn, 'Foxx_evap')
           end if
        else
-          if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Faox_evap', rc=rc) .and. &
+          if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Foxx_evap', rc=rc) .and. &
                fldchk(is_local%wrap%FBMed_aoflux_o        , 'Faox_evap' , rc=rc)) then
-             call addmrg_to(compocn, 'Faox_evap', &
+             call addmrg_to(compocn, 'Foxx_evap', &
                   mrg_from=compmed, mrg_fld='Faox_evap', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
        end if
-    end if
+    end if ! end of coupling_mode bloc
 
     ! to ocn: water flux due to melting ice from ice
     ! to ocn: heat flux from melting ice from ice

@@ -211,8 +211,8 @@ contains
       F_flds(3,:) = (/'Faxa_rain ','Faxa_rain '/) ! mean_prec_rate
       F_flds(4,:) = (/'Faxa_swnet','Faxa_swnet'/) ! mean_net_sw_flx
       F_flds(5,:) = (/'Faxa_lwnet','Faxa_lwnet'/) ! mean_net_lw_flx
-      F_flds(6,:) = (/'Faoa_sen  ','Foxx_sen  '/) ! mean_sensi_heat_flx
-      F_flds(7,:) = (/'Faxa_lat  ','Foxx_lat  '/) ! mean_laten_heat_flx
+      F_flds(6,:) = (/'Faxa_sen  ','Faxa_sen  '/) ! mean_sensi_heat_flx
+      F_flds(7,:) = (/'Faxa_lat  ','Faxa_lat  '/) ! mean_laten_heat_flx
       do n = 1,size(F_flds,1)
          fldname1 = trim(F_flds(n,1))
          fldname2 = trim(F_flds(n,2))
