@@ -1805,7 +1805,11 @@ contains
             end if
             call med_phases_aofluxes_init_fldbuns(gcomp, rc=rc)
          end if
+         if (maintask) then
+            write(logunit,'(a)') trim(subname)//' initializing FB FBMed_aoflux_[a,o]'
+         end if
       end if
+
 
       !! HERE
       !---------------------------------------

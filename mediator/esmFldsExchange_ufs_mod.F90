@@ -49,6 +49,7 @@ contains
     ! local variables:
     type(InternalState) :: is_local
     integer             :: n, maptype
+    logical             :: use_aoflux_to_ocn
     character(len=CX)   :: msgString
     character(len=CL)   :: cvalue
     character(len=CS)   :: fldname
@@ -74,6 +75,12 @@ contains
     end if
     write(msgString,'(A,i6,A)') trim(subname)//': maptype is ',maptype,', '//mapnames(maptype)
     call ESMF_LogWrite(trim(msgString), ESMF_LOGMSG_INFO)
+
+    if (trim(coupling_mode) == 'nems_orig_data' .or. trim(coupling_mode) == 'nems_frac_aoflux') then
+       use_aoflux_to_ocn = .true.
+    else
+       use_aoflux_to_ocn = .false.
+    end if
 
     !=====================================================================
     ! scalar information
@@ -405,41 +412,97 @@ contains
           end if
        end if
     end do
+
+    !to ocn: surface stress from mediator or atm and ice stress via auto merge
+    flds = (/'taux', 'tauy'/)
+    do n = 1,size(flds)
+       fldname = trim(flds(n))
+       if (phase == 'advertise') then
+          if (is_local%wrap%comp_present(compice) .and. is_local%wrap%comp_present(compocn)) then
+             call addfld_aoflux('Faox_'//fldname)
+             call addfld_from(compice , 'Fioi_'//fldname)
+             call addfld_from(compatm, 'Faxa_'//fldname)
+             call addfld_to(compocn , 'Foxx_'//fldname)
+          end if
+       else
+          if (use_aoflux_to_ocn) then
+             if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Foxx_'//fldname, rc=rc) .and. &
+                  fldchk(is_local%wrap%FBMed_aoflux_o        , 'Faox_'//fldname, rc=rc) .and. &
+                  fldchk(is_local%wrap%FBImp(compice,compice), 'Fioi_'//fldname, rc=rc)) then
+                call addmap_from(compice,  'Fioi_'//fldname, compocn, mapfcopy, 'unset', 'unset')
+                call addmrg_to(compocn,  'Foxx_'//fldname, &
+                     mrg_from=compmed, mrg_fld='Faox_'//fldname, mrg_type='merge', mrg_fracname='ofrac')
+                call addmrg_to(compocn,  'Foxx_'//fldname, &
+                     mrg_from=compice, mrg_fld='Fioi_'//fldname, mrg_type='merge', mrg_fracname='ifrac')
+             end if
+          else
+             if ( fldchk(is_local%wrap%FBexp(compocn)   , 'Foxx_'//fldname, rc=rc) .and. &
+                  fldchk(is_local%wrap%FBImp(compice,compice), 'Fioi_'//fldname, rc=rc) .and. &
+                  fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_'//fldname, rc=rc)) then
+                call addmap_from(compice, 'Fioi_'//fldname, compocn, mapfcopy, 'unset', 'unset')
+                call addmap_from(compatm, 'Faxa_'//fldname, compocn, mapconsf_aofrac, 'aofrac', 'unset')
+                call addmrg_to(compocn, 'Foxx_'//fldname, &
+                     mrg_from=compice, mrg_fld='Fioi_'//fldname, mrg_type='merge', mrg_fracname='ifrac')
+                call addmrg_to(compocn, 'Foxx_'//fldname, &
+                     mrg_from=compatm, mrg_fld='Faxa_'//fldname, mrg_type='merge', mrg_fracname='ofrac')
+             end if
+          end if
+       end if
+          ! if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Foxx_'//fldname, rc=rc) .and. &
+          !      fldchk(is_local%wrap%FBImp(compice,compice), 'Fioi_'//fldname, rc=rc) .and. &
+          !      fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_'//fldname, rc=rc)) then
+          !    call addmap_from(compice, 'Fioi_'//fldname, compocn, mapfcopy, 'unset', 'unset')
+          !    call addmap_from(compatm, 'Faxa_'//fldname, compocn, mapconsf_aofrac, 'aofrac', 'unset')
+          !    call addmrg_to(compocn, 'Foxx_'//fldname, &
+          !         mrg_from=compice, mrg_fld='Fioi_'//fldname, mrg_type='merge', mrg_fracname='ifrac')
+          !    call addmrg_to(compocn, 'Foxx_'//fldname, &
+          !         mrg_from=compatm, mrg_fld='Faxa_'//fldname, mrg_type='merge', mrg_fracname='ofrac')
+          ! else if ( fldchk(is_local%wrap%FBexp(compocn)   , 'Foxx_'//fldname, rc=rc) .and. &
+          !      fldchk(is_local%wrap%FBMed_aoflux_o        , 'Faox_'//fldname, rc=rc) .and. &
+          !      fldchk(is_local%wrap%FBImp(compice,compice), 'Fioi_'//fldname, rc=rc)) then
+          !    print *,'XXX0'
+          !    call addmap_from(compice,  'Fioi_'//fldname, compocn, mapfcopy, 'unset', 'unset')
+          !    call addmrg_to(compocn,  'Foxx_'//fldname, &
+          !         mrg_from=compmed, mrg_fld='Faox_'//fldname, mrg_type='merge', mrg_fracname='ofrac')
+          !    call addmrg_to(compocn,  'Foxx_'//fldname, &
+          !         mrg_from=compice, mrg_fld='Fioi_'//fldname, mrg_type='merge', mrg_fracname='ifrac')
+          ! end if
+       end do
     deallocate(flds)
 
     if (trim(coupling_mode) == 'nems_orig' .or. trim(coupling_mode) == 'nems_frac' .or. &
         trim(coupling_mode) == 'nems_frac_aoflux_sbs') then
        ! to ocn: merge surface stress
-       allocate(oflds(2))
-       allocate(aflds(2))
-       allocate(iflds(2))
-       oflds = (/'Foxx_taux', 'Foxx_tauy'/)
-       aflds = (/'Faxa_taux', 'Faxa_tauy'/)
-       iflds = (/'Fioi_taux', 'Fioi_tauy'/)
-       do n = 1,size(oflds)
-          if (phase == 'advertise') then
-             if (is_local%wrap%comp_present(compice) .and. is_local%wrap%comp_present(compatm) &
-                .and. is_local%wrap%comp_present(compocn)) then
-                   call addfld_from(compice, trim(iflds(n)))
-                   call addfld_from(compatm, trim(aflds(n)))
-                   call addfld_to(compocn, trim(oflds(n)))
-             end if
-          else
-             if ( fldchk(is_local%wrap%FBexp(compocn)        , trim(oflds(n)), rc=rc) .and. &
-                  fldchk(is_local%wrap%FBImp(compice,compice), trim(iflds(n)), rc=rc) .and. &
-                  fldchk(is_local%wrap%FBImp(compatm,compatm), trim(aflds(n)), rc=rc)) then
-                call addmap_from(compice, trim(iflds(n)), compocn, mapfcopy, 'unset', 'unset')
-                call addmap_from(compatm, trim(aflds(n)), compocn, mapconsf_aofrac, 'aofrac', 'unset')
-                call addmrg_to(compocn, trim(oflds(n)), &
-                     mrg_from=compice, mrg_fld=trim(iflds(n)), mrg_type='merge', mrg_fracname='ifrac')
-                call addmrg_to(compocn, trim(oflds(n)), &
-                     mrg_from=compatm, mrg_fld=trim(aflds(n)), mrg_type='merge', mrg_fracname='ofrac')
-             end if
-          end if
-       end do
-       deallocate(oflds)
-       deallocate(aflds)
-       deallocate(iflds)
+       ! allocate(oflds(2))
+       ! allocate(aflds(2))
+       ! allocate(iflds(2))
+       ! oflds = (/'Foxx_taux', 'Foxx_tauy'/)
+       ! aflds = (/'Faxa_taux', 'Faxa_tauy'/)
+       ! iflds = (/'Fioi_taux', 'Fioi_tauy'/)
+       ! do n = 1,size(oflds)
+       !    if (phase == 'advertise') then
+       !       if (is_local%wrap%comp_present(compice) .and. is_local%wrap%comp_present(compatm) &
+       !          .and. is_local%wrap%comp_present(compocn)) then
+       !             call addfld_from(compice, trim(iflds(n)))
+       !             call addfld_from(compatm, trim(aflds(n)))
+       !             call addfld_to(compocn, trim(oflds(n)))
+       !       end if
+       !    else
+       !       if ( fldchk(is_local%wrap%FBexp(compocn)        , trim(oflds(n)), rc=rc) .and. &
+       !            fldchk(is_local%wrap%FBImp(compice,compice), trim(iflds(n)), rc=rc) .and. &
+       !            fldchk(is_local%wrap%FBImp(compatm,compatm), trim(aflds(n)), rc=rc)) then
+       !          call addmap_from(compice, trim(iflds(n)), compocn, mapfcopy, 'unset', 'unset')
+       !          call addmap_from(compatm, trim(aflds(n)), compocn, mapconsf_aofrac, 'aofrac', 'unset')
+       !          call addmrg_to(compocn, trim(oflds(n)), &
+       !               mrg_from=compice, mrg_fld=trim(iflds(n)), mrg_type='merge', mrg_fracname='ifrac')
+       !          call addmrg_to(compocn, trim(oflds(n)), &
+       !               mrg_from=compatm, mrg_fld=trim(aflds(n)), mrg_type='merge', mrg_fracname='ofrac')
+       !       end if
+       !    end if
+       ! end do
+       ! deallocate(oflds)
+       ! deallocate(aflds)
+       ! deallocate(iflds)
 
        ! to ocn: net long wave via auto merge
        if (phase == 'advertise') then
@@ -488,28 +551,28 @@ contains
     else if (trim(coupling_mode) == 'nems_orig_data' .or. trim(coupling_mode) == 'nems_frac_aoflux') then
        ! nems_orig_data
        ! to ocn: surface stress from mediator and ice stress via auto merge
-       allocate(flds(2))
-       flds = (/'taux', 'tauy'/)
-       do n = 1,size(flds)
-          if (phase == 'advertise') then
-             if (is_local%wrap%comp_present(compice) .and. is_local%wrap%comp_present(compocn)) then
-                call addfld_aoflux('Faox_'//trim(flds(n)))
-                call addfld_from(compice , 'Fioi_'//trim(flds(n)))
-                call addfld_to(compocn , 'Foxx_'//trim(flds(n)))
-             end if
-          else
-             if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Foxx_'//trim(flds(n)), rc=rc) .and. &
-                  fldchk(is_local%wrap%FBMed_aoflux_o        , 'Faox_'//trim(flds(n)), rc=rc) .and. &
-                  fldchk(is_local%wrap%FBImp(compice,compice), 'Fioi_'//trim(flds(n)), rc=rc)) then
-                call addmap_from(compice,  'Fioi_'//trim(flds(n)), compocn, mapfcopy, 'unset', 'unset')
-                call addmrg_to(compocn,  'Foxx_'//trim(flds(n)), &
-                     mrg_from=compmed, mrg_fld='Faox_'//trim(flds(n)), mrg_type='merge', mrg_fracname='ofrac')
-                call addmrg_to(compocn,  'Foxx_'//trim(flds(n)), &
-                     mrg_from=compice, mrg_fld='Fioi_'//trim(flds(n)), mrg_type='merge', mrg_fracname='ifrac')
-             end if
-          end if
-       end do
-       deallocate(flds)
+       ! allocate(flds(2))
+       ! flds = (/'taux', 'tauy'/)
+       ! do n = 1,size(flds)
+       !    if (phase == 'advertise') then
+       !       if (is_local%wrap%comp_present(compice) .and. is_local%wrap%comp_present(compocn)) then
+       !          call addfld_aoflux('Faox_'//trim(flds(n)))
+       !          call addfld_from(compice , 'Fioi_'//trim(flds(n)))
+       !          call addfld_to(compocn , 'Foxx_'//trim(flds(n)))
+       !       end if
+       !    else
+       !       if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Foxx_'//trim(flds(n)), rc=rc) .and. &
+       !            fldchk(is_local%wrap%FBMed_aoflux_o        , 'Faox_'//trim(flds(n)), rc=rc) .and. &
+       !            fldchk(is_local%wrap%FBImp(compice,compice), 'Fioi_'//trim(flds(n)), rc=rc)) then
+       !          call addmap_from(compice,  'Fioi_'//trim(flds(n)), compocn, mapfcopy, 'unset', 'unset')
+       !          call addmrg_to(compocn,  'Foxx_'//trim(flds(n)), &
+       !               mrg_from=compmed, mrg_fld='Faox_'//trim(flds(n)), mrg_type='merge', mrg_fracname='ofrac')
+       !          call addmrg_to(compocn,  'Foxx_'//trim(flds(n)), &
+       !               mrg_from=compice, mrg_fld='Fioi_'//trim(flds(n)), mrg_type='merge', mrg_fracname='ifrac')
+       !       end if
+       !    end if
+       ! end do
+       ! deallocate(flds)
 
        ! to ocn: long wave net via auto merge
        if (phase == 'advertise') then
@@ -534,12 +597,12 @@ contains
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compocn)) then
              call addfld_aoflux('Faox_sen')
-             call addfld_to(compocn, 'Faox_sen')
+             call addfld_to(compocn, 'Foxx_sen')
           end if
        else
-          if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Faox_sen', rc=rc) .and. &
+          if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Foxx_sen', rc=rc) .and. &
                fldchk(is_local%wrap%FBMed_aoflux_o        , 'Faox_sen' , rc=rc)) then
-             call addmrg_to(compocn, 'Faox_sen', &
+             call addmrg_to(compocn, 'Foxx_sen', &
                   mrg_from=compmed, mrg_fld='Faox_sen', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
        end if
@@ -548,12 +611,12 @@ contains
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compocn)) then
              call addfld_aoflux('Faox_evap')
-             call addfld_to(compocn, 'Faox_evap')
+             call addfld_to(compocn, 'Foxx_evap')
           end if
        else
-          if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Faox_evap', rc=rc) .and. &
+          if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Foxx_evap', rc=rc) .and. &
                fldchk(is_local%wrap%FBMed_aoflux_o        , 'Faox_evap' , rc=rc)) then
-             call addmrg_to(compocn, 'Faox_evap', &
+             call addmrg_to(compocn, 'Foxx_evap', &
                   mrg_from=compmed, mrg_fld='Faox_evap', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
        end if
