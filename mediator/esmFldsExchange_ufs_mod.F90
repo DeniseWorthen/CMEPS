@@ -90,8 +90,8 @@ contains
        call NUOPC_CompAttributeGet(gcomp, name="ScalarFieldName", value=cvalue, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        do n = 1,ncomps
-          call addfld_to(n, trim(cvalue))
-          call addfld_from(n, trim(cvalue))
+          call addfld_to(n   , trim(cvalue))
+          call addfld_from(n , trim(cvalue))
        end do
     end if
 
@@ -120,7 +120,7 @@ contains
           fldname = trim(flds(n))
           if (phase == 'advertise') then
              if (is_local%wrap%comp_present(compatm) )then
-                call addfld_from(compatm, fldname)
+                call addfld_from(compatm , fldname)
              end if
           else
             if ( fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
@@ -152,7 +152,7 @@ contains
           fldname = trim(flds(n))
           if (phase == 'advertise') then
              if (is_local%wrap%comp_present(compatm) )then
-                call addfld_from(compatm, fldname)
+                call addfld_from(compatm , fldname)
              end if
           else
             if ( fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
@@ -191,16 +191,16 @@ contains
     ! to atm: fractions (computed in med_phases_prep_atm)
     if (phase == 'advertise') then
        if (is_local%wrap%comp_present(compice) .and. is_local%wrap%comp_present(compatm)) then
-          call addfld_from(compice, 'Si_ifrac')
-          call addfld_to(compatm, 'Si_ifrac')
+          call addfld_from(compice , 'Si_ifrac')
+          call addfld_to(compatm   , 'Si_ifrac')
        end if
        ! ofrac used by atm
        if (is_local%wrap%comp_present(compocn) .and. is_local%wrap%comp_present(compatm)) then
-          call addfld_from(compatm, 'Sa_ofrac')
+          call addfld_from(compatm , 'Sa_ofrac')
        end if
        ! lfrac used by atm
        if (is_local%wrap%comp_present(complnd) .and. is_local%wrap%comp_present(compatm)) then
-          call addfld_to(compatm, 'Sl_lfrac')
+          call addfld_to(compatm  , 'Sl_lfrac')
        end if
     end if
 
@@ -220,8 +220,8 @@ contains
        fldname = trim(flds(n))
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compice) .and. is_local%wrap%comp_present(compatm)) then
-             call addfld_from(compice, fldname)
-             call addfld_to(compatm, fldname)
+             call addfld_from(compice , fldname)
+             call addfld_to(compatm   , fldname)
           end if
        else
           if ( fldchk(is_local%wrap%FBexp(compatm)        , fldname, rc=rc) .and. &
@@ -239,8 +239,8 @@ contains
        fldname = trim(flds(n))
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compice) .and. is_local%wrap%comp_present(compatm)) then
-             call addfld_from(compice, fldname)
-             call addfld_to(compatm, fldname)
+             call addfld_from(compice , fldname)
+             call addfld_to(compatm   , fldname)
           end if
        else
           if ( fldchk(is_local%wrap%FBexp(compatm)        , fldname, rc=rc) .and. &
@@ -255,8 +255,8 @@ contains
     ! to atm: unmerged surface temperatures from ocn
     if (phase == 'advertise') then
        if (is_local%wrap%comp_present(compocn) .and. is_local%wrap%comp_present(compatm)) then
-          call addfld_from(compocn, 'So_t')
-          call addfld_to(compatm, 'So_t')
+          call addfld_from(compocn , 'So_t')
+          call addfld_to(compatm   , 'So_t')
        end if
     else
        if ( fldchk(is_local%wrap%FBexp(compatm)        , 'So_t', rc=rc) .and. &
@@ -269,8 +269,8 @@ contains
     ! to atm: unmerged surface temperatures from lnd
     if (phase == 'advertise') then
        if (is_local%wrap%comp_present(complnd) .and. is_local%wrap%comp_present(compatm)) then
-          call addfld_from(complnd, 'Sl_t')
-          call addfld_to(compatm, 'Sl_t')
+          call addfld_from(complnd , 'Sl_t')
+          call addfld_to(compatm   , 'Sl_t')
        end if
     else
        if ( fldchk(is_local%wrap%FBexp(compatm)        , 'Sl_t', rc=rc) .and. &
@@ -293,7 +293,7 @@ contains
           if (phase == 'advertise') then
              do n = 1,size(flds)
                 call addfld_aoflux('Faox_'//trim(flds(n)))
-                call addfld_to(compatm, 'Faox_'//trim(flds(n)))
+                call addfld_to(compatm , 'Faox_'//trim(flds(n)))
              end do
           else
              do n = 1,size(flds)
@@ -312,8 +312,8 @@ contains
     ! to atm: surface roughness length from wav
     if (phase == 'advertise') then
        if (is_local%wrap%comp_present(compwav) .and. is_local%wrap%comp_present(compatm)) then
-          call addfld_from(compwav, 'Sw_z0')
-          call addfld_to(compatm, 'Sw_z0')
+          call addfld_from(compwav , 'Sw_z0')
+          call addfld_to(compatm   , 'Sw_z0')
        end if
     else
        if ( fldchk(is_local%wrap%FBexp(compatm)        , 'Sw_z0', rc=rc) .and. &
@@ -330,8 +330,8 @@ contains
     ! to ocn: sea level pressure from atm
     if (phase == 'advertise') then
        if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compocn)) then
-          call addfld_from(compatm, 'Sa_pslv')
-          call addfld_to(compocn, 'Sa_pslv')
+          call addfld_from(compatm , 'Sa_pslv')
+          call addfld_to(compocn   , 'Sa_pslv')
        end if
     else
        if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Sa_pslv', rc=rc) .and. &
@@ -344,7 +344,7 @@ contains
     ! to ocn: swpen thru ice w/o bands
     if (phase == 'advertise') then
        if (is_local%wrap%comp_present(compice) .and. is_local%wrap%comp_present(compocn)) then
-          call addfld_from(compice, 'Fioi_swpen')
+          call addfld_from(compice , 'Fioi_swpen')
        end if
     else
        if (fldchk(is_local%wrap%FBImp(compice,compice), 'Fioi_swpen', rc=rc)) then
@@ -365,8 +365,8 @@ contains
     do n = 1,size(oflds)
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compocn)) then
-             call addfld_from(compatm, trim(aflds(n)))
-             call addfld_to(compocn, trim(oflds(n)))
+             call addfld_from(compatm , trim(aflds(n)))
+             call addfld_to(compocn   , trim(oflds(n)))
           end if
        else
           if ( fldchk(is_local%wrap%FBexp(compocn)        , trim(oflds(n)), rc=rc) .and. &
@@ -379,8 +379,8 @@ contains
     do n = 1,size(oflds)
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compice) .and. is_local%wrap%comp_present(compocn)) then
-             call addfld_from(compice, trim(iflds(n)))
-             call addfld_to(compocn, trim(oflds(n)))
+             call addfld_from(compice , trim(iflds(n)))
+             call addfld_to(compocn   , trim(oflds(n)))
           end if
        else
           if ( fldchk(is_local%wrap%FBexp(compocn)        , trim(oflds(n)), rc=rc) .and. &
@@ -400,8 +400,8 @@ contains
        fldname = trim(flds(n))
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compocn)) then
-             call addfld_from(compatm, fldname)
-             call addfld_to(compocn, fldname)
+             call addfld_from(compatm , fldname)
+             call addfld_to(compocn   , fldname)
           end if
        else
           if ( fldchk(is_local%wrap%FBexp(compocn)        , fldname, rc=rc) .and. &
@@ -420,9 +420,9 @@ contains
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compice) .and. is_local%wrap%comp_present(compocn)) then
              call addfld_aoflux('Faox_'//fldname)
+             call addfld_from(compatm , 'Faxa_'//fldname)
              call addfld_from(compice , 'Fioi_'//fldname)
-             call addfld_from(compatm, 'Faxa_'//fldname)
-             call addfld_to(compocn , 'Foxx_'//fldname)
+             call addfld_to(compocn   , 'Foxx_'//fldname)
           end if
        else
           if (use_aoflux_to_ocn) then
@@ -454,10 +454,10 @@ contains
     ! to ocn: net long wave via auto merge
     if (phase == 'advertise') then
        if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compocn)) then
-          call addfld_from(compatm, 'Faxa_lwnet')
-          call addfld_from(compatm, 'Faxa_lwdn')
           call addfld_aoflux('Faox_lwup')
-          call addfld_to(compocn, 'Foxx_lwnet')
+          call addfld_from(compatm , 'Faxa_lwnet')
+          call addfld_from(compatm , 'Faxa_lwdn')
+          call addfld_to(compocn   , 'Foxx_lwnet')
        end if
     else
        if (use_aoflux_to_ocn) then
@@ -483,9 +483,9 @@ contains
     ! to ocn: sensible heat flux
     if (phase == 'advertise') then
        if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compocn)) then
-          call addfld_from(compatm, 'Faxa_sen')
           call addfld_aoflux('Faox_sen')
-          call addfld_to(compocn, 'Foxx_sen')
+          call addfld_from(compatm , 'Faxa_sen')
+          call addfld_to(compocn   , 'Foxx_sen')
        end if
     else
        if (use_aoflux_to_ocn) then
@@ -507,9 +507,9 @@ contains
     ! to ocn: evaporation water flux
     if (phase == 'advertise') then
        if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compocn)) then
-          call addfld_from(compatm, 'Faxa_evap')
           call addfld_aoflux('Faox_evap')
-          call addfld_to(compocn, 'Foxx_evap')
+          call addfld_from(compatm , 'Faxa_evap')
+          call addfld_to(compocn   , 'Foxx_evap')
        end if
     else
        if (use_aoflux_to_ocn) then
@@ -690,8 +690,8 @@ contains
        fldname = trim(flds(n))
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compice) .and. is_local%wrap%comp_present(compocn)) then
-             call addfld_from(compice, fldname)
-             call addfld_to(compocn, fldname)
+             call addfld_from(compice , fldname)
+             call addfld_to(compocn   , fldname)
           end if
        else
           if ( fldchk(is_local%wrap%FBexp(compocn)        , fldname, rc=rc) .and. &
@@ -711,8 +711,8 @@ contains
        fldname = trim(flds(n))
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compwav) .and. is_local%wrap%comp_present(compocn)) then
-             call addfld_from(compwav, fldname)
-             call addfld_to(compocn, fldname)
+             call addfld_from(compwav , fldname)
+             call addfld_to(compocn   , fldname)
           end if
        else
           if ( fldchk(is_local%wrap%FBexp(compocn)        , fldname, rc=rc) .and. &
@@ -744,8 +744,8 @@ contains
        fldname = trim(flds(n))
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compice)) then
-             call addfld_from(compatm, fldname)
-             call addfld_to(compice, fldname)
+             call addfld_from(compatm , fldname)
+             call addfld_to(compice   , fldname)
           end if
        else
           if ( fldchk(is_local%wrap%FBexp(compice)        , fldname, rc=rc) .and. &
@@ -771,8 +771,8 @@ contains
        fldname = trim(flds(n))
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compice)) then
-             call addfld_from(compatm, fldname)
-             call addfld_to(compice, fldname)
+             call addfld_from(compatm , fldname)
+             call addfld_to(compice   , fldname)
           endif
        else
           if ( fldchk(is_local%wrap%FBexp(compice)        , fldname, rc=rc) .and. &
@@ -799,8 +799,8 @@ contains
        fldname = trim(flds(n))
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compocn) .and. is_local%wrap%comp_present(compice)) then
-             call addfld_from(compocn, fldname)
-             call addfld_to(compice, fldname)
+             call addfld_from(compocn , fldname)
+             call addfld_to(compice   , fldname)
           endif
        else
           if ( fldchk(is_local%wrap%FBexp(compice)        , fldname, rc=rc) .and. &
@@ -814,8 +814,8 @@ contains
 
     if (phase == 'advertise') then
        if (is_local%wrap%comp_present(compice) .and. is_local%wrap%comp_present(compwav)) then
-          call addfld_from(compwav, 'Sw_elevation_spectrum')
-          call addfld_to(compice, 'Sw_elevation_spectrum')
+          call addfld_from(compwav , 'Sw_elevation_spectrum')
+          call addfld_to(compice   , 'Sw_elevation_spectrum')
        end if
     else
        if ( fldchk(is_local%wrap%FBExp(compice)        , 'Sw_elevation_spectrum', rc=rc) .and. &
@@ -837,8 +837,8 @@ contains
        fldname = trim(flds(n))
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compwav)) then
-             call addfld_from(compatm, fldname)
-             call addfld_to(compwav, fldname)
+             call addfld_from(compatm , fldname)
+             call addfld_to(compwav   , fldname)
           end if
        else
           if ( fldchk(is_local%wrap%FBexp(compwav)        , fldname, rc=rc) .and. &
@@ -857,8 +857,8 @@ contains
         fldname = trim(flds(n))
         if (phase == 'advertise') then
            if (is_local%wrap%comp_present(compice) .and. is_local%wrap%comp_present(compwav)) then
-              call addfld_from(compice, fldname)
-              call addfld_to(compwav, fldname)
+              call addfld_from(compice , fldname)
+              call addfld_to(compwav   , fldname)
         end if
         else
            if ( fldchk(is_local%wrap%FBexp(compwav)        , fldname, rc=rc) .and. &
@@ -879,8 +879,8 @@ contains
         fldname = trim(flds(n))
         if (phase == 'advertise') then
            if (is_local%wrap%comp_present(compocn) .and. is_local%wrap%comp_present(compwav)) then
-              call addfld_from(compocn, fldname)
-              call addfld_to(compwav, fldname)
+              call addfld_from(compocn , fldname)
+              call addfld_to(compwav   , fldname)
            end if
         else
            if ( fldchk(is_local%wrap%FBexp(compwav)        , fldname, rc=rc) .and. &
@@ -917,8 +917,8 @@ contains
        fldname = trim(flds(n))
        if (phase == 'advertise') then
           if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(complnd)) then
-             call addfld_from(compatm, fldname)
-             call addfld_to(complnd, fldname)
+             call addfld_from(compatm , fldname)
+             call addfld_to(complnd   , fldname)
           end if
        else
           if ( fldchk(is_local%wrap%FBexp(complnd)        , fldname, rc=rc) .and. &
