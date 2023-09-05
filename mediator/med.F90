@@ -53,6 +53,8 @@ module MED
   use esmFldsExchange_cesm_mod , only : esmFldsExchange_cesm
   use esmFldsExchange_hafs_mod , only : esmFldsExchange_hafs
   use med_phases_profile_mod   , only : med_phases_profile_finalize
+  !DEBUG
+  use esmFlds         , only : med_fldList_GetaofluxfldList
 
   implicit none
   private
@@ -1633,6 +1635,7 @@ contains
     real(r8)                           :: real_nx, real_ny
     character(len=CX)                  :: msgString
     character(len=*), parameter :: subname = '('//__FILE__//':DataInitialize)'
+    type(med_fldList_type), pointer :: fldListMed_aoflux
     !-----------------------------------------------------------
 
     call ESMF_LogWrite(trim(subname)//": called", ESMF_LOGMSG_INFO)
@@ -1837,6 +1840,17 @@ contains
       end if
 
       if (maintask) then
+         fldListMed_aoflux => med_fldList_GetaofluxFldList()
+         fieldCount = med_fldList_GetNumFlds(fldListMed_aoflux)
+         if (fieldcount > 0) then
+            allocate(fldnames(fieldCount))
+            call med_fldList_getfldnames(fldListMed_aoflux%fields, fldnames, rc=rc)
+            do n = 1,fieldcount
+               print *,'aoflux flds ',n,trim(fldnames(n))
+            end do
+            deallocate(fldnames)
+         end if
+
          call med_fldList_Document_Mapping(logunit, is_local%wrap%med_coupling_active)
          call med_fldList_Document_Merging(logunit, is_local%wrap%med_coupling_active)
       end if
