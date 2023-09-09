@@ -111,38 +111,39 @@ contains
        end if
     end if
 
-    ! from atm: fields required for atm/ocn flux calculation
-    allocate(flds(13))
-    flds = (/'Sa_u   ', 'Sa_v   ', 'Sa_z   ', 'Sa_tbot', 'Sa_pbot', 'Sa_pslv', &
-             'Sa_shum', 'Sa_ptem', 'Sa_dens', 'Sa_u10m', 'Sa_v10m', 'Sa_t2m ', &
-             'Sa_q2m '/)
-    do n = 1,size(flds)
-       fldname = trim(flds(n))
-       if (phase == 'advertise') then
-          if (is_local%wrap%comp_present(compatm) )then
+    ! fields required for atm/ocn flux calculation
+    if (is_local%wrap%comp_present(compocn) .and. is_local%wrap%comp_present(compatm)) then
+       ! from atm: states for fluxes
+       allocate(flds(13))
+       flds = (/'Sa_u   ', 'Sa_v   ', 'Sa_z   ', 'Sa_tbot', 'Sa_pbot', 'Sa_pslv', &
+                'Sa_shum', 'Sa_ptem', 'Sa_dens', 'Sa_u10m', 'Sa_v10m', 'Sa_t2m ', &
+                'Sa_q2m '/)
+       do n = 1,size(flds)
+          fldname = trim(flds(n))
+          if (phase == 'advertise') then
              call addfld_from(compatm , fldname)
+          else
+             if ( fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
+                call addmap_from(compatm, fldname, compocn, maptype, 'one', 'unset')
+             end if
           end if
-       else
-          if ( fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
-             call addmap_from(compatm, fldname, compocn, maptype, 'one', 'unset')
+       end do
+       deallocate(flds)
+
+       ! from med: fields returned by the atm/ocn flux computation, otherwise unadvertised
+       allocate(flds(8))
+       flds = (/'So_tref  ', 'So_qref  ', 'So_ustar ', 'So_re    ','So_ssq   ', 'So_u10   ', &
+                'So_duu10n', 'Faox_lat '/)
+       do n = 1,size(flds)
+          fldname = trim(flds(n))
+          if (phase == 'advertise') then
+             call addfld_aoflux(fldname)
           end if
-       end if
-    end do
-    deallocate(flds)
+       end do
+       deallocate(flds)
+    end if
 
-    ! fields returned by the atm/ocn flux computation which are otherwise unadvertised
-    allocate(flds(8))
-    flds = (/'So_tref  ', 'So_qref  ', 'So_ustar ', 'So_re    ','So_ssq   ', 'So_u10   ', &
-             'So_duu10n', 'Faox_lat '/)
-    do n = 1,size(flds)
-       fldname = trim(flds(n))
-       if (phase == 'advertise') then
-          call addfld_aoflux(fldname)
-       end if
-    end do
-    deallocate(flds)
-
-    ! Advertise the ocean albedos. These are not sent to the ATM in UFS.
+    ! from med: ocean albedos (not sent to the ATM in UFS).
     if (phase == 'advertise') then
        call addfld_ocnalb('So_avsdr')
        call addfld_ocnalb('So_avsdf')
