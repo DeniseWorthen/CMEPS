@@ -43,18 +43,15 @@ module MED
   use med_internalstate_mod    , only : med_internalstate_defaultmasks, logunit, maintask
   use med_internalstate_mod    , only : ncomps, compname
   use med_internalstate_mod    , only : compmed, compatm, compocn, compice, complnd, comprof, compwav, compglc
-  use med_internalstate_mod    , only : coupling_mode, aoflux_code, aoflux_ccpp_suite, use_ufsX
+  use med_internalstate_mod    , only : coupling_mode, aoflux_code, aoflux_ccpp_suite
   use esmFlds                  , only : med_fldList_GetocnalbfldList, med_fldList_type
   use esmFlds                  , only : med_fldList_GetNumFlds, med_fldList_GetFldNames, med_fldList_GetFldInfo
   use esmFlds                  , only : med_fldList_Document_Mapping, med_fldList_Document_Merging
   use esmFlds                  , only : med_fldList_GetfldListFr, med_fldList_GetfldListTo, med_fldList_Realize
   use esmFldsExchange_nems_mod , only : esmFldsExchange_nems
-  use esmFldsExchange_ufs_mod  , only : esmFldsExchange_ufs
   use esmFldsExchange_cesm_mod , only : esmFldsExchange_cesm
   use esmFldsExchange_hafs_mod , only : esmFldsExchange_hafs
   use med_phases_profile_mod   , only : med_phases_profile_finalize
-  !DEBUG
-  use esmFlds         , only : med_fldList_GetaofluxfldList
 
   implicit none
   private
@@ -812,31 +809,16 @@ contains
        write(logunit,*)
     end if
 
-    use_ufsX = .false.
-    call NUOPC_CompAttributeGet(gcomp, name='use_ufsX', value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent .and. isSet) then
-      if (trim(cvalue) == 'true') then
-        use_ufsX = .true.
-      end if
-    end if
-
     ! Initialize memory for fldlistTo and fldlistFr - this is need for the calls below for the
     ! advertise phase
     call med_fldlist_init1(ncomps)
 
-    !! HERE
     if (trim(coupling_mode) == 'cesm') then
        call esmFldsExchange_cesm(gcomp, phase='advertise', rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     else if (trim(coupling_mode(1:4)) == 'nems') then
-       if (use_ufsX) then
-          call esmFldsExchange_ufs(gcomp, phase='advertise', rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       else
-          call esmFldsExchange_nems(gcomp, phase='advertise', rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       end if
+       call esmFldsExchange_nems(gcomp, phase='advertise', rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
     else if (trim(coupling_mode(1:4)) == 'hafs') then
        call esmFldsExchange_hafs(gcomp, phase='advertise', rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -1635,7 +1617,6 @@ contains
     real(r8)                           :: real_nx, real_ny
     character(len=CX)                  :: msgString
     character(len=*), parameter :: subname = '('//__FILE__//':DataInitialize)'
-    type(med_fldList_type), pointer :: fldListMed_aoflux
     !-----------------------------------------------------------
 
     call ESMF_LogWrite(trim(subname)//": called", ESMF_LOGMSG_INFO)
@@ -1793,7 +1774,7 @@ contains
       !---------------------------------------
 
       ! NOTE: this section must be done BEFORE the second call to esmFldsExchange
-      ! Create field bundles for mediator atm/ocean computation
+      ! Create field bundles for mediator atm/ocean flux computation
       fieldCount = med_fldList_GetNumFlds(med_fldList_getaofluxfldList())
       if ( fieldCount > 0 ) then
          if ( is_local%wrap%med_coupling_active(compocn,compatm) .or. &
@@ -1808,13 +1789,8 @@ contains
             end if
             call med_phases_aofluxes_init_fldbuns(gcomp, rc=rc)
          end if
-         if (maintask) then
-            write(logunit,'(a)') trim(subname)//' initializing FB FBMed_aoflux_[a,o]'
-         end if
       end if
 
-
-      !! HERE
       !---------------------------------------
       ! Second call to esmFldsExchange_xxx
       ! Determine mapping and merging info for field exchanges in mediator
@@ -1827,30 +1803,14 @@ contains
          call esmFldsExchange_cesm(gcomp, phase='initialize', rc=rc)
          if (ChkErr(rc,__LINE__,u_FILE_u)) return
       else if (trim(coupling_mode(1:4)) == 'nems') then
-         if (use_ufsX) then
-            call esmFldsExchange_ufs(gcomp, phase='initialize', rc=rc)
-            if (ChkErr(rc,__LINE__,u_FILE_u)) return
-         else
-            call esmFldsExchange_nems(gcomp, phase='initialize', rc=rc)
-            if (ChkErr(rc,__LINE__,u_FILE_u)) return
-         end if
+         call esmFldsExchange_nems(gcomp, phase='initialize', rc=rc)
+         if (ChkErr(rc,__LINE__,u_FILE_u)) return
       else if (trim(coupling_mode) == 'hafs') then
          call esmFldsExchange_hafs(gcomp, phase='initialize', rc=rc)
          if (ChkErr(rc,__LINE__,u_FILE_u)) return
       end if
 
       if (maintask) then
-         fldListMed_aoflux => med_fldList_GetaofluxFldList()
-         fieldCount = med_fldList_GetNumFlds(fldListMed_aoflux)
-         if (fieldcount > 0) then
-            allocate(fldnames(fieldCount))
-            call med_fldList_getfldnames(fldListMed_aoflux%fields, fldnames, rc=rc)
-            do n = 1,fieldcount
-               print *,'aoflux flds ',n,trim(fldnames(n))
-            end do
-            deallocate(fldnames)
-         end if
-
          call med_fldList_Document_Mapping(logunit, is_local%wrap%med_coupling_active)
          call med_fldList_Document_Merging(logunit, is_local%wrap%med_coupling_active)
       end if
