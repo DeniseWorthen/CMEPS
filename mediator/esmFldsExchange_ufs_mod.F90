@@ -111,70 +111,69 @@ contains
        end if
     end if
 
-    if ( trim(coupling_mode) == 'nems_orig_data') then
-       ! atm fields required for atm/ocn flux calculation
-       allocate(flds(10))
-       flds = (/'Sa_u   ', 'Sa_v   ', 'Sa_z   ', 'Sa_tbot', 'Sa_pbot', &
-                'Sa_shum', 'Sa_u10m', 'Sa_v10m', 'Sa_t2m ', 'Sa_q2m '/)
-       do n = 1,size(flds)
-          fldname = trim(flds(n))
-          if (phase == 'advertise') then
-             if (is_local%wrap%comp_present(compatm) )then
-                call addfld_from(compatm , fldname)
-             end if
-          else
-            if ( fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
-               call addmap_from(compatm, fldname, compocn, maptype, 'one', 'unset')
-            end if
+    ! atm fields required for atm/ocn flux calculation
+    allocate(flds(13))
+    flds = (/'Sa_u   ', 'Sa_v   ', 'Sa_z   ', 'Sa_tbot', 'Sa_pbot', &
+             'Sa_pslv', 'Sa_shum', 'Sa_ptem', 'Sa_dens', 'Sa_u10m', &
+             'Sa_v10m', 'Sa_t2m ', 'Sa_q2m '/)
+    do n = 1,size(flds)
+       fldname = trim(flds(n))
+       if (phase == 'advertise') then
+          if (is_local%wrap%comp_present(compatm) )then
+             call addfld_from(compatm , fldname)
           end if
-       end do
-       deallocate(flds)
+       else
+          if ( fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
+             call addmap_from(compatm, fldname, compocn, maptype, 'one', 'unset')
+          end if
+       end if
+    end do
+    deallocate(flds)
 
-       ! fields returned by the atm/ocn flux computation which are otherwise unadvertised
-       allocate(flds(8))
-       flds = (/'So_tref  ', 'So_qref  ', 'So_ustar ', 'So_re    ','So_ssq   ', &
-                'So_u10   ', 'So_duu10n', 'Faox_lat '/)
-       do n = 1,size(flds)
-          fldname = trim(flds(n))
-          if (phase == 'advertise') then
-             call addfld_aoflux(fldname)
-          end if
-       end do
-       deallocate(flds)
-    end if
+    ! fields returned by the atm/ocn flux computation which are otherwise unadvertised
+    allocate(flds(8))
+    flds = (/'So_tref  ', 'So_qref  ', 'So_ustar ', 'So_re    ','So_ssq   ', &
+             'So_u10   ', 'So_duu10n', 'Faox_lat '/)
+    do n = 1,size(flds)
+       fldname = trim(flds(n))
+       if (phase == 'advertise') then
+          call addfld_aoflux(fldname)
+       end if
+    end do
+    deallocate(flds)
 
-    if (trim(coupling_mode) == 'nems_frac_aoflux' .or. trim(coupling_mode) == 'nems_frac_aoflux_sbs') then
-       allocate(flds(12))
-       flds = (/'Sa_u     ', 'Sa_v     ', 'Sa_z     ', 'Sa_tbot  ', 'Sa_pbot  ', &
-                'Sa_pslv  ', 'Sa_shum  ', 'Sa_ptem  ', 'Sa_dens  ', 'Sa_u10m  ', &
-                'Sa_v10m  ', 'Faxa_lwdn'/)
-       do n = 1,size(flds)
-          fldname = trim(flds(n))
-          if (phase == 'advertise') then
-             if (is_local%wrap%comp_present(compatm) )then
-                call addfld_from(compatm , fldname)
-             end if
-          else
-            if ( fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
-               call addmap_from(compatm, fldname, compocn, maptype, 'one', 'unset')
-            end if
-          end if
-       end do
-       deallocate(flds)
+    ! if (trim(coupling_mode) == 'nems_frac_aoflux' .or. trim(coupling_mode) == 'nems_frac_aoflux_sbs') then
+    !    allocate(flds(12))
+    !    flds = (/'Sa_u     ', 'Sa_v     ', 'Sa_z     ', 'Sa_tbot  ', 'Sa_pbot  ', &
+    !             'Sa_pslv  ', 'Sa_shum  ', 'Sa_ptem  ', 'Sa_dens  ', 'Sa_u10m  ', &
+    !             'Sa_v10m  ', 'Faxa_lwdn'/)
+    !    do n = 1,size(flds)
+    !       fldname = trim(flds(n))
+    !       if (phase == 'advertise') then
+    !          if (is_local%wrap%comp_present(compatm) )then
+    !             call addfld_from(compatm , fldname)
+    !          end if
+    !       else
+    !         if ( fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
+    !            call addmap_from(compatm, fldname, compocn, maptype, 'one', 'unset')
+    !         end if
+    !       end if
+    !    end do
+    !    deallocate(flds)
 
-       ! fields returned by the atm/ocn flux computation which are otherwise unadvertised
-       allocate(flds(13))
-       flds = (/'So_tref  ', 'So_qref  ','So_u10   ', 'So_ustar ','So_ssq   ', &
-                'So_re    ', 'So_duu10n','Faox_lwup', 'Faox_sen ','Faox_lat ', &
-                'Faox_evap', 'Faox_taux','Faox_tauy'/)
-       do n = 1,size(flds)
-          fldname = trim(flds(n))
-          if (phase == 'advertise') then
-             call addfld_aoflux(fldname)
-          end if
-       end do
-       deallocate(flds)
-    end if
+    !    ! fields returned by the atm/ocn flux computation which are otherwise unadvertised
+    !    allocate(flds(13))
+    !    flds = (/'So_tref  ', 'So_qref  ','So_u10   ', 'So_ustar ','So_ssq   ', &
+    !             'So_re    ', 'So_duu10n','Faox_lwup', 'Faox_sen ','Faox_lat ', &
+    !             'Faox_evap', 'Faox_taux','Faox_tauy'/)
+    !    do n = 1,size(flds)
+    !       fldname = trim(flds(n))
+    !       if (phase == 'advertise') then
+    !          call addfld_aoflux(fldname)
+    !       end if
+    !    end do
+    !    deallocate(flds)
+    ! end if
 
     ! Advertise the ocean albedos. These are not sent to the ATM in UFS.
     if (phase == 'advertise') then
@@ -286,28 +285,27 @@ contains
     ! - surface sensible heat flux
     ! - surface upward longwave heat flux
     ! - evaporation water flux from water, not in the list do we need to send it to atm?
-    if (trim(coupling_mode) == 'nems_frac_aoflux') then
-       if (is_local%wrap%comp_present(compocn) .and. is_local%wrap%comp_present(compatm)) then
-          allocate(flds(5))
-          flds = (/ 'lat ', 'sen ', 'lwup', 'taux', 'tauy' /)
-          if (phase == 'advertise') then
-             do n = 1,size(flds)
-                call addfld_aoflux('Faox_'//trim(flds(n)))
-                call addfld_to(compatm , 'Faox_'//trim(flds(n)))
-             end do
-          else
-             do n = 1,size(flds)
-                if (fldchk(is_local%wrap%FBMed_aoflux_o, 'Faox_'//trim(flds(n)), rc=rc)) then
-                   if (trim(is_local%wrap%aoflux_grid) == 'ogrid') then
-                      call addmap_aoflux('Faox_'//trim(flds(n)), compatm, maptype, 'ofrac', 'unset')
-                   end if
-                   call addmrg_to(compatm, 'Faox_'//trim(flds(n)), mrg_from=compmed, mrg_fld='Faox_'//trim(flds(n)), mrg_type='copy')
-                end if
-             end do
+    !if (trim(coupling_mode) == 'nems_frac_aoflux') then
+    allocate(flds(5))
+    flds = (/ 'lat ', 'sen ', 'lwup', 'taux', 'tauy' /)
+    do n = 1,size(flds)
+       fldname = trim(flds(n))
+       if (phase == 'advertise') then
+          if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compocn)) then
+             call addfld_aoflux('Faox_'// fldname)
+             call addfld_to(compatm , 'Faox_'//fldname)
           end if
-          deallocate(flds)
+       else
+          if (fldchk(is_local%wrap%FBMed_aoflux_o, 'Faox_'//fldname, rc=rc)) then
+             if (trim(is_local%wrap%aoflux_grid) == 'ogrid') then
+                call addmap_aoflux('Faox_'//fldname, compatm, maptype, 'ofrac', 'unset')
+             end if
+             call addmrg_to(compatm, 'Faox_'//fldname, mrg_from=compmed, mrg_fld='Faox_'//fldname, mrg_type='copy')
+          end if
        end if
-    end if
+    end do
+    deallocate(flds)
+    !end if
 
     ! to atm: surface roughness length from wav
     if (phase == 'advertise') then
@@ -427,8 +425,8 @@ contains
        else
           if (use_aoflux_to_ocn) then
              if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Foxx_'//fldname, rc=rc) .and. &
-                  fldchk(is_local%wrap%FBMed_aoflux_o        , 'Faox_'//fldname, rc=rc) .and. &
-                  fldchk(is_local%wrap%FBImp(compice,compice), 'Fioi_'//fldname, rc=rc)) then
+                  fldchk(is_local%wrap%FBImp(compice,compice), 'Fioi_'//fldname, rc=rc) .and. &
+                  fldchk(is_local%wrap%FBMed_aoflux_o        , 'Faox_'//fldname, rc=rc)) then
                 call addmap_from(compice,  'Fioi_'//fldname, compocn, mapfcopy, 'unset', 'unset')
                 call addmrg_to(compocn,  'Foxx_'//fldname, &
                      mrg_from=compmed, mrg_fld='Faox_'//fldname, mrg_type='merge', mrg_fracname='ofrac')
@@ -462,8 +460,8 @@ contains
     else
        if (use_aoflux_to_ocn) then
           if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Foxx_lwnet', rc=rc) .and. &
-               fldchk(is_local%wrap%FBMed_aoflux_o        , 'Faox_lwup' , rc=rc) .and. &
-               fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_lwdn' , rc=rc)) then
+               fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_lwdn' , rc=rc) .and. &
+               fldchk(is_local%wrap%FBMed_aoflux_o        , 'Faox_lwup' , rc=rc)) then
              call addmap_from(compatm, 'Faxa_lwdn', compocn, maptype, 'one', 'unset')
              call addmrg_to(compocn, 'Foxx_lwnet', &
                   mrg_from=compmed, mrg_fld='Faox_lwup', mrg_type='merge', mrg_fracname='ofrac')
@@ -765,8 +763,7 @@ contains
     ! to ice: meridional wind at the lowest model level from atm
     ! to ice: specific humidity at the lowest model level from atm
     allocate(flds(6))
-    flds = (/'Sa_u   ', 'Sa_v   ', 'Sa_z   ', 'Sa_tbot', 'Sa_pbot', &
-             'Sa_shum'/)
+    flds = (/'Sa_u   ', 'Sa_v   ', 'Sa_z   ', 'Sa_tbot', 'Sa_pbot', 'Sa_shum'/)
     do n = 1,size(flds)
        fldname = trim(flds(n))
        if (phase == 'advertise') then
@@ -793,8 +790,8 @@ contains
     ! to ice: meridional sea surface slope from ocn
     ! to ice: ocean melt and freeze potential from ocn
     allocate(flds(7))
-    flds = (/'So_t   ', 'So_s   ', 'So_u   ', 'So_v   ','So_dhdx', &
-             'So_dhdy', 'Fioo_q '/)
+    flds = (/'So_t   ', 'So_s   ', 'So_u   ', 'So_v   ','So_dhdx', 'So_dhdy', &
+             'Fioo_q '/)
     do n = 1,size(flds)
        fldname = trim(flds(n))
        if (phase == 'advertise') then
