@@ -164,6 +164,11 @@ module med_internalstate_mod
     type(ESMF_FieldBundle) :: FBMed_aoflux_o                     ! Ocn/Atm flux output fields on ocn grid
     type(packed_data_type), pointer :: packed_data_aoflux_o2a(:) ! packed data for mapping ocn->atm
 
+    ! Mediator field bundles for ocean nst
+    type(ESMF_FieldBundle) :: FBMed_ocnnst_o            ! Ocn NST on ocn grid
+    type(ESMF_FieldBundle) :: FBMed_ocnnst_a            ! Ocn NST on atm grid
+    type(packed_data_type), pointer :: packed_data_ocnnst_o2a(:) ! packed data for mapping ocn->atm
+
     ! Mapping
     ! RH(n,k,m) is a RH from grid n to grid k, map type m
     type(ESMF_RouteHandle) , pointer :: RH(:,:,:)            ! Routehandles for pairs of components and different mappers
@@ -311,6 +316,7 @@ contains
     allocate(is_local%wrap%FBExp(ncomps))
     allocate(is_local%wrap%packed_data_ocnalb_o2a(nmappers))
     allocate(is_local%wrap%packed_data_aoflux_o2a(nmappers))
+    allocate(is_local%wrap%packed_data_ocnnst_o2a(nmappers))
     allocate(is_local%wrap%RH(ncomps,ncomps,nmappers))
     allocate(is_local%wrap%field_NormOne(ncomps,ncomps,nmappers))
     allocate(is_local%wrap%packed_data(ncomps,ncomps,nmappers))

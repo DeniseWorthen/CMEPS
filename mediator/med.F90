@@ -44,7 +44,7 @@ module MED
   use med_internalstate_mod    , only : ncomps, compname
   use med_internalstate_mod    , only : compmed, compatm, compocn, compice, complnd, comprof, compwav, compglc
   use med_internalstate_mod    , only : coupling_mode, aoflux_code, aoflux_ccpp_suite
-  use esmFlds                  , only : med_fldList_GetocnalbfldList, med_fldList_type
+  use esmFlds                  , only : med_fldList_GetocnalbfldList, med_fldList_GetocnnstfldList, med_fldList_type
   use esmFlds                  , only : med_fldList_GetNumFlds, med_fldList_GetFldNames, med_fldList_GetFldInfo
   use esmFlds                  , only : med_fldList_Document_Mapping, med_fldList_Document_Merging
   use esmFlds                  , only : med_fldList_GetfldListFr, med_fldList_GetfldListTo, med_fldList_Realize
@@ -114,6 +114,7 @@ contains
     use med_phases_post_wav_mod , only: med_phases_post_wav
     use med_phases_ocnalb_mod   , only: med_phases_ocnalb_run
     use med_phases_aofluxes_mod , only: med_phases_aofluxes_run
+    use med_phases_ocnnst_mod   , only: med_phases_ocnnst_run
     use med_diag_mod            , only: med_phases_diag_accum, med_phases_diag_print
     use med_diag_mod            , only: med_phases_diag_atm
     use med_diag_mod            , only: med_phases_diag_lnd
@@ -404,6 +405,17 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call NUOPC_CompSpecialize(gcomp, specLabel=mediator_label_Advance, &
          specPhaseLabel="med_phases_aofluxes_run", specRoutine=med_phases_aofluxes_run, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    !------------------
+    ! phase routine for ocean NST computation
+    !------------------
+
+    call NUOPC_CompSetEntryPoint(gcomp, ESMF_METHOD_RUN, &
+         phaseLabelList=(/"med_phases_ocnnst_run"/), userRoutine=mediator_routine_Run, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call NUOPC_CompSpecialize(gcomp, specLabel=mediator_label_Advance, &
+         specPhaseLabel="med_phases_ocnnst_run", specRoutine=med_phases_ocnnst_run, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !------------------
@@ -1560,6 +1572,7 @@ contains
     !   -- Re-initialize fractions
     !   -- Carry out ocnalb_init
     !   -- Carry out aoffluxes_init
+    !   -- Carry out ocnnst_init
     ! Once the atm is ready:
     !   -- Copy import fields to local FBs
     !----------------------------------------------------------
@@ -1586,6 +1599,7 @@ contains
     use med_phases_post_rof_mod , only : med_phases_post_rof
     use med_phases_post_wav_mod , only : med_phases_post_wav
     use med_phases_ocnalb_mod   , only : med_phases_ocnalb_run
+    use med_phases_ocnnst_mod   , only : med_phases_ocnnst_run
     use med_phases_aofluxes_mod , only : med_phases_aofluxes_init_fldbuns
     use med_phases_profile_mod  , only : med_phases_profile
     use med_diag_mod            , only : med_diag_zero, med_diag_init
@@ -1604,6 +1618,7 @@ contains
     type(ESMF_Time)                    :: time
     type(ESMF_Field)                   :: field
     type(med_fldList_type), pointer    :: fldListMed_ocnalb
+    type(med_fldList_type), pointer    :: fldListMed_ocnnst
     logical                            :: atCorrectTime
     integer                            :: n1,n2,n
     integer                            :: nsrc,ndst
@@ -1768,6 +1783,31 @@ contains
          end if
       end if
 
+      !ocn NST mindless copy of above
+      if ( is_local%wrap%med_coupling_active(compocn,compatm) .or. is_local%wrap%med_coupling_active(compatm,compocn)) then
+         ! Create field bundles for mediator ocean albedo computation
+         fldListMed_ocnnst => med_fldlist_getocnnstFldList()
+         fieldCount = med_fldList_GetNumFlds(fldListMed_ocnnst)
+         if (fieldCount > 0) then
+            allocate(fldnames(fieldCount))
+            call med_fldList_getfldnames(fldListMed_ocnnst%fields, fldnames, rc=rc)
+            if (ChkErr(rc,__LINE__,u_FILE_u)) return
+            call FB_init(is_local%wrap%FBMed_ocnnst_a, is_local%wrap%flds_scalar_name, &
+                 STgeom=is_local%wrap%NStateImp(compatm), fieldnamelist=fldnames, name='FBMed_ocnnst_a', rc=rc)
+            if (ChkErr(rc,__LINE__,u_FILE_u)) return
+            if (maintask) then
+               write(logunit,'(a)') trim(subname)//' initializing FB FBMed_ocnnst_a'
+            end if
+            call FB_init(is_local%wrap%FBMed_ocnnst_o, is_local%wrap%flds_scalar_name, &
+                 STgeom=is_local%wrap%NStateImp(compocn), fieldnamelist=fldnames, name='FBMed_ocnnst_o', rc=rc)
+            if (ChkErr(rc,__LINE__,u_FILE_u)) return
+            if (maintask) then
+               write(logunit,'(a)') trim(subname)//' initializing FB FBMed_ocnnst_o'
+            end if
+            deallocate(fldnames)
+         end if
+      end if
+
       !---------------------------------------
       ! Initialize field bundles needed for atm/ocn flux computation:
       ! is_local%wrap%FBMed_aoflux_a and is_local%wrap%FBMed_aoflux_o
@@ -1850,6 +1890,18 @@ contains
                packed_data=is_local%wrap%packed_data_ocnalb_o2a(:), rc=rc)
           if (ChkErr(rc,__LINE__,u_FILE_u)) return
        end if
+
+       if ( ESMF_FieldBundleIsCreated(is_local%wrap%FBMed_ocnnst_o) .and. &
+            ESMF_FieldBundleIsCreated(is_local%wrap%FBMed_ocnnst_a)) then
+          call med_map_packed_field_create(compatm, &
+               is_local%wrap%flds_scalar_name, &
+               fieldsSrc=med_fldList_getocnnstfldList(), &
+               FBSrc=is_local%wrap%FBMed_ocnnst_o, &
+               FBDst=is_local%wrap%FBMed_ocnnst_a, &
+               packed_data=is_local%wrap%packed_data_ocnnst_o2a(:), rc=rc)
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       end if
+
       !---------------------------------------
       ! Initialize ocn export accumulation field bundle
       !---------------------------------------
@@ -1944,6 +1996,15 @@ contains
 
     if (is_local%wrap%comp_present(compocn) .or. is_local%wrap%comp_present(compatm)) then
        call med_phases_ocnalb_run(gcomp, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
+
+    !----------------------------------------------------------
+    ! Initialize ocean NST
+    !----------------------------------------------------------
+
+    if (is_local%wrap%comp_present(compocn) .or. is_local%wrap%comp_present(compatm)) then
+       call med_phases_ocnnst_run(gcomp, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     end if
 

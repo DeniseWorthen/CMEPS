@@ -24,6 +24,9 @@ module esmflds
   public :: med_fldList_addfld_aoflux
   public :: med_fldList_addmap_aoflux
 
+  public :: med_fldList_addfld_ocnnst
+  public :: med_fldList_addmap_ocnst
+
   private :: med_fldList_AddFld
   private :: med_fldList_AddMap
   private :: med_fldList_AddMrg
@@ -39,6 +42,8 @@ module esmflds
   public :: med_fldList_GetFldListTo
   public :: med_fldList_GetaofluxFldList
   public :: med_fldList_GetocnalbFldList
+  public :: med_fldList_GetocnnstFldList
+
   !-----------------------------------------------
   ! Types and instantiations that determine fields, mappings, mergings
   !-----------------------------------------------
@@ -76,6 +81,7 @@ module esmflds
 
   type (med_fldList_type), target :: fldlist_aoflux
   type (med_fldList_type), target :: fldlist_ocnalb
+  type (med_fldList_type), target :: fldlist_ocnnst
 
   integer                    :: rc
   character(len=CL)          :: infostr
@@ -109,6 +115,15 @@ contains
 
     fldList => fldlist_ocnalb
   end function Med_FldList_GetocnalbFldList
+
+  !================================================================================
+
+  function med_fldList_GetocnnstFldList() result(fldList)
+    ! Return a pointer to the ocnnst fldlist
+    type(med_fldList_type), pointer :: fldList
+
+    fldList => fldlist_ocnnst
+  end function Med_FldList_GetocnnstFldList
 
   !================================================================================
 
@@ -162,6 +177,16 @@ contains
     call med_fldList_AddFld(fldlist_ocnalb%fields, stdname, shortname)
 
   end subroutine med_fldList_addfld_ocnalb
+
+  !================================================================================
+
+  subroutine med_fldList_addfld_ocnnst(stdname, shortname)
+    character(len=*)             , intent(in)             :: stdname
+    character(len=*)             , intent(in)  , optional :: shortname
+
+    call med_fldList_AddFld(fldlist_ocnnst%fields, stdname, shortname)
+
+  end subroutine med_fldList_addfld_ocnnst
 
   !================================================================================
 
@@ -381,6 +406,19 @@ contains
     call med_fldList_AddMap(fldlist_ocnalb%fields, fldname, destcomp, maptype, mapnorm, mapfile)
 
   end subroutine med_fldList_addmap_ocnalb
+
+  !================================================================================
+
+  subroutine med_fldList_addmap_ocnnst(fldname, destcomp, maptype, mapnorm, mapfile)
+    character(len=*)                  , intent(in)    :: fldname
+    integer                            , intent(in)    :: destcomp
+    integer                            , intent(in)    :: maptype
+    character(len=*)                   , intent(in)    :: mapnorm
+    character(len=*), optional         , intent(in)    :: mapfile
+
+    call med_fldList_AddMap(fldlist_ocnnst%fields, fldname, destcomp, maptype, mapnorm, mapfile)
+
+  end subroutine med_fldList_addmap_ocnnst
 
   !================================================================================
 

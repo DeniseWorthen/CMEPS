@@ -149,6 +149,13 @@ contains
        call addfld_ocnalb('So_avsdf')
        call addfld_ocnalb('So_anidr')
        call addfld_ocnalb('So_anidf')
+
+       ! stick these in ocnalb for now
+       call addfld_ocnalb('So_nst')
+    end if
+    ! nst from atm for checking
+    if (phase == 'advertise') then
+       call addfld_from(compatm, 'Sa_tskn')
     end if
 
     !=====================================================================

@@ -360,6 +360,16 @@ contains
                      is_local%wrap%nx(compatm), is_local%wrap%ny(compatm), nt=1, pre='Med_aoflux_atm', rc=rc)
              end if
 
+             if (ESMF_FieldBundleIsCreated(is_local%wrap%FBMed_ocnnst_o,rc=rc)) then
+                call med_io_write(io_file, is_local%wrap%FBMed_ocnnst_o, whead(m), wdata(m), &
+                     is_local%wrap%nx(compocn), is_local%wrap%ny(compocn), nt=1, pre='Med_nst_ocn', rc=rc)
+             end if
+
+             if (ESMF_FieldBundleIsCreated(is_local%wrap%FBMed_ocnnst_a,rc=rc)) then
+                call med_io_write(io_file, is_local%wrap%FBMed_ocnnst_a, whead(m), wdata(m), &
+                     is_local%wrap%nx(compatm), is_local%wrap%ny(compatm), nt=1, pre='Med_nst_atm', rc=rc)
+             end if
+
           end do ! end of loop over whead/wdata m index phases
 
           ! Close file
@@ -502,6 +512,11 @@ contains
              if (ESMF_FieldBundleIsCreated(is_local%wrap%FBMed_ocnalb_a,rc=rc)) then
                 call med_io_write(instfiles(compmed)%io_file, is_local%wrap%FBMed_ocnalb_a, whead(m), wdata(m), &
                      is_local%wrap%nx(compatm), is_local%wrap%ny(compatm), nt=1, pre='Med_alb_atm', rc=rc)
+             end if
+
+             if (ESMF_FieldBundleIsCreated(is_local%wrap%FBMed_ocnnst_o,rc=rc)) then
+                call med_io_write(instfiles(compmed)%io_file, is_local%wrap%FBMed_ocnnst_o, whead(m), wdata(m), &
+                     is_local%wrap%nx(compocn), is_local%wrap%ny(compocn), nt=1, pre='Med_nst_ocn', rc=rc)
              end if
           end do ! end of loop over m
 
