@@ -34,10 +34,24 @@ module med_phases_ocnnst_mod
   !--------------------------------------------------------------------------
 
   type ocnnst_type
-     real(r8) , pointer :: lats  (:) => null() ! latitudes  (degrees)
-     real(r8) , pointer :: lons  (:) => null() ! longitudes (degrees)
-     integer  , pointer :: mask  (:) => null() ! ocn domain mask: 0 <=> inactive cell
-     real(r8) , pointer :: tnst  (:) => null() ! ocn NST
+     real(r8) , pointer :: lats        (:) => null() ! latitudes  (degrees)
+     real(r8) , pointer :: lons        (:) => null() ! longitudes (degrees)
+     integer  , pointer :: mask        (:) => null() ! ocn domain mask: 0 <=> inactive cell
+     real(r8) , pointer :: tsfco       (:) => null() ! sea surface temperature (K)
+     real(r8) , pointer :: tref        (:) => null() ! sea surface reference temperature (K)
+     real(r8) , pointer :: tseal       (:) => null() ! ocean surface skin temperature (K)
+     real(r8) , pointer :: tsfc_water  (:) => null() ! surface skin temperature over water (K)
+     real(r8) , pointer :: tsurf_water (:) => null() ! surface skin temperature after iteration over water (K)
+     real(r8) , pointer :: xt          (:) => null() ! heat content in diurnal thermocline layer (K m)
+     real(r8) , pointer :: xs          (:) => null() ! salinity  content in diurnal thermocline layer (ppt m)
+     real(r8) , pointer :: xu          (:) => null() ! u-current content in diurnal thermocline layer (m2 s-1)
+     real(r8) , pointer :: xv          (:) => null() ! v-current  content in diurnal thermocline layer (m2 s-1)
+     real(r8) , pointer :: xz          (:) => null() ! diurnal thermocline layer thickness (m)
+     real(r8) , pointer :: z_c         (:) => null() ! sub-layer cooling thickness (m)
+     real(r8) , pointer :: xtts        (:) => null() ! d(xt)/d(ts) (m)
+     real(r8) , pointer :: xzts        (:) => null() ! d(xz)/d(ts) (m K-1)
+     real(r8) , pointer :: dt_cool     (:) => null() ! sub-layer cooling amount (K)
+     real(r8) , pointer :: dtzm        (:) => null() ! mean of dT(z)  (z1 to z2) (?)
      logical            :: created   ! has memory been allocated here
   end type ocnnst_type
 
