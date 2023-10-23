@@ -25,7 +25,7 @@ module esmflds
   public :: med_fldList_addmap_aoflux
 
   public :: med_fldList_addfld_ocnnst
-  public :: med_fldList_addmap_ocnst
+  public :: med_fldList_addmap_ocnnst
 
   private :: med_fldList_AddFld
   private :: med_fldList_AddMap

@@ -1,4 +1,4 @@
-module med_phases_ocnnst_modocn
+module med_phases_ocnnst_mod
 
   use med_kind_mod          , only : CX=>SHR_KIND_CX, CS=>SHR_KIND_CS, CL=>SHR_KIND_CL, R8=>SHR_KIND_R8
   use med_internalstate_mod , only : InternalState, logunit
@@ -53,6 +53,8 @@ module med_phases_ocnnst_modocn
   character(len=*) , parameter :: orb_fixed_year       = 'fixed_year'
   character(len=*) , parameter :: orb_variable_year    = 'variable_year'
   character(len=*) , parameter :: orb_fixed_parameters = 'fixed_parameters'
+  ! used, reused in module
+  logical  :: use_nextswcday  ! use the scalar field for next time (otherwise, will be set using clock)
 
 !===============================================================================
 contains
@@ -144,7 +146,7 @@ contains
     deallocate(fieldlist)
     call ESMF_MeshGet(lmesh, spatialDim=spatialDim, numOwnedElements=numOwnedElements, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    lsize = size(ocnnst%anidr)
+    lsize = size(ocnnst%tnst)
     if (numOwnedElements /= lsize) then
        write(tempc1,'(i10)') numOwnedElements
        write(tempc2,'(i10)') lsize
@@ -214,7 +216,7 @@ contains
     type(ESMF_VM)           :: vm
     type(ESMF_Field)        :: lfield
     integer                 :: iam
-    logical                 :: update_alb
+    logical                 :: update_nst
     type(InternalState)     :: is_local
     type(ESMF_Clock)        :: clock
     type(ESMF_Clock)        :: dclock
@@ -371,12 +373,11 @@ contains
           rlon = const_deg2rad * ocnnst%lons(n)
           cosz = shr_orb_cosz( nextsw_cday, rlat, rlon, delta )
           if (cosz  >  0.0_r8) then !--- sun hit --
+          end if
+       end do
+       update_nst = .true.
 
-          end do
-          update_nst = .true.
-
-       endif    ! nextsw_cday
-    end if   ! flux_albav
+    endif    ! nextsw_cday
 
     ! ! Update current ifrad/ofrad values if albedo was updated in field bundle
     ! if (update_nst) then
