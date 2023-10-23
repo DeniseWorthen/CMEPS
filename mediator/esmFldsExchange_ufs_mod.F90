@@ -40,6 +40,7 @@ contains
     use esmFlds               , only : addmap_aoflux => med_fldList_addmap_aoflux
     use esmFlds               , only : addfld_ocnalb => med_fldList_addfld_ocnalb
     use esmFlds               , only : addmap_ocnalb => med_fldList_addmap_ocnalb
+    use esmFlds               , only : addfld_ocnnst => med_fldList_addfld_ocnnst
 
     ! input/output parameters:
     type(ESMF_GridComp)              :: gcomp
@@ -150,8 +151,8 @@ contains
        call addfld_ocnalb('So_anidr')
        call addfld_ocnalb('So_anidf')
 
-       ! stick these in ocnalb for now
-       call addfld_ocnalb('So_nst')
+       call addfld_ocnnst('So_t')
+       call addfld_ocnnst('So_nst')
     end if
     ! nst from atm for checking
     if (phase == 'advertise') then
