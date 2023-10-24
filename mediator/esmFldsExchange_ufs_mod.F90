@@ -150,13 +150,14 @@ contains
        call addfld_ocnalb('So_avsdf')
        call addfld_ocnalb('So_anidr')
        call addfld_ocnalb('So_anidf')
-
-       call addfld_ocnnst('So_t')
-       call addfld_ocnnst('So_nst')
     end if
     ! nst from atm for checking
     if (phase == 'advertise') then
        call addfld_from(compatm, 'Sa_tskn')
+
+       call addfld_ocnnst('So_tref')
+       call addfld_ocnnst('So_tskin')
+       call addfld_ocnnst('So_tsurf')
     end if
 
     !=====================================================================

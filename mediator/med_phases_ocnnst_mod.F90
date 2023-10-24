@@ -5,6 +5,7 @@ module med_phases_ocnnst_mod
   use med_constants_mod     , only : dbug_flag       => med_constants_dbug_flag
   use med_utils_mod         , only : chkerr          => med_utils_chkerr
   use med_methods_mod       , only : FB_diagnose     => med_methods_FB_diagnose
+  use med_methods_mod       , only : FB_getFldPtr    => med_methods_FB_getFldPtr
   use med_methods_mod       , only : State_GetScalar => med_methods_State_GetScalar
   use med_internalstate_mod , only : mapconsf, mapnames, compatm, compocn, maintask
   use perf_mod              , only : t_startf, t_stopf
@@ -139,10 +140,23 @@ contains
     ! These must must be on the ocean grid since the ocean NST computation is on the ocean grid
     ! The following sets pointers to the module arrays
 
-    call ESMF_FieldBundleGet(is_local%wrap%FBMed_ocnnst_o, fieldname='So_nst', field=lfield, rc=rc)
+    call ESMF_FieldBundleGet(is_local%wrap%FBMed_ocnnst_o, fieldname='So_tref', field=lfield, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldGet(lfield, farrayptr=ocnnst%tnst, rc=rc)
+    call ESMF_FieldGet(lfield, farrayptr=ocnnst%tref, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_FieldBundleGet(is_local%wrap%FBMed_ocnnst_o, fieldname='So_tskin', field=lfield, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_FieldGet(lfield, farrayptr=ocnnst%tseal, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_FieldBundleGet(is_local%wrap%FBMed_ocnnst_o, fieldname='So_tsurf', field=lfield, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_FieldGet(lfield, farrayptr=ocnnst%tsurf_water, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+    call FB_GetFldPtr(is_local%wrap%FBMed_ocnnst_o, 'So_t', ocnnst%tsfco, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    !call FB_GetFldPtr(is_local%wrap%FBImp(compocn,compocn), 'So_t', tsfco, rc=rc)
+    !if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !----------------------------------
     ! Get lat, lon, which are time-invariant
@@ -160,7 +174,7 @@ contains
     deallocate(fieldlist)
     call ESMF_MeshGet(lmesh, spatialDim=spatialDim, numOwnedElements=numOwnedElements, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    lsize = size(ocnnst%tnst)
+    lsize = size(ocnnst%tsfco)
     if (numOwnedElements /= lsize) then
        write(tempc1,'(i10)') numOwnedElements
        write(tempc2,'(i10)') lsize
@@ -371,7 +385,7 @@ contains
 
     ! Calculate ocean NST on the ocean grid
     update_nst = .false.
-    lsize = size(ocnnst%tnst)
+    lsize = size(ocnnst%tsfco)
 
     ! Solar declination
     ! Will only do albedo calculation if nextsw_cday is not -1.
