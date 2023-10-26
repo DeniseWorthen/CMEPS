@@ -38,8 +38,18 @@ module med_phases_ocnnst_mod
      real(r8) , pointer :: lats        (:) => null() ! latitudes  (degrees)
      real(r8) , pointer :: lons        (:) => null() ! longitudes (degrees)
      integer  , pointer :: mask        (:) => null() ! ocn domain mask: 0 <=> inactive cell
-
+     !inputs
      real(r8) , pointer :: tsfco       (:) => null() ! sea surface temperature (K)
+     real(r8) , pointer :: ps          (:) => null() ! surface pressure (Pa)
+     real(r8) , pointer :: u1          (:) => null() ! zonal component of surface layer wind (m/s)
+     real(r8) , pointer :: v1          (:) => null() ! merid component of surface layer wind (m/s)
+     real(r8) , pointer :: t1          (:) => null() ! surface layer mean temperature (K)
+     real(r8) , pointer :: q1          (:) => null() ! surface layer mean spec humidity (kg/kg)
+     real(r8) , pointer :: dlwflx      (:) => null() ! total sky sfc downward lw flux (W/m2)
+     real(r8) , pointer :: sfcnsw      (:) => null() ! total sfc netsw flx into ocean (W/m2)
+     real(r8) , pointer :: rain        (:) => null() ! rainfall rate (kg/m2/s)
+     real(r8) , pointer :: wind        (:) => null() ! wind speed (m/s)
+     ! outputs
      real(r8) , pointer :: tseal       (:) => null() ! ocean surface skin temperature (K)
      real(r8) , pointer :: tsfc_water  (:) => null() ! surface skin temperature over water (K)
      real(r8) , pointer :: tsurf_water (:) => null() ! surface skin temperature after iteration over water (K)
@@ -278,6 +288,7 @@ contains
     character(CS)           :: starttype        ! config start type
     character(CL)           :: runtype          ! initial, continue, hybrid, branch
     real(R8)                :: nextsw_cday      ! calendar day of next atm shortwave
+    real(R8)                :: solhr            ! fcst hour at the end of prev time step (currTime)
     !real(R8), pointer       :: ofrac(:)
     !real(R8), pointer       :: ofrad(:)
     !real(R8), pointer       :: ifrac(:)
@@ -363,6 +374,9 @@ contains
        end if
 
        call ESMF_ClockGet( clock, currTime=currTime, timeStep=timeStep, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       ! clock is not advanced until the end of ModelAdvance
+       call ESMF_TimeGet( currTime, hr_r8=solhr, rc=rc )
        if (chkerr(rc,__LINE__,u_FILE_u)) return
 
        if (trim(runtype) == 'initial') then
