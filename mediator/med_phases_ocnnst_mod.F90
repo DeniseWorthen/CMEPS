@@ -38,21 +38,32 @@ module med_phases_ocnnst_mod
      real(r8) , pointer :: lats        (:) => null() ! latitudes  (degrees)
      real(r8) , pointer :: lons        (:) => null() ! longitudes (degrees)
      integer  , pointer :: mask        (:) => null() ! ocn domain mask: 0 <=> inactive cell
+
      real(r8) , pointer :: tsfco       (:) => null() ! sea surface temperature (K)
-     real(r8) , pointer :: tref        (:) => null() ! sea surface reference temperature (K)
      real(r8) , pointer :: tseal       (:) => null() ! ocean surface skin temperature (K)
      real(r8) , pointer :: tsfc_water  (:) => null() ! surface skin temperature over water (K)
      real(r8) , pointer :: tsurf_water (:) => null() ! surface skin temperature after iteration over water (K)
-     real(r8) , pointer :: xt          (:) => null() ! heat content in diurnal thermocline layer (K m)
+     real(r8) , pointer :: dtzm        (:) => null() ! mean of dT(z)  (z1 to z2) (?)
+     ! in sfcf file
+     real(r8) , pointer :: c0          (:) => null() ! coefficient1 to calculate d(tz)/d(ts) (nd)
+     real(r8) , pointer :: c2          (:) => null() ! coefficient2 to calculate d(tz)/d(ts) (nd)
+     real(r8) , pointer :: dconv       (:) => null() ! thickness of free convection layer (m)
+     real(r8) , pointer :: dtcool      (:) => null() ! sub-layer cooling amount (K)
+     real(r8) , pointer :: qrain       (:) => null() ! sensible heat flux due to rainfall (W)
+     real(r8) , pointer :: tref        (:) => null() ! sea surface reference temperature (K)
+     real(r8) , pointer :: w0          (:) => null() ! coefficient3 to calculate d(tz)/d(ts) (nd)
+     real(r8) , pointer :: wd          (:) => null() ! coefficient4 to calculate d(tz)/d(ts) (nd)
+
      real(r8) , pointer :: xs          (:) => null() ! salinity  content in diurnal thermocline layer (ppt m)
+     real(r8) , pointer :: xt          (:) => null() ! heat content in diurnal thermocline layer (K m)
+     real(r8) , pointer :: xtts        (:) => null() ! d(xt)/d(ts) (m)
+
      real(r8) , pointer :: xu          (:) => null() ! u-current content in diurnal thermocline layer (m2 s-1)
      real(r8) , pointer :: xv          (:) => null() ! v-current  content in diurnal thermocline layer (m2 s-1)
      real(r8) , pointer :: xz          (:) => null() ! diurnal thermocline layer thickness (m)
-     real(r8) , pointer :: z_c         (:) => null() ! sub-layer cooling thickness (m)
-     real(r8) , pointer :: xtts        (:) => null() ! d(xt)/d(ts) (m)
      real(r8) , pointer :: xzts        (:) => null() ! d(xz)/d(ts) (m K-1)
-     real(r8) , pointer :: dt_cool     (:) => null() ! sub-layer cooling amount (K)
-     real(r8) , pointer :: dtzm        (:) => null() ! mean of dT(z)  (z1 to z2) (?)
+     real(r8) , pointer :: zc          (:) => null() ! sub-layer cooling thickness (m)
+
      logical            :: created   ! has memory been allocated here
   end type ocnnst_type
 
@@ -106,6 +117,7 @@ contains
     integer                  :: numOwnedElements
     type(InternalState)      :: is_local
     real(R8), pointer        :: ownedElemCoords(:)
+    real(r8), pointer        :: dataptr1d(:)
     character(len=CL)        :: tempc1,tempc2
     character(len=CS)        :: cvalue
     logical                  :: isPresent, isSet
@@ -153,10 +165,21 @@ contains
     call ESMF_FieldGet(lfield, farrayptr=ocnnst%tsurf_water, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
-    call FB_GetFldPtr(is_local%wrap%FBMed_ocnnst_o, 'So_t', ocnnst%tsfco, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    !call FB_GetFldPtr(is_local%wrap%FBImp(compocn,compocn), 'So_t', tsfco, rc=rc)
+    !call FB_GetFldPtr(is_local%wrap%FBMed_ocnnst_o, 'So_t', ocnnst%tsfco, rc=rc)
     !if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(is_local%wrap%FBImp(compocn,compocn), 'So_t', ocnnst%tsfco, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(is_local%wrap%FBImp(compocn,compocn), 'So_omask', dataptr1d, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    lsize = size(ocnnst%tsfco)
+    do n = 1,lsize
+       if (dataptr1d(n) == 0._r8) then
+          ocnnst%mask(n) = 0
+       else
+          ocnnst%mask(n) = 1
+       end if
+    enddo
 
     !----------------------------------
     ! Get lat, lon, which are time-invariant
@@ -397,10 +420,12 @@ contains
 
        ! Compute NST
        do n = 1,lsize
-          rlat = const_deg2rad * ocnnst%lats(n)
-          rlon = const_deg2rad * ocnnst%lons(n)
-          cosz = shr_orb_cosz( nextsw_cday, rlat, rlon, delta )
-          if (cosz  >  0.0_r8) then !--- sun hit --
+          if (ocnnst%mask(n) > 0.0) then
+             rlat = const_deg2rad * ocnnst%lats(n)
+             rlon = const_deg2rad * ocnnst%lons(n)
+             cosz = shr_orb_cosz( nextsw_cday, rlat, rlon, delta )
+             if (cosz  >  0.0_r8) then !--- sun hit --
+             end if
           end if
        end do
        update_nst = .true.
