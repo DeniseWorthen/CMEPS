@@ -162,18 +162,21 @@ contains
     ! These must must be on the ocean grid since the ocean NST computation is on the ocean grid
     ! The following sets pointers to the module arrays
 
-    call ESMF_FieldBundleGet(is_local%wrap%FBMed_ocnnst_o, fieldname='So_tref', field=lfield, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldGet(lfield, farrayptr=ocnnst%tref, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldBundleGet(is_local%wrap%FBMed_ocnnst_o, fieldname='So_tskin', field=lfield, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldGet(lfield, farrayptr=ocnnst%tseal, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldBundleGet(is_local%wrap%FBMed_ocnnst_o, fieldname='So_tsurf', field=lfield, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldGet(lfield, farrayptr=ocnnst%tsurf_water, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(is_local%wrap%,FBMed_ocnnst_o, 'So_xt', ocnnst%xt, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(is_local%wrap%,FBMed_ocnnst_o, 'So_xz', ocnnst%xz, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(is_local%wrap%,FBMed_ocnnst_o, 'So_dtcool', ocnnst%dtcool, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(is_local%wrap%,FBMed_ocnnst_o, 'So_dtzm', ocnnst%dtzm, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call FB_GetFldPtr(is_local%wrap%,FBMed_ocnnst_o, 'So_tref', ocnnst%tref, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(is_local%wrap%,FBMed_ocnnst_o, 'So_tseal', ocnnst%tseal, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(is_local%wrap%,FBMed_ocnnst_o, 'So_tsurf_water', ocnnst%tsurf_water, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !call FB_GetFldPtr(is_local%wrap%FBMed_ocnnst_o, 'So_t', ocnnst%tsfco, rc=rc)
     !if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -289,6 +292,8 @@ contains
     character(CL)           :: runtype          ! initial, continue, hybrid, branch
     real(R8)                :: nextsw_cday      ! calendar day of next atm shortwave
     real(R8)                :: solhr            ! fcst hour at the end of prev time step (currTime)
+    real(R8)                :: z_c_0
+    real(R8)                :: tem2
     !real(R8), pointer       :: ofrac(:)
     !real(R8), pointer       :: ofrad(:)
     !real(R8), pointer       :: ifrac(:)
@@ -305,6 +310,8 @@ contains
     real(R8)                :: delta            ! Solar declination angle  in radians
     real(R8)                :: eccf             ! Earth orbit eccentricity factor
     real(R8), parameter     :: const_deg2rad = shr_const_pi/180.0_R8  ! deg to rads
+    real(R8), parameter     :: tgice = 271.20_R8  ! TODO? actually f(s)
+    real(R8), parameter     :: zero = 0.0_R8, one = 1.0_R8, omz1 = 2.0_R8
     character(CL)           :: msg
     logical                 :: first_call = .true.
     character(len=*)  , parameter :: subname='(med_phases_ocnnst_run)'
@@ -375,9 +382,6 @@ contains
 
        call ESMF_ClockGet( clock, currTime=currTime, timeStep=timeStep, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
-       ! clock is not advanced until the end of ModelAdvance
-       call ESMF_TimeGet( currTime, hr_r8=solhr, rc=rc )
-       if (chkerr(rc,__LINE__,u_FILE_u)) return
 
        if (trim(runtype) == 'initial') then
           call ESMF_TimeGet( currTime, dayOfYear_r8=nextsw_cday, rc=rc )
@@ -424,10 +428,32 @@ contains
     update_nst = .false.
     lsize = size(ocnnst%tsfco)
 
+    ! Clock is not advanced until the end of ModelAdvance
+    call ESMF_TimeGet( currTime, hr_r8=solhr, rc=rc )
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+
     ! Solar declination
     ! Will only do albedo calculation if nextsw_cday is not -1.
     write(msg,*)trim(subname)//' nextsw_cday = ',nextsw_cday
     call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
+
+    ! nst_pre
+    z_c_0 = zero
+    do n = 1,lsize
+       if (ocnnst%mask(n) > 0) then
+          call get_dtzm_point(ocnnst%xt(n), ocnnst%xz(n), ocnnst%dtcool(n), z_c_0, zero, omz1, ocnnst%dtm(n))
+          ocnnst%tref(n) = max(tgice, ocnnst%tsfco(n) - ocnnst%dtmz(n))
+          if (abs(ocnnst%xz(n)) > zero) then
+             tem2 = one / ocnnst%xz(n)
+          else
+             tem2 = zero
+          endif
+          ocnnst%tseal(n)     = ocnnst%tref(n) + (ocnnst%xt(n)+ocnnst%xt(n)) * tem2 - ocnnst%dtcool(n)
+          ocnnst%tsurf_wat(n) = ocnnst%tseal(n)
+       endif
+    enddo
+
+
 
     if (nextsw_cday >= -0.5_r8) then
        call shr_orb_decl(nextsw_cday, eccen, mvelpp,lambm0, obliqr, delta, eccf)
@@ -438,8 +464,8 @@ contains
              rlat = const_deg2rad * ocnnst%lats(n)
              rlon = const_deg2rad * ocnnst%lons(n)
              cosz = shr_orb_cosz( nextsw_cday, rlat, rlon, delta )
-             if (cosz  >  0.0_r8) then !--- sun hit --
-             end if
+             !if (cosz  >  0.0_r8) then !--- sun hit --
+             !end if
           end if
        end do
        update_nst = .true.

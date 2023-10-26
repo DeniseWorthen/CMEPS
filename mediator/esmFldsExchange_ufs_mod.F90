@@ -155,9 +155,10 @@ contains
     if (phase == 'advertise') then
        call addfld_from(compatm, 'Sa_tskn')
 
-       call addfld_ocnnst('So_tref')
-       call addfld_ocnnst('So_tskin')
-       call addfld_ocnnst('So_tsurf')
+       flds = (/'tref', '
+       call addfld_ocnnst('Snst_tref')
+       call addfld_ocnnst('Snst_tskin')
+       call addfld_ocnnst('Snst_tsurf')
     end if
 
     !=====================================================================
