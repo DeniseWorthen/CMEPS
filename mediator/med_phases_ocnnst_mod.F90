@@ -20,15 +20,16 @@ module med_phases_ocnnst_mod
   ! Public interfaces
   !--------------------------------------------------------------------------
 
-  public med_phases_ocnnst_run
+  public :: med_phases_ocnnst_run
 
   !--------------------------------------------------------------------------
   ! Private interfaces
   !--------------------------------------------------------------------------
 
-  private med_phases_ocnnst_init
-  private med_phases_ocnnst_orbital_update
-  private med_phases_ocnnst_orbital_init
+  private :: med_phases_ocnnst_init
+  private :: med_phases_ocnnst_orbital_update
+  private :: med_phases_ocnnst_orbital_init
+  private :: set_ocnnst_pointers
 
   !--------------------------------------------------------------------------
   ! Private data
@@ -39,17 +40,21 @@ module med_phases_ocnnst_mod
      real(r8) , pointer :: lons        (:) => null() ! longitudes (degrees)
      integer  , pointer :: mask        (:) => null() ! ocn domain mask: 0 <=> inactive cell
      !inputs
+     real(r8) , pointer :: ifrac       (:) => null() ! sea ice fraction (nd); ofrac=1.0-ifrac
      real(r8) , pointer :: tsfco       (:) => null() ! sea surface temperature (K)
      real(r8) , pointer :: ps          (:) => null() ! surface pressure (Pa)
      real(r8) , pointer :: u1          (:) => null() ! zonal component of surface layer wind (m/s)
      real(r8) , pointer :: v1          (:) => null() ! merid component of surface layer wind (m/s)
      real(r8) , pointer :: t1          (:) => null() ! surface layer mean temperature (K)
      real(r8) , pointer :: q1          (:) => null() ! surface layer mean spec humidity (kg/kg)
+     real(r8) , pointer :: z1          (:) => null() ! layer 1 height above ground (not MSL) (m)
+     real(r8) , pointer :: u10m        (:) => null() ! zonal component of 10m wind (m/s)
+     real(r8) , pointer :: v10m        (:) => null() ! merid component of 10m wind (m/s)
      real(r8) , pointer :: dlwflx      (:) => null() ! total sky sfc downward lw flux (W/m2)
      real(r8) , pointer :: sfcnsw      (:) => null() ! total sfc netsw flx into ocean (W/m2)
      real(r8) , pointer :: rain        (:) => null() ! rainfall rate (kg/m2/s)
      real(r8) , pointer :: wind        (:) => null() ! wind speed (m/s)
-     ! outputs
+     ! ?
      real(r8) , pointer :: tseal       (:) => null() ! ocean surface skin temperature (K)
      real(r8) , pointer :: tsfc_water  (:) => null() ! surface skin temperature over water (K)
      real(r8) , pointer :: tsurf_water (:) => null() ! surface skin temperature after iteration over water (K)
@@ -155,38 +160,10 @@ contains
     call ESMF_GridCompGetInternalState(gcomp, is_local, rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
-    !----------------------------------
-    ! Set pointers to fields needed for NST calculations
-    !----------------------------------
-
-    ! These must must be on the ocean grid since the ocean NST computation is on the ocean grid
-    ! The following sets pointers to the module arrays
-
-    call FB_GetFldPtr(is_local%wrap%,FBMed_ocnnst_o, 'So_xt', ocnnst%xt, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(is_local%wrap%,FBMed_ocnnst_o, 'So_xz', ocnnst%xz, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(is_local%wrap%,FBMed_ocnnst_o, 'So_dtcool', ocnnst%dtcool, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(is_local%wrap%,FBMed_ocnnst_o, 'So_dtzm', ocnnst%dtzm, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    call FB_GetFldPtr(is_local%wrap%,FBMed_ocnnst_o, 'So_tref', ocnnst%tref, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(is_local%wrap%,FBMed_ocnnst_o, 'So_tseal', ocnnst%tseal, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(is_local%wrap%,FBMed_ocnnst_o, 'So_tsurf_water', ocnnst%tsurf_water, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    !call FB_GetFldPtr(is_local%wrap%FBMed_ocnnst_o, 'So_t', ocnnst%tsfco, rc=rc)
-    !if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(is_local%wrap%FBImp(compocn,compocn), 'So_t', ocnnst%tsfco, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    ! ocean mask
     call FB_GetFldPtr(is_local%wrap%FBImp(compocn,compocn), 'So_omask', dataptr1d, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    lsize = size(ocnnst%tsfco)
-    do n = 1,lsize
+    do n = 1,size(dataptr1d)
        if (dataptr1d(n) == 0._r8) then
           ocnnst%mask(n) = 0
        else
@@ -424,43 +401,56 @@ contains
     call med_phases_ocnnst_orbital_update(clock, logunit, iam==0, eccen, obliqr, lambm0, mvelpp, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    ! Calculate ocean NST on the ocean grid
-    update_nst = .false.
-    lsize = size(ocnnst%tsfco)
-
     ! Clock is not advanced until the end of ModelAdvance
     call ESMF_TimeGet( currTime, hr_r8=solhr, rc=rc )
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
     ! Solar declination
-    ! Will only do albedo calculation if nextsw_cday is not -1.
     write(msg,*)trim(subname)//' nextsw_cday = ',nextsw_cday
     call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
+
+    if (nextsw_cday >= -0.5_r8) then
+       call shr_orb_decl(nextsw_cday, eccen, mvelpp,lambm0, obliqr, delta, eccf)
+    end if
+    !
+    ! Calculate ocean NST on the ocean grid
+    !
+    update_nst = .false.
+    lsize = size(ocnnst%mask)
+
+    ! ice fraction on ocean
+    call FB_GetFldPtr(is_local%wrap%FBfrac(compocn), 'ifrac', ocnnst%ifrac, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    ! ocean surface temperature from ocean
+    call FB_GetFldPtr(is_local%wrap%FBImp(compocn,compocn), 'So_t', ocnnst%tsfco, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    ! ocean netsw from prep_ocn_custom (nst must run after ocn_accum, which calls prep_ocn_custom)
+    call FB_GetFldPtr(is_local%wrap%FBExp(compocn), 'Foxx_swnet',  ocnnst%sfcnsw, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    ! set pointers
+    call set_ocnnst_pointers(is_local%wrap%FBImp(compatm,compocn), is_local%wrap%FBMed_ocnnst, &
+         ocnnst, lsize, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
 
     ! nst_pre
     z_c_0 = zero
     do n = 1,lsize
-       if (ocnnst%mask(n) > 0) then
+       if (ocnnst%mask(n) == 1) then
           call get_dtzm_point(ocnnst%xt(n), ocnnst%xz(n), ocnnst%dtcool(n), z_c_0, zero, omz1, ocnnst%dtm(n))
-          ocnnst%tref(n) = max(tgice, ocnnst%tsfco(n) - ocnnst%dtmz(n))
+          ocnnst%tref(n) = max(tgice, ocnnst%tsfco(n) - ocnnst%dtm(n))
           if (abs(ocnnst%xz(n)) > zero) then
              tem2 = one / ocnnst%xz(n)
           else
              tem2 = zero
           endif
           ocnnst%tseal(n)     = ocnnst%tref(n) + (ocnnst%xt(n)+ocnnst%xt(n)) * tem2 - ocnnst%dtcool(n)
-          ocnnst%tsurf_wat(n) = ocnnst%tseal(n)
+          ocnnst%tsurf_wat(n) = oxnnst%tseal(n)
        endif
     enddo
 
-
-
-    if (nextsw_cday >= -0.5_r8) then
-       call shr_orb_decl(nextsw_cday, eccen, mvelpp,lambm0, obliqr, delta, eccf)
-
        ! Compute NST
        do n = 1,lsize
-          if (ocnnst%mask(n) > 0.0) then
+          if (ocnnst%mask(n) == 1) then
              rlat = const_deg2rad * ocnnst%lats(n)
              rlon = const_deg2rad * ocnnst%lons(n)
              cosz = shr_orb_cosz( nextsw_cday, rlat, rlon, delta )
@@ -674,5 +664,92 @@ contains
   end subroutine med_phases_ocnnst_orbital_update
 
 !===============================================================================
+
+  subroutine set_ocnnst_in_pointers(fldbun_a, fldbun_m, ocnnst, lsize, rc)
+
+    ! Set pointers for ocnnst
+
+    use med_methods_mod , only : FB_fldchk    => med_methods_FB_FldChk
+
+    ! input/output variables
+    type(ESMF_FieldBundle)     , intent(inout) :: fldbun_a
+    type(ESMF_FieldBundle)     , intent(inout) :: fldbun_m
+    type(ocnnst_type)          , intent(inout) :: ocnnst
+    integer                    , intent(out)   :: lsize
+    integer                    , intent(out)   :: rc
+    !-----------------------------------------------------------------------
+
+    rc = ESMF_SUCCESS
+
+    !----------------------------------
+    ! Set pointers to fields needed for NST calculations
+    !----------------------------------
+
+    ! Import from atm, 'inst, height_lowest fields'
+    call FB_GetFldPtr(fldbun_a, 'Sa_pbot' ,           ocnnst%ps,         rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Sa_u' ,              ocnnst%u1,         rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Sa_v' ,              ocnnst%v1,         rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Sa_qbot' ,           ocnnst%q1,         rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Sa_tbot' ,           ocnnst%t1,         rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Sa_z' ,              ocnnst%z1,         rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Sa_u10m' ,           ocnnst%u10m,       rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Sa_v10m' ,           ocnnst%v10m,       rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Faxa_rain' ,         ocnnst%rain,       rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Faxa_lwdn' ,         ocnnst%dlwflx,     rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! Ocean NST fields (mapped back to ATM)
+    call FB_GetFldPtr(fldbun_m, 'Snst_tref' ,         ocnnst%tref,       rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_dconv' ,        ocnnst%dconv,      rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_dtcool' ,       ocnnst%dtcool,     rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_qrain' ,        ocnnst%qrain,      rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_xtts' ,         ocnnst%xtts,       rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_xzts' ,         ocnnst%xzts,       rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_c0' ,           ocnnst%c0,         rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_cd' ,           ocnnst%cd,         rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_w0' ,           ocnnst%w0,         rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_wd' ,           ocnnst%wd,         rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_xs' ,           ocnnst%xs,         rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_xt' ,           ocnnst%xt,         rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_xu' ,           ocnnst%xu,         rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_xv' ,           ocnnst%xv,         rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_xz' ,           ocnnst%xz,         rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_zc' ,           ocnnst%zc,         rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call FB_GetFldPtr(fldbun_m, 'Snst_tseal' ,       ocnnst%tseal,       rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_tsfc_water' ,  ocnnst%tsfc_water,  rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_tsurf_water' , ocnnst%tsurf_water, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_dtzm' ,        ocnnst%dtzm,        rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+  end subroutine set_ocnnst_in_pointers
 
 end module med_phases_ocnnst_mod

@@ -546,11 +546,6 @@ contains
 
     end if  ! if sea-ice is present
 
-    ! start of nst work---will need it's own fbocnnst etc
-
-
-
-
     ! Deallocate Foxx_swnet if it was allocated in this subroutine
     if (.not. FB_fldchk(is_local%wrap%FBExp(compocn), 'Foxx_swnet', rc=rc)) then
        deallocate(Foxx_swnet)

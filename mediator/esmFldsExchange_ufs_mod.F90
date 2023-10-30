@@ -151,14 +151,29 @@ contains
        call addfld_ocnalb('So_anidr')
        call addfld_ocnalb('So_anidf')
     end if
-    ! nst from atm for checking
-    if (phase == 'advertise') then
-       call addfld_from(compatm, 'Sa_tskn')
 
-       flds = (/'tref', '
-       call addfld_ocnnst('Snst_tref')
-       call addfld_ocnnst('Snst_tskin')
-       call addfld_ocnnst('Snst_tsurf')
+    ! from med: ocean nst
+    if (phase == 'advertise') then
+       call addfld_from(compatm, 'Sa_tskn')   ! to check
+       !sent back to ATM, will need have mapping added; So_nst should be done
+       !below instead of So_t
+       allocate(flds(16))
+       flds = (/'tref  ', 'dconv ', 'dtcool', 'qrain ', 'xtts  ', 'xzts  ', &
+                'c0    ', 'cd    ', 'w0    ', 'wd    ', 'xs    ', 'xt    ', &
+                'xu    ', 'xv    ', 'xz    ', 'zc    '/)
+       do n = 1,size(flds)
+          fldname = 'Snst_'//trim(flds(n))
+          call addfld_ocnnst(fldname))
+       end do
+       deallocate(flds)
+
+       allocate(flds(4))
+       flds = (/'tseal      ', 'tsfc_water ', 'tsurf_water', 'dtzm       ')/
+       do n = 1,size(flds)
+          fldname = 'Snst_'//trim(flds(n))
+          call addfld_ocnnst(fldname))
+       end do
+       deallocate(flds)
     end if
 
     !=====================================================================
