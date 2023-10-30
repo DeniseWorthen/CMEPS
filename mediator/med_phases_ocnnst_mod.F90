@@ -9,9 +9,6 @@ module med_phases_ocnnst_mod
   use med_methods_mod       , only : State_GetScalar => med_methods_State_GetScalar
   use med_internalstate_mod , only : mapconsf, mapnames, compatm, compocn, maintask
   use perf_mod              , only : t_startf, t_stopf
-  use shr_orb_mod           , only : shr_orb_cosz, shr_orb_decl
-  use shr_orb_mod           , only : shr_orb_params, SHR_ORB_UNDEF_INT, SHR_ORB_UNDEF_REAL
-  use shr_log_mod           , only : shr_log_unit
 
   implicit none
   private
@@ -27,8 +24,6 @@ module med_phases_ocnnst_mod
   !--------------------------------------------------------------------------
 
   private :: med_phases_ocnnst_init
-  private :: med_phases_ocnnst_orbital_update
-  private :: med_phases_ocnnst_orbital_init
   private :: set_ocnnst_pointers
 
   !--------------------------------------------------------------------------
@@ -38,6 +33,7 @@ module med_phases_ocnnst_mod
   type ocnnst_type
      real(r8) , pointer :: lats        (:) => null() ! latitudes  (degrees)
      real(r8) , pointer :: lons        (:) => null() ! longitudes (degrees)
+     real(r8) , pointer :: area        (:) => null() ! area (m2)
      integer  , pointer :: mask        (:) => null() ! ocn domain mask: 0 <=> inactive cell
      !inputs
      real(r8) , pointer :: ifrac       (:) => null() ! sea ice fraction (nd); ofrac=1.0-ifrac
@@ -53,7 +49,6 @@ module med_phases_ocnnst_mod
      real(r8) , pointer :: dlwflx      (:) => null() ! total sky sfc downward lw flux (W/m2)
      real(r8) , pointer :: sfcnsw      (:) => null() ! total sfc netsw flx into ocean (W/m2)
      real(r8) , pointer :: rain        (:) => null() ! rainfall rate (kg/m2/s)
-     real(r8) , pointer :: wind        (:) => null() ! wind speed (m/s)
      ! ?
      real(r8) , pointer :: tseal       (:) => null() ! ocean surface skin temperature (K)
      real(r8) , pointer :: tsfc_water  (:) => null() ! surface skin temperature over water (K)
@@ -78,24 +73,27 @@ module med_phases_ocnnst_mod
      real(r8) , pointer :: xz          (:) => null() ! diurnal thermocline layer thickness (m)
      real(r8) , pointer :: xzts        (:) => null() ! d(xz)/d(ts) (m K-1)
      real(r8) , pointer :: zc          (:) => null() ! sub-layer cooling thickness (m)
-
      logical            :: created   ! has memory been allocated here
   end type ocnnst_type
 
-  character(*),parameter :: u_FILE_u = &
-       __FILE__
-  character(len=CL)      :: orb_mode        ! attribute - orbital mode
-  integer                :: orb_iyear       ! attribute - orbital year
-  integer                :: orb_iyear_align ! attribute - associated with model year
-  real(R8)               :: orb_obliq       ! attribute - obliquity in degrees
-  real(R8)               :: orb_mvelp       ! attribute - moving vernal equinox longitude
-  real(R8)               :: orb_eccen       ! attribute and update-  orbital eccentricity
+  ! local
+  type(ESMF_FieldBundle) :: FBnst
+  real(r8) , pointer     :: wind        (:) => null() ! wind speed (m/s)
+  logical  , pointer     :: flag_guess  (:) => null() ! .true.=  guess step to get CD et al
+                                                      ! when iter = 1, flag_guess = .true. when wind < 2
+                                                      ! when iter = 2, flag_guess = .false. for all grids
+  logical  , pointer     :: flag_iter   (:) => null() ! execution or not
+                                                      ! when iter = 1, flag_iter = .true. for all grids
+                                                      ! when iter = 2, flag_iter = .true. when wind < 2
+                                                      ! for both land and ocean (when nstf_name1 > 0)
 
-  character(len=*) , parameter :: orb_fixed_year       = 'fixed_year'
-  character(len=*) , parameter :: orb_variable_year    = 'variable_year'
-  character(len=*) , parameter :: orb_fixed_parameters = 'fixed_parameters'
+  character(*),parameter :: u_FILE_u =  __FILE__
+
+  !--- potential temperature definition in surface layer physics
+  logical              :: thsfc_loc      = .true.     !< flag for local vs. standard potential temperature
+
   ! used, reused in module
-  logical  :: use_nextswcday  ! use the scalar field for next time (otherwise, will be set using clock)
+  !logical  :: use_nextswcday  ! use the scalar field for next time (otherwise, will be set using clock)
 
 !===============================================================================
 contains
@@ -113,6 +111,7 @@ contains
     use ESMF  , only : ESMF_VM, ESMF_VMGet, ESMF_Mesh, ESMF_MeshGet
     use ESMF  , only : ESMF_GridComp, ESMF_GridCompGet
     use ESMF  , only : ESMF_FieldBundleGet, ESMF_Field, ESMF_FieldGet
+    use ESMF  , only : ESMF_TYPEKIND_LOGICAL
     use NUOPC , only : NUOPC_CompAttributeGet
     use ESMF  , only : operator(==)
 
@@ -133,12 +132,12 @@ contains
     type(InternalState)      :: is_local
     real(R8), pointer        :: ownedElemCoords(:)
     real(r8), pointer        :: dataptr1d(:)
+    logical , pointer        :: logptr1d(:)
     character(len=CL)        :: tempc1,tempc2
     character(len=CS)        :: cvalue
     logical                  :: isPresent, isSet
     integer                  :: fieldCount
     character(CL)            :: msg
-    type(ESMF_Field), pointer :: fieldlist(:)
     character(*), parameter  :: subname = '(med_phases_ocnnst_init) '
     !-----------------------------------------------------------------------
 
@@ -206,19 +205,54 @@ contains
        ocnnst%lats(n) = ownedElemCoords(2*n)
     end do
 
-    ! Initialize orbital values
-    call  med_phases_ocnnst_orbital_init(gcomp, logunit, iam==0, rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    ! ocean grid ara
+    allocate(ocnnst%area(numOwnedElements))
+    call ESMF_FieldBundelGet(is_local%wrap%FBImp(compocn,compocn), 'So_omask', lfield, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_FieldRegridGetArea(lfield, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_FieldGet(lfield, farrayPtr=dataptr1d, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    ocnnst%area(:) = dataptr1d(:)
 
     ! Allow setting of NST timestep using the clock instead of the atm's next timestep
-    use_nextswcday = .true.
-    call NUOPC_CompAttributeGet(gcomp, name="ScalarFieldIdxNextSwCday", isPresent=isPresent, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (.not. isPresent ) then
-       use_nextswcday = .false.
-    endif
-    write(msg,'(A,l)') trim(subname)//': use_nextswcday setting is ',use_nextswcday
-    call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
+    ! use_nextswcday = .true.
+    ! call NUOPC_CompAttributeGet(gcomp, name="ScalarFieldIdxNextSwCday", isPresent=isPresent, rc=rc)
+    ! if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    ! if (.not. isPresent ) then
+    !    use_nextswcday = .false.
+    ! endif
+    ! write(msg,'(A,l)') trim(subname)//': use_nextswcday setting is ',use_nextswcday
+    ! call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
+
+    !----------------------------------
+    ! local FB needed for NST calculation
+    !----------------------------------
+
+    lfield = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_R8, name='wind', meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_FieldBundleAdd(FBnst, (/lfield/), rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_FieldGet(lfield, farrayPtr=dataptr1d, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    dataptr1d = 0.0
+
+    lfield = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_LOGCIAL, name='flag_iter', meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_FieldBundleAdd(FBnst, (/lfield/), rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_FieldGet(lfield, farrayPtr=logptr1d, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    logptr1d = .true.
+    if (ocnnst%mask(i) == 0) logptr1d = .false.
+
+    lfield = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_LOGCIAL, name='flag_guess', meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_FieldBundleAdd(FBnst, (/lfield/), rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_FieldGet(lfield, farrayPtr=logptr1d, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    logptr1d = .false.
 
     if (dbug_flag > 5) then
       call ESMF_LogWrite(trim(subname)//": done", ESMF_LOGMSG_INFO)
@@ -271,21 +305,10 @@ contains
     real(R8)                :: solhr            ! fcst hour at the end of prev time step (currTime)
     real(R8)                :: z_c_0
     real(R8)                :: tem2
-    !real(R8), pointer       :: ofrac(:)
-    !real(R8), pointer       :: ofrad(:)
-    !real(R8), pointer       :: ifrac(:)
-    !real(R8), pointer       :: ifrad(:)
     integer                 :: lsize            ! local size
     integer                 :: n                ! indices
     real(R8)                :: rlat             ! gridcell latitude in radians
     real(R8)                :: rlon             ! gridcell longitude in radians
-    real(R8)                :: cosz             ! Cosine of solar zenith angle
-    real(R8)                :: eccen            ! Earth orbit eccentricity
-    real(R8)                :: mvelpp           ! Earth orbit
-    real(R8)                :: lambm0           ! Earth orbit
-    real(R8)                :: obliqr           ! Earth orbit
-    real(R8)                :: delta            ! Solar declination angle  in radians
-    real(R8)                :: eccf             ! Earth orbit eccentricity factor
     real(R8), parameter     :: const_deg2rad = shr_const_pi/180.0_R8  ! deg to rads
     real(R8), parameter     :: tgice = 271.20_R8  ! TODO? actually f(s)
     real(R8), parameter     :: zero = 0.0_R8, one = 1.0_R8, omz1 = 2.0_R8
@@ -397,21 +420,12 @@ contains
        end if
     end if
 
-    ! Get orbital values
-    call med_phases_ocnnst_orbital_update(clock, logunit, iam==0, eccen, obliqr, lambm0, mvelpp, rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
     ! Clock is not advanced until the end of ModelAdvance
     call ESMF_TimeGet( currTime, hr_r8=solhr, rc=rc )
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
-    ! Solar declination
     write(msg,*)trim(subname)//' nextsw_cday = ',nextsw_cday
     call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
-
-    if (nextsw_cday >= -0.5_r8) then
-       call shr_orb_decl(nextsw_cday, eccen, mvelpp,lambm0, obliqr, delta, eccf)
-    end if
     !
     ! Calculate ocean NST on the ocean grid
     !
@@ -432,57 +446,78 @@ contains
          ocnnst, lsize, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
-    ! nst_pre
-    z_c_0 = zero
-    do n = 1,lsize
-       if (ocnnst%mask(n) == 1) then
-          call get_dtzm_point(ocnnst%xt(n), ocnnst%xz(n), ocnnst%dtcool(n), z_c_0, zero, omz1, ocnnst%dtm(n))
-          ocnnst%tref(n) = max(tgice, ocnnst%tsfco(n) - ocnnst%dtm(n))
-          if (abs(ocnnst%xz(n)) > zero) then
-             tem2 = one / ocnnst%xz(n)
-          else
-             tem2 = zero
-          endif
-          ocnnst%tseal(n)     = ocnnst%tref(n) + (ocnnst%xt(n)+ocnnst%xt(n)) * tem2 - ocnnst%dtcool(n)
-          ocnnst%tsurf_wat(n) = oxnnst%tseal(n)
-       endif
-    enddo
+    call FB_GetFldPtr(FBnst, 'wind', wind, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    wind = sqrt(ocnnst%u1*ocnnst%u1 + ocnnst%v1*ocnnst%v1)
+    call FB_GetFldPtr(FBnst, 'flag_iter', flag_iter, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(FBnst, 'flag_guess', flag_guess, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-       ! Compute NST
-       do n = 1,lsize
-          if (ocnnst%mask(n) == 1) then
-             rlat = const_deg2rad * ocnnst%lats(n)
-             rlon = const_deg2rad * ocnnst%lons(n)
-             cosz = shr_orb_cosz( nextsw_cday, rlat, rlon, delta )
-             !if (cosz  >  0.0_r8) then !--- sun hit --
-             !end if
+    ! NST
+    do iter = 1,2
+
+
+       ! loop_control_part1
+       do i = 1,lsize
+          if (ocnnst%mask(i) == 1) then
+             if (iter == 1 .and. wind(i) < 2.0d0) then
+                flag_guess(i) = .true.
+             end if
           end if
        end do
-       update_nst = .true.
 
-    endif    ! nextsw_cday
+       ! nst_pre
+       z_c_0 = zero
+       do i = 1,lsize
+          if (ocnnst%mask(i) == 1) then
+             call get_dtzm_point(ocnnst%xt(i), ocnnst%xz(i), ocnnst%dtcool(i), z_c_0, zero, omz1, ocnnst%dtm(i))
+             ocnnst%tref(i) = max(tgice, ocnnst%tsfco(i) - ocnnst%dtm(i))
+             if (abs(ocnnst%xz(i)) > zero) then
+                tem2 = one / ocnnst%xz(i)
+             else
+                tem2 = zero
+             endif
+             ocnnst%tseal(i)     = ocnnst%tref(i) + (ocnnst%xt(i)+ocnnst%xt(i)) * tem2 - ocnnst%dtcool(i)
+             ocnnst%tsurf_wat(i) = oxnnst%tseal(i)
+          endif
+       enddo
 
-    ! ! Update current ifrad/ofrad values if albedo was updated in field bundle
-    ! if (update_nst) then
-    !    call ESMF_FieldBundleGet(is_local%wrap%FBFrac(compocn), fieldname='ifrac', field=lfield, rc=rc)
-    !    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    !    call ESMF_FieldGet(lfield, farrayptr=ifrac, rc=rc)
-    !    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    !    call ESMF_FieldBundleGet(is_local%wrap%FBFrac(compocn), fieldname='ifrad', field=lfield, rc=rc)
-    !    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    !    call ESMF_FieldGet(lfield, farrayptr=ifrad, rc=rc)
-    !    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    !    call ESMF_FieldBundleGet(is_local%wrap%FBFrac(compocn), fieldname='ofrac', field=lfield, rc=rc)
-    !    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    !    call ESMF_FieldGet(lfield, farrayptr=ofrac, rc=rc)
-    !    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    !    call ESMF_FieldBundleGet(is_local%wrap%FBFrac(compocn), fieldname='ofrad', field=lfield, rc=rc)
-    !    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    !    call ESMF_FieldGet(lfield, farrayptr=ofrad, rc=rc)
-    !    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    !    ifrad(:) = ifrac(:)
-    !    ofrad(:) = ofrac(:)
-    ! endif
+       ! nst_run
+       ! Compute NST
+       !do n = 1,lsize
+       !   if (ocnnst%mask(n) == 1) then
+       !      rlat = const_deg2rad * ocnnst%lats(n)
+       !      rlon = const_deg2rad * ocnnst%lons(n)
+       !   end if
+       !end do
+       !update_nst = .true.
+
+       ! nst_post
+       !zsea1 = 0.001_kp*real(nstf_name4)
+       !zsea2 = 0.001_kp*real(nstf_name5)
+       ! nstf_name4,5 are both 0 right now
+       zsea1 = 0.0_r8
+       zsea2 = 0.0_r8
+       do i = 1,lsize
+          if (ocnnst%mask(i) == 1) then
+             call get_dtzm_point(ocnnst%xt(i), ocnnst%xz(i), ocnnst%dtcool(i), ocnnst%zc, zsea1, zsea2, ocnnst%dtm(i))
+             ocnnst%tsfc_wat(i) = max(tgice, ocnnst%tref(i) + ocnnst%dtzm(i))
+          end if
+       end do
+
+       ! loop_control_part2
+       do i = 1, im
+          if (ocnnst%mask(i) == 0) then
+             flag_iter(i)  = .false.
+             flag_guess(i) = .false.
+          else
+             if (iter == 1 .and. wind(i) < 2.0d0) then
+                flag_iter(i) = .true.
+             endif
+          endif
+       end do
+    end do
 
     if (ESMF_FieldBundleIsCreated(is_local%wrap%FBMed_ocnnst_o, rc=rc)) then
        call NUOPC_MediatorGet(gcomp, driverClock=dClock, rc=rc)
@@ -502,166 +537,6 @@ contains
   end subroutine med_phases_ocnnst_run
 
 !===============================================================================
-
-  subroutine med_phases_ocnnst_orbital_init(gcomp, logunit, maintask, rc)
-
-    !----------------------------------------------------------
-    ! Obtain orbital related values
-    !----------------------------------------------------------
-
-    use ESMF  , only : ESMF_GridComp, ESMF_GridCompGet
-    use ESMF  , only : ESMF_LogWrite, ESMF_LogFoundError, ESMF_LogSetError
-    use ESMF  , only : ESMf_SUCCESS, ESMF_FAILURE, ESMF_LOGMSG_INFO, ESMF_RC_NOT_VALID
-    use NUOPC , only : NUOPC_CompAttributeGet
-
-    ! input/output variables
-    type(ESMF_GridComp)                 :: gcomp
-    integer             , intent(in)    :: logunit         ! output logunit
-    logical             , intent(in)    :: maintask
-    integer             , intent(out)   :: rc              ! output error
-
-    ! local variables
-
-    character(len=CL) :: msgstr          ! temporary
-    character(len=CL) :: cvalue          ! temporary
-    character(len=*) , parameter :: subname = "(med_phases_ocnnst_orbital_init)"
-    !-------------------------------------------
-
-    rc = ESMF_SUCCESS
-
-    ! Determine orbital attributes from input
-    call NUOPC_CompAttributeGet(gcomp, name="orb_mode", value=cvalue, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) orb_mode
-
-    call NUOPC_CompAttributeGet(gcomp, name="orb_iyear", value=cvalue, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) orb_iyear
-
-    call NUOPC_CompAttributeGet(gcomp, name="orb_iyear_align", value=cvalue, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) orb_iyear_align
-
-    call NUOPC_CompAttributeGet(gcomp, name="orb_obliq", value=cvalue, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) orb_obliq
-
-    call NUOPC_CompAttributeGet(gcomp, name="orb_eccen", value=cvalue, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) orb_eccen
-
-    call NUOPC_CompAttributeGet(gcomp, name="orb_mvelp", value=cvalue, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) orb_mvelp
-
-    ! Error checks
-    if (trim(orb_mode) == trim(orb_fixed_year)) then
-       orb_obliq = SHR_ORB_UNDEF_REAL
-       orb_eccen = SHR_ORB_UNDEF_REAL
-       orb_mvelp = SHR_ORB_UNDEF_REAL
-       if (orb_iyear == SHR_ORB_UNDEF_INT) then
-          write(logunit,*) trim(subname),' ERROR: invalid settings orb_mode =',trim(orb_mode)
-          write(logunit,*) trim(subname),' ERROR: fixed_year settings = ',orb_iyear
-          write (msgstr, *) ' ERROR: invalid settings for orb_mode '//trim(orb_mode)
-          call ESMF_LogSetError(ESMF_RC_NOT_VALID, msg=msgstr, line=__LINE__, file=__FILE__, rcToReturn=rc)
-          return  ! bail out
-       endif
-    elseif (trim(orb_mode) == trim(orb_variable_year)) then
-       orb_obliq = SHR_ORB_UNDEF_REAL
-       orb_eccen = SHR_ORB_UNDEF_REAL
-       orb_mvelp = SHR_ORB_UNDEF_REAL
-       if (orb_iyear == SHR_ORB_UNDEF_INT .or. orb_iyear_align == SHR_ORB_UNDEF_INT) then
-          write(logunit,*) trim(subname),' ERROR: invalid settings orb_mode =',trim(orb_mode)
-          write(logunit,*) trim(subname),' ERROR: variable_year settings = ',orb_iyear, orb_iyear_align
-          write (msgstr, *) subname//' ERROR: invalid settings for orb_mode '//trim(orb_mode)
-          call ESMF_LogSetError(ESMF_RC_NOT_VALID, msg=msgstr, line=__LINE__, file=__FILE__, rcToReturn=rc)
-          return  ! bail out
-       endif
-    elseif (trim(orb_mode) == trim(orb_fixed_parameters)) then
-       !-- force orb_iyear to undef to make sure shr_orb_params works properly
-       orb_iyear = SHR_ORB_UNDEF_INT
-       orb_iyear_align = SHR_ORB_UNDEF_INT
-       if (orb_eccen == SHR_ORB_UNDEF_REAL .or. &
-           orb_obliq == SHR_ORB_UNDEF_REAL .or. &
-           orb_mvelp == SHR_ORB_UNDEF_REAL) then
-          write(logunit,*) trim(subname),' ERROR: invalid settings orb_mode =',trim(orb_mode)
-          write(logunit,*) trim(subname),' ERROR: orb_eccen = ',orb_eccen
-          write(logunit,*) trim(subname),' ERROR: orb_obliq = ',orb_obliq
-          write(logunit,*) trim(subname),' ERROR: orb_mvelp = ',orb_mvelp
-          write (msgstr, *) subname//' ERROR: invalid settings for orb_mode '//trim(orb_mode)
-          call ESMF_LogSetError(ESMF_RC_NOT_VALID, msg=msgstr, line=__LINE__, file=__FILE__, rcToReturn=rc)
-          return  ! bail out
-       endif
-    else
-       write (msgstr, *) subname//' ERROR: invalid orb_mode '//trim(orb_mode)
-       call ESMF_LogSetError(ESMF_RC_NOT_VALID, msg=msgstr, line=__LINE__, file=__FILE__, rcToReturn=rc)
-       rc = ESMF_FAILURE
-       return  ! bail out
-    endif
-  end subroutine med_phases_ocnnst_orbital_init
-
-  !===============================================================================
-
-  subroutine med_phases_ocnnst_orbital_update(clock, logunit,  maintask, eccen, obliqr, lambm0, mvelpp, rc)
-
-    !----------------------------------------------------------
-    ! Update orbital settings
-    !----------------------------------------------------------
-
-    use ESMF, only : ESMF_Clock, ESMF_ClockGet, ESMF_Time, ESMF_TimeGet
-    use ESMF, only : ESMF_LogSetError, ESMF_RC_NOT_VALID, ESMF_SUCCESS
-
-    ! input/output variables
-    type(ESMF_Clock) , intent(in)    :: clock
-    integer          , intent(in)    :: logunit
-    logical          , intent(in)    :: maintask
-    real(R8)         , intent(inout) :: eccen  ! orbital eccentricity
-    real(R8)         , intent(inout) :: obliqr ! Earths obliquity in rad
-    real(R8)         , intent(inout) :: lambm0 ! Mean long of perihelion at vernal equinox (radians)
-    real(R8)         , intent(inout) :: mvelpp ! moving vernal equinox long of perihelion plus pi (rad)
-    integer          , intent(out)   :: rc     ! output error
-
-    ! local variables
-    type(ESMF_Time)   :: CurrTime ! current time
-    integer           :: year     ! model year at current time
-    integer           :: orb_year ! orbital year for current orbital computation
-    character(len=CL) :: msgstr   ! temporary
-    logical           :: lprint
-    logical           :: first_time = .true.
-    character(len=*) , parameter :: subname = "(med_phases_ocnnst_orbital_update)"
-    !-------------------------------------------
-
-    rc = ESMF_SUCCESS
-    lprint = .false.
-    if (trim(orb_mode) == trim(orb_variable_year)) then
-       call ESMF_ClockGet(clock, CurrTime=CurrTime, rc=rc)
-       if (chkerr(rc,__LINE__,u_FILE_u)) return
-       call ESMF_TimeGet(CurrTime, yy=year, rc=rc)
-       if (chkerr(rc,__LINE__,u_FILE_u)) return
-       orb_year = orb_iyear + (year - orb_iyear_align)
-       lprint = maintask
-    else
-       orb_year = orb_iyear
-       if (first_time) then
-          lprint = maintask
-          first_time = .false.
-       else
-          lprint = .false.
-       end if
-    end if
-
-    eccen = orb_eccen
-    shr_log_unit = logunit
-    call shr_orb_params(orb_year, eccen, orb_obliq, orb_mvelp, obliqr, lambm0, mvelpp, lprint)
-
-    if ( eccen  == SHR_ORB_UNDEF_REAL .or. obliqr == SHR_ORB_UNDEF_REAL .or. &
-         mvelpp == SHR_ORB_UNDEF_REAL .or. lambm0 == SHR_ORB_UNDEF_REAL) then
-       write (msgstr, *) subname//' ERROR: orb params incorrect'
-       call ESMF_LogSetError(ESMF_RC_NOT_VALID, msg=msgstr, line=__LINE__, file=__FILE__, rcToReturn=rc)
-       return  ! bail out
-    endif
-
-  end subroutine med_phases_ocnnst_orbital_update
 
 !===============================================================================
 
@@ -751,5 +626,162 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
   end subroutine set_ocnnst_in_pointers
+
+  subroutine stability                                                &
+       !  ---  inputs:
+       ( z1, zvfun, gdx, tv1, thv1, wind, z0max, ztmax, tvs, grav,    &
+       thsfc_loc,                                                     &
+       !  ---  outputs:
+       rb, fm, fh, fm10, fh2, cm, ch, stress, ustar)
+
+    integer, parameter :: kind_phys = R8
+    integer, parameter :: kp = kind_phys
+    !  ---  inputs:
+    real(kind=kind_phys), intent(in) ::                               &
+         z1, zvfun, gdx, tv1, thv1, wind, z0max, ztmax, tvs, grav
+    logical,              intent(in) :: thsfc_loc
+
+    !  ---  outputs:
+    real(kind=kind_phys), intent(out) ::                              &
+         rb, fm, fh, fm10, fh2, cm, ch, stress, ustar
+
+    !  ---  locals:
+    real(kind=kind_phys), parameter :: alpha=5.0_kp, a0=-3.975_kp,    &
+         a1=12.32_kp, alpha4=4.0_kp*alpha,                            &
+         b1=-7.755_kp, b2=6.041_kp,                                   &
+         xkrefsqr=0.3_kp, xkmin=0.05_kp,                              &
+         xkgdx=3000.0_kp,                                             &
+         a0p=-7.941_kp, a1p=24.75_kp, b1p=-8.705_kp, b2p=7.899_kp,    &
+         zolmin=-10.0_kp, zero=0.0_kp, one=1.0_kp
+
+    real(kind=kind_phys) :: aa,     aa0,    bb,     bb0, dtv,   adtv, &
+         hl1,    hl12,   pm,     ph,  pm10,  ph2,                     &
+         z1i,                                                         &
+         fms,    fhs,    hl0,    hl0inf, hlinf,                       &
+         hl110,  hlt,    hltinf, olinf,                               &
+         tem1,   tem2,   zolmax                                       &
+
+         real(kind=kind_phys) :: xkzo
+
+    z1i = one / z1
+
+    !
+    !  set background diffusivities with one for gdx >= xkgdx and
+    !   as a function of horizontal grid size for gdx < xkgdx
+    !   (i.e., gdx/xkgdx for gdx < xkgdx)
+    !
+    if(gdx >= xkgdx) then
+       xkzo = one
+    else
+       xkzo = gdx / xkgdx
+    endif
+
+    tem1 = tv1 - tvs
+    if(tem1 > zero) then
+       tem2 = xkzo * zvfun
+       xkzo = min(max(tem2, xkmin), xkzo)
+    endif
+
+    zolmax = xkrefsqr / sqrt(xkzo)
+
+    !  compute stability indices (rb and hlinf)
+
+    dtv     = thv1 - tvs
+    adtv    = max(abs(dtv),0.001_kp)
+    dtv     = sign(1.0_kp,dtv) * adtv
+
+    if(thsfc_loc) then ! Use local potential temperature
+       rb      = max(-5000.0_kp, (grav+grav) * dtv * z1
+       &              / ((thv1 + tvs) * wind * wind))
+    else ! Use potential temperature referenced to 1000 hPa
+       rb      = max(-5000.0_kp, grav * dtv * z1
+       &              / (tv1 * wind * wind))
+    endif
+
+    tem1    = one / z0max
+    tem2    = one / ztmax
+    fm      = log((z0max+z1)  * tem1)
+    fh      = log((ztmax+z1)  * tem2)
+    fm10    = log((z0max+10.0_kp) * tem1)
+    fh2     = log((ztmax+2.0_kp)  * tem2)
+    hlinf   = rb * fm * fm / fh
+    hlinf   = min(max(hlinf,zolmin),zolmax)
+    !
+    !  stable case
+    !
+    if (dtv >= zero) then
+       hl1 = hlinf
+       if(hlinf > 0.25_kp) then
+          tem1   = hlinf * z1i
+          hl0inf = z0max * tem1
+          hltinf = ztmax * tem1
+          aa     = sqrt(one + alpha4 * hlinf)
+          aa0    = sqrt(one + alpha4 * hl0inf)
+          bb     = aa
+          bb0    = sqrt(one + alpha4 * hltinf)
+          pm     = aa0 - aa + log( (aa + one)/(aa0 + one) )
+          ph     = bb0 - bb + log( (bb + one)/(bb0 + one) )
+          fms    = fm - pm
+          fhs    = fh - ph
+          hl1    = fms * fms * rb / fhs
+          hl1    = min(hl1, zolmax)
+       endif
+       !
+       !  second iteration
+       !
+       tem1  = hl1 * z1i
+       hl0   = z0max * tem1
+       hlt   = ztmax * tem1
+       aa    = sqrt(one + alpha4 * hl1)
+       aa0   = sqrt(one + alpha4 * hl0)
+       bb    = aa
+       bb0   = sqrt(one + alpha4 * hlt)
+       pm    = aa0 - aa + log( (one+aa)/(one+aa0) )
+       ph    = bb0 - bb + log( (one+bb)/(one+bb0) )
+       hl110 = hl1 * 10.0_kp * z1i
+       aa    = sqrt(one + alpha4 * hl110)
+       pm10  = aa0 - aa + log( (one+aa)/(one+aa0) )
+       hl12  = (hl1+hl1) * z1i
+       !           aa    = sqrt(one + alpha4 * hl12)
+       bb    = sqrt(one + alpha4 * hl12)
+       ph2   = bb0 - bb + log( (one+bb)/(one+bb0) )
+       !
+       !  unstable case - check for unphysical obukhov length
+       !
+    else                          ! dtv < 0 case
+       olinf = z1 / hlinf
+       tem1  = 50.0_kp * z0max
+       if(abs(olinf) <= tem1) then
+          hlinf = -z1 / tem1
+          hlinf = max(hlinf, zolmin)
+       endif
+       !
+       !  get pm and ph
+       !
+       if (hlinf >= -0.5_kp) then
+          hl1   = hlinf
+          pm    = (a0  + a1*hl1)  * hl1   / (one+ (b1+b2*hl1)  *hl1)
+          ph    = (a0p + a1p*hl1) * hl1   / (one+ (b1p+b2p*hl1)*hl1)
+          hl110 = hl1 * 10.0_kp * z1i
+          pm10  = (a0 + a1*hl110) * hl110/(one+(b1+b2*hl110)*hl110)
+          hl12  = (hl1+hl1) * z1i
+          ph2   = (a0p + a1p*hl12) * hl12/(one+(b1p+b2p*hl12)*hl12)
+       else                       ! hlinf < 0.05
+          hl1   = -hlinf
+          tem1  = one / sqrt(hl1)
+          pm    = log(hl1) + 2.0_kp * sqrt(tem1) - .8776_kp
+          ph    = log(hl1) + 0.5_kp * tem1 + 1.386_kp
+          !             pm    = log(hl1) + 2.0 * hl1 ** (-.25) - .8776
+          !             ph    = log(hl1) + 0.5 * hl1 ** (-.5) + 1.386
+          hl110 = hl1 * 10.0_kp * z1i
+          pm10  = log(hl110) + 2.0_kp/sqrt(sqrt(hl110)) - 0.8776_kp
+          !             pm10  = log(hl110) + 2. * hl110 ** (-.25) - .8776
+          hl12  = (hl1+hl1) * z1i
+          ph2   = log(hl12) + 0.5_kp / sqrt(hl12) + 1.386_kp
+          !             ph2   = log(hl12) + .5 * hl12 ** (-.5) + 1.386
+       endif
+
+    endif          ! end of if (dtv >= 0 ) then loop
+  end subroutine stability
 
 end module med_phases_ocnnst_mod
