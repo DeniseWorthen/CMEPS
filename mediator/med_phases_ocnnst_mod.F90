@@ -1,5 +1,7 @@
 module med_phases_ocnnst_mod
 
+  use ESMF                  , only : ESMF_FieldBundle
+
   use med_kind_mod          , only : CX=>SHR_KIND_CX, CS=>SHR_KIND_CS, CL=>SHR_KIND_CL, R8=>SHR_KIND_R8
   use med_internalstate_mod , only : InternalState, logunit
   use med_constants_mod     , only : dbug_flag       => med_constants_dbug_flag
@@ -9,6 +11,7 @@ module med_phases_ocnnst_mod
   use med_methods_mod       , only : State_GetScalar => med_methods_State_GetScalar
   use med_internalstate_mod , only : mapconsf, mapnames, compatm, compocn, maintask
   use perf_mod              , only : t_startf, t_stopf
+  use module_nst_water_prop , only : get_dtzm_point
 
   implicit none
   private
@@ -51,18 +54,19 @@ module med_phases_ocnnst_mod
      real(r8) , pointer :: rain        (:) => null() ! rainfall rate (kg/m2/s)
      ! ?
      real(r8) , pointer :: tseal       (:) => null() ! ocean surface skin temperature (K)
-     real(r8) , pointer :: tsfc_water  (:) => null() ! surface skin temperature over water (K)
-     real(r8) , pointer :: tsurf_water (:) => null() ! surface skin temperature after iteration over water (K)
+     real(r8) , pointer :: tsfc_wat    (:) => null() ! surface skin temperature over water (K)
+     real(r8) , pointer :: tsurf_wat   (:) => null() ! surface skin temperature after iteration over water (K)
      real(r8) , pointer :: dtzm        (:) => null() ! mean of dT(z)  (z1 to z2) (?)
+     real(r8) , pointer :: dtm         (:) => null() ! ?
      ! in sfcf file
-     real(r8) , pointer :: c0          (:) => null() ! coefficient1 to calculate d(tz)/d(ts) (nd)
-     real(r8) , pointer :: c2          (:) => null() ! coefficient2 to calculate d(tz)/d(ts) (nd)
-     real(r8) , pointer :: dconv       (:) => null() ! thickness of free convection layer (m)
-     real(r8) , pointer :: dtcool      (:) => null() ! sub-layer cooling amount (K)
+     real(r8) , pointer :: c_0         (:) => null() ! coefficient1 to calculate d(tz)/d(ts) (nd)
+     real(r8) , pointer :: c_d         (:) => null() ! coefficient2 to calculate d(tz)/d(ts) (nd)
+     real(r8) , pointer :: d_conv      (:) => null() ! thickness of free convection layer (m)
+     real(r8) , pointer :: dt_cool     (:) => null() ! sub-layer cooling amount (K)
      real(r8) , pointer :: qrain       (:) => null() ! sensible heat flux due to rainfall (W)
      real(r8) , pointer :: tref        (:) => null() ! sea surface reference temperature (K)
-     real(r8) , pointer :: w0          (:) => null() ! coefficient3 to calculate d(tz)/d(ts) (nd)
-     real(r8) , pointer :: wd          (:) => null() ! coefficient4 to calculate d(tz)/d(ts) (nd)
+     real(r8) , pointer :: w_0         (:) => null() ! coefficient3 to calculate d(tz)/d(ts) (nd)
+     real(r8) , pointer :: w_d         (:) => null() ! coefficient4 to calculate d(tz)/d(ts) (nd)
 
      real(r8) , pointer :: xs          (:) => null() ! salinity  content in diurnal thermocline layer (ppt m)
      real(r8) , pointer :: xt          (:) => null() ! heat content in diurnal thermocline layer (K m)
@@ -109,9 +113,11 @@ contains
 
     use ESMF  , only : ESMF_LogWrite, ESMF_LOGMSG_INFO, ESMF_SUCCESS, ESMF_FAILURE
     use ESMF  , only : ESMF_VM, ESMF_VMGet, ESMF_Mesh, ESMF_MeshGet
-    use ESMF  , only : ESMF_GridComp, ESMF_GridCompGet
-    use ESMF  , only : ESMF_FieldBundleGet, ESMF_Field, ESMF_FieldGet
-    use ESMF  , only : ESMF_TYPEKIND_LOGICAL
+    use ESMF  , only : ESMF_GridComp, ESMF_GridCompGet, ESMF_MESHLOC_ELEMENT
+    use ESMF  , only : ESMF_FieldBundleCreate, ESMF_FieldBundleAdd, ESMF_FieldBundleGet
+    use ESMF  , only : ESMF_FieldRegridGetArea
+    use ESMF  , only : ESMF_Field, ESMF_FieldGet, ESMF_FieldCreate
+    use ESMF  , only : ESMF_TYPEKIND_LOGICAL, ESMF_TYPEKIND_R8
     use NUOPC , only : NUOPC_CompAttributeGet
     use ESMF  , only : operator(==)
 
@@ -138,6 +144,7 @@ contains
     logical                  :: isPresent, isSet
     integer                  :: fieldCount
     character(CL)            :: msg
+    type(ESMF_Field), pointer :: fieldlist(:)
     character(*), parameter  :: subname = '(med_phases_ocnnst_init) '
     !-----------------------------------------------------------------------
 
@@ -207,7 +214,7 @@ contains
 
     ! ocean grid ara
     allocate(ocnnst%area(numOwnedElements))
-    call ESMF_FieldBundelGet(is_local%wrap%FBImp(compocn,compocn), 'So_omask', lfield, rc=rc)
+    call ESMF_FieldBundleGet(is_local%wrap%FBImp(compocn,compocn), fieldname='So_omask', field=lfield, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call ESMF_FieldRegridGetArea(lfield, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -229,6 +236,8 @@ contains
     ! local FB needed for NST calculation
     !----------------------------------
 
+    FBnst = ESMF_FieldBundleCreate(name='FBnst', rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
     lfield = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_R8, name='wind', meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     call ESMF_FieldBundleAdd(FBnst, (/lfield/), rc=rc)
@@ -236,23 +245,24 @@ contains
     call ESMF_FieldGet(lfield, farrayPtr=dataptr1d, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     dataptr1d = 0.0
-
-    lfield = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_LOGCIAL, name='flag_iter', meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
+#ifdef test
+    lfield = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_LOGICAL, name='flag_iter', meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     call ESMF_FieldBundleAdd(FBnst, (/lfield/), rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     call ESMF_FieldGet(lfield, farrayPtr=logptr1d, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     logptr1d = .true.
-    if (ocnnst%mask(i) == 0) logptr1d = .false.
+    where (ocnnst%mask == 0) logptr1d = .false.
 
-    lfield = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_LOGCIAL, name='flag_guess', meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
+    lfield = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_LOGICAL, name='flag_guess', meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     call ESMF_FieldBundleAdd(FBnst, (/lfield/), rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     call ESMF_FieldGet(lfield, farrayPtr=logptr1d, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     logptr1d = .false.
+#endif
 
     if (dbug_flag > 5) then
       call ESMF_LogWrite(trim(subname)//": done", ESMF_LOGMSG_INFO)
@@ -291,6 +301,7 @@ contains
     type(ESMF_VM)           :: vm
     type(ESMF_Field)        :: lfield
     integer                 :: iam
+    integer                 :: iter
     logical                 :: update_nst
     type(InternalState)     :: is_local
     type(ESMF_Clock)        :: clock
@@ -303,10 +314,10 @@ contains
     character(CL)           :: runtype          ! initial, continue, hybrid, branch
     real(R8)                :: nextsw_cday      ! calendar day of next atm shortwave
     real(R8)                :: solhr            ! fcst hour at the end of prev time step (currTime)
-    real(R8)                :: z_c_0
+    real(R8)                :: z_c_0, zsea1, zsea2
     real(R8)                :: tem2
     integer                 :: lsize            ! local size
-    integer                 :: n                ! indices
+    integer                 :: i                ! indices
     real(R8)                :: rlat             ! gridcell latitude in radians
     real(R8)                :: rlon             ! gridcell longitude in radians
     real(R8), parameter     :: const_deg2rad = shr_const_pi/180.0_R8  ! deg to rads
@@ -383,35 +394,47 @@ contains
        call ESMF_ClockGet( clock, currTime=currTime, timeStep=timeStep, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
 
+    !    if (trim(runtype) == 'initial') then
+    !       call ESMF_TimeGet( currTime, dayOfYear_r8=nextsw_cday, rc=rc )
+    !       if (chkerr(rc,__LINE__,u_FILE_u)) return
+    !    else
+    !       ! obtain nextsw_cday from atm if it is in the import state
+    !       if (use_nextswcday) then
+    !          call State_GetScalar(&
+    !               state=is_local%wrap%NstateImp(compatm), &
+    !               flds_scalar_name=is_local%wrap%flds_scalar_name, &
+    !               flds_scalar_num=is_local%wrap%flds_scalar_num, &
+    !               scalar_id=is_local%wrap%flds_scalar_index_nextsw_cday, &
+    !               scalar_value=nextsw_cday, rc=rc)
+    !          if (chkerr(rc,__LINE__,u_FILE_u)) return
+    !       else
+    !          call ESMF_TimeGet( currTime, dayOfYear_r8=nextsw_cday, rc=rc )
+    !          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    !       end if
+    !    end if
+    !    first_call = .false.
+    ! else
+    !    ! Note that med_methods_State_GetScalar includes a broadcast to all other pets
+    !    if (use_nextswcday) then
+    !       call State_GetScalar(&
+    !            state=is_local%wrap%NstateImp(compatm), &
+    !            flds_scalar_name=is_local%wrap%flds_scalar_name, &
+    !            flds_scalar_num=is_local%wrap%flds_scalar_num, &
+    !            scalar_id=is_local%wrap%flds_scalar_index_nextsw_cday, &
+    !            scalar_value=nextsw_cday, rc=rc)
+    !       if (chkerr(rc,__LINE__,u_FILE_u)) return
+    !    else
+    !       call ESMF_ClockGetNextTime(clock, nextTime, rc=rc)
+    !       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    !       call ESMF_TimeGet(nextTime, dayOfYear_r8=nextsw_cday, rc=rc)
+    !       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    !    end if
+    ! end if
+
        if (trim(runtype) == 'initial') then
           call ESMF_TimeGet( currTime, dayOfYear_r8=nextsw_cday, rc=rc )
           if (chkerr(rc,__LINE__,u_FILE_u)) return
-       else
-          ! obtain nextsw_cday from atm if it is in the import state
-          if (use_nextswcday) then
-             call State_GetScalar(&
-                  state=is_local%wrap%NstateImp(compatm), &
-                  flds_scalar_name=is_local%wrap%flds_scalar_name, &
-                  flds_scalar_num=is_local%wrap%flds_scalar_num, &
-                  scalar_id=is_local%wrap%flds_scalar_index_nextsw_cday, &
-                  scalar_value=nextsw_cday, rc=rc)
-             if (chkerr(rc,__LINE__,u_FILE_u)) return
-          else
-             call ESMF_TimeGet( currTime, dayOfYear_r8=nextsw_cday, rc=rc )
-             if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          end if
-       end if
-       first_call = .false.
-    else
-       ! Note that med_methods_State_GetScalar includes a broadcast to all other pets
-       if (use_nextswcday) then
-          call State_GetScalar(&
-               state=is_local%wrap%NstateImp(compatm), &
-               flds_scalar_name=is_local%wrap%flds_scalar_name, &
-               flds_scalar_num=is_local%wrap%flds_scalar_num, &
-               scalar_id=is_local%wrap%flds_scalar_index_nextsw_cday, &
-               scalar_value=nextsw_cday, rc=rc)
-          if (chkerr(rc,__LINE__,u_FILE_u)) return
+          first_call = .false.
        else
           call ESMF_ClockGetNextTime(clock, nextTime, rc=rc)
           if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -421,11 +444,11 @@ contains
     end if
 
     ! Clock is not advanced until the end of ModelAdvance
-    call ESMF_TimeGet( currTime, hr_r8=solhr, rc=rc )
+    call ESMF_TimeGet( currTime, h_r8=solhr, rc=rc )
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
-    write(msg,*)trim(subname)//' nextsw_cday = ',nextsw_cday
-    call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
+    !write(msg,*)trim(subname)//' nextsw_cday = ',nextsw_cday
+    !call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
     !
     ! Calculate ocean NST on the ocean grid
     !
@@ -442,17 +465,21 @@ contains
     call FB_GetFldPtr(is_local%wrap%FBExp(compocn), 'Foxx_swnet',  ocnnst%sfcnsw, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     ! set pointers
-    call set_ocnnst_pointers(is_local%wrap%FBImp(compatm,compocn), is_local%wrap%FBMed_ocnnst, &
-         ocnnst, lsize, rc=rc)
+    call set_ocnnst_pointers(is_local%wrap%FBImp(compatm,compocn), is_local%wrap%FBMed_ocnnst_o, &
+         ocnnst, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
     call FB_GetFldPtr(FBnst, 'wind', wind, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     wind = sqrt(ocnnst%u1*ocnnst%u1 + ocnnst%v1*ocnnst%v1)
-    call FB_GetFldPtr(FBnst, 'flag_iter', flag_iter, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(FBnst, 'flag_guess', flag_guess, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    !call ESMF_FieldBundleGet(FBnst, field_name='flag_iter', field=lfield, rc=rc)
+    !if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    !call ESMF_FieldGet(lfield, farrayPtr=flag_iter, rc=rc)
+    !if (chkerr(rc,__LINE__,u_FILE_u)) return
+    !call ESMF_FieldBundleGet(FBnst, field_name='flag_guess', field=lfield, rc=rc)
+    !if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    !call ESMF_FieldGet(lfield, farrayPtr=flag_guess, rc=rc)
+    !if (chkerr(rc,__LINE__,u_FILE_u)) return
 
     ! NST
     do iter = 1,2
@@ -471,15 +498,15 @@ contains
        z_c_0 = zero
        do i = 1,lsize
           if (ocnnst%mask(i) == 1) then
-             call get_dtzm_point(ocnnst%xt(i), ocnnst%xz(i), ocnnst%dtcool(i), z_c_0, zero, omz1, ocnnst%dtm(i))
-             ocnnst%tref(i) = max(tgice, ocnnst%tsfco(i) - ocnnst%dtm(i))
+             call get_dtzm_point(ocnnst%xt(i), ocnnst%xz(i), ocnnst%dt_cool(i), z_c_0, zero, omz1, ocnnst%dtzm(i))
+             ocnnst%tref(i) = max(tgice, ocnnst%tsfco(i) - ocnnst%dtzm(i))
              if (abs(ocnnst%xz(i)) > zero) then
                 tem2 = one / ocnnst%xz(i)
              else
                 tem2 = zero
              endif
-             ocnnst%tseal(i)     = ocnnst%tref(i) + (ocnnst%xt(i)+ocnnst%xt(i)) * tem2 - ocnnst%dtcool(i)
-             ocnnst%tsurf_wat(i) = oxnnst%tseal(i)
+             ocnnst%tseal(i)     = ocnnst%tref(i) + (ocnnst%xt(i)+ocnnst%xt(i)) * tem2 - ocnnst%dt_cool(i)
+             ocnnst%tsurf_wat(i) = ocnnst%tseal(i)
           endif
        enddo
 
@@ -501,13 +528,13 @@ contains
        zsea2 = 0.0_r8
        do i = 1,lsize
           if (ocnnst%mask(i) == 1) then
-             call get_dtzm_point(ocnnst%xt(i), ocnnst%xz(i), ocnnst%dtcool(i), ocnnst%zc, zsea1, zsea2, ocnnst%dtm(i))
+             call get_dtzm_point(ocnnst%xt(i), ocnnst%xz(i), ocnnst%dt_cool(i), ocnnst%zc(i), zsea1, zsea2, ocnnst%dtzm(i))
              ocnnst%tsfc_wat(i) = max(tgice, ocnnst%tref(i) + ocnnst%dtzm(i))
           end if
        end do
 
        ! loop_control_part2
-       do i = 1, im
+       do i = 1, lsize
           if (ocnnst%mask(i) == 0) then
              flag_iter(i)  = .false.
              flag_guess(i) = .false.
@@ -540,7 +567,9 @@ contains
 
 !===============================================================================
 
-  subroutine set_ocnnst_in_pointers(fldbun_a, fldbun_m, ocnnst, lsize, rc)
+  subroutine set_ocnnst_pointers(fldbun_a, fldbun_m, ocnnst, rc)
+
+    use ESMF  , only : ESMF_FieldBundle, ESMF_SUCCESS
 
     ! Set pointers for ocnnst
 
@@ -550,7 +579,6 @@ contains
     type(ESMF_FieldBundle)     , intent(inout) :: fldbun_a
     type(ESMF_FieldBundle)     , intent(inout) :: fldbun_m
     type(ocnnst_type)          , intent(inout) :: ocnnst
-    integer                    , intent(out)   :: lsize
     integer                    , intent(out)   :: rc
     !-----------------------------------------------------------------------
 
@@ -585,9 +613,9 @@ contains
     ! Ocean NST fields (mapped back to ATM)
     call FB_GetFldPtr(fldbun_m, 'Snst_tref' ,         ocnnst%tref,       rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_dconv' ,        ocnnst%dconv,      rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_dconv' ,        ocnnst%d_conv,     rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_dtcool' ,       ocnnst%dtcool,     rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_dtcool' ,       ocnnst%dt_cool,    rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(fldbun_m, 'Snst_qrain' ,        ocnnst%qrain,      rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -595,13 +623,13 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(fldbun_m, 'Snst_xzts' ,         ocnnst%xzts,       rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_c0' ,           ocnnst%c0,         rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_c0' ,           ocnnst%c_0,        rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_cd' ,           ocnnst%cd,         rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_cd' ,           ocnnst%c_d,        rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_w0' ,           ocnnst%w0,         rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_w0' ,           ocnnst%w_0,        rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_wd' ,           ocnnst%wd,         rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_wd' ,           ocnnst%w_d,        rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(fldbun_m, 'Snst_xs' ,           ocnnst%xs,         rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -618,24 +646,28 @@ contains
 
     call FB_GetFldPtr(fldbun_m, 'Snst_tseal' ,       ocnnst%tseal,       rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_tsfc_water' ,  ocnnst%tsfc_water,  rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_tsfc_wat' ,    ocnnst%tsfc_wat,    rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_tsurf_water' , ocnnst%tsurf_water, rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_tsurf_water' , ocnnst%tsurf_wat,   rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(fldbun_m, 'Snst_dtzm' ,        ocnnst%dtzm,        rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_dtm' ,         ocnnst%dtm,         rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-  end subroutine set_ocnnst_in_pointers
+  end subroutine set_ocnnst_pointers
 
   subroutine stability                                                &
-       !  ---  inputs:
+ !  ---  inputs:
        ( z1, zvfun, gdx, tv1, thv1, wind, z0max, ztmax, tvs, grav,    &
        thsfc_loc,                                                     &
-       !  ---  outputs:
+ !  ---  outputs:
        rb, fm, fh, fm10, fh2, cm, ch, stress, ustar)
 
     integer, parameter :: kind_phys = R8
     integer, parameter :: kp = kind_phys
+    real (kind=kind_phys), parameter :: ca=0.4_kind_phys  ! ca - von karman constant
+
     !  ---  inputs:
     real(kind=kind_phys), intent(in) ::                               &
          z1, zvfun, gdx, tv1, thv1, wind, z0max, ztmax, tvs, grav
@@ -659,9 +691,9 @@ contains
          z1i,                                                         &
          fms,    fhs,    hl0,    hl0inf, hlinf,                       &
          hl110,  hlt,    hltinf, olinf,                               &
-         tem1,   tem2,   zolmax                                       &
+         tem1,   tem2,   zolmax
 
-         real(kind=kind_phys) :: xkzo
+    real(kind=kind_phys) :: xkzo
 
     z1i = one / z1
 
@@ -691,11 +723,9 @@ contains
     dtv     = sign(1.0_kp,dtv) * adtv
 
     if(thsfc_loc) then ! Use local potential temperature
-       rb      = max(-5000.0_kp, (grav+grav) * dtv * z1
-       &              / ((thv1 + tvs) * wind * wind))
+       rb      = max(-5000.0_kp, (grav+grav) * dtv * z1 / ((thv1 + tvs) * wind * wind))
     else ! Use potential temperature referenced to 1000 hPa
-       rb      = max(-5000.0_kp, grav * dtv * z1
-       &              / (tv1 * wind * wind))
+       rb      = max(-5000.0_kp, grav * dtv * z1 / (tv1 * wind * wind))
     endif
 
     tem1    = one / z0max
@@ -782,6 +812,21 @@ contains
        endif
 
     endif          ! end of if (dtv >= 0 ) then loop
+    !
+    !  finish the exchange coefficient computation to provide fm and fh
+    !
+    fm        = fm - pm
+    fh        = fh - ph
+    fm10      = fm10 - pm10
+    fh2       = fh2 - ph2
+    cm        = ca * ca / (fm * fm)
+    ch        = ca * ca / (fm * fh)
+    tem1      = 0.00001_kp/z1
+    cm        = max(cm, tem1)
+    ch        = max(ch, tem1)
+    stress    = cm * wind * wind
+    ustar     = sqrt(stress)
+
   end subroutine stability
 
 end module med_phases_ocnnst_mod
