@@ -2,7 +2,7 @@ module med_phases_ocnnst_mod
 
   use ESMF                  , only : ESMF_FieldBundle
 
-  use med_kind_mod          , only : CX=>SHR_KIND_CX, CS=>SHR_KIND_CS, CL=>SHR_KIND_CL, R8=>SHR_KIND_R8
+  use med_kind_mod          , only : CX=>SHR_KIND_CX, CS=>SHR_KIND_CS, CL=>SHR_KIND_CL, R8=>SHR_KIND_R8, I4=>SHR_KIND_I4
   use med_internalstate_mod , only : InternalState, logunit
   use med_constants_mod     , only : dbug_flag       => med_constants_dbug_flag
   use med_utils_mod         , only : chkerr          => med_utils_chkerr
@@ -50,7 +50,6 @@ module med_phases_ocnnst_mod
      real(r8) , pointer :: u10m        (:) => null() ! zonal component of 10m wind (m/s)
      real(r8) , pointer :: v10m        (:) => null() ! merid component of 10m wind (m/s)
      real(r8) , pointer :: dlwflx      (:) => null() ! total sky sfc downward lw flux (W/m2)
-     real(r8) , pointer :: sfcnsw      (:) => null() ! total sfc netsw flx into ocean (W/m2)
      real(r8) , pointer :: rain        (:) => null() ! rainfall rate (kg/m2/s)
      ! ?
      real(r8) , pointer :: tseal       (:) => null() ! ocean surface skin temperature (K)
@@ -83,13 +82,16 @@ module med_phases_ocnnst_mod
   ! local
   type(ESMF_FieldBundle) :: FBnst
   real(r8) , pointer     :: wind        (:) => null() ! wind speed (m/s)
-  logical  , pointer     :: flag_guess  (:) => null() ! .true.=  guess step to get CD et al
-                                                      ! when iter = 1, flag_guess = .true. when wind < 2
-                                                      ! when iter = 2, flag_guess = .false. for all grids
-  logical  , pointer     :: flag_iter   (:) => null() ! execution or not
-                                                      ! when iter = 1, flag_iter = .true. for all grids
-                                                      ! when iter = 2, flag_iter = .true. when wind < 2
-                                                      ! for both land and ocean (when nstf_name1 > 0)
+  real(r8) , pointer     :: sfcnsw      (:) => null() ! total sfc netsw flx into ocean (W/m2)
+  ! logical  , pointer     :: flag_guess  (:) => null() ! .true.=  guess step to get CD et al
+  !                                                     ! when iter = 1, flag_guess = .true. when wind < 2
+  !                                                     ! when iter = 2, flag_guess = .false. for all grids
+  ! logical  , pointer     :: flag_iter   (:) => null() ! execution or not
+  !                                                     ! when iter = 1, flag_iter = .true. for all grids
+  !                                                     ! when iter = 2, flag_iter = .true. when wind < 2
+  !                                                     ! for both land and ocean (when nstf_name1 > 0)
+  integer(i4) , pointer :: flag_guess (:) => null() ! 1 = true, 0 = false
+  integer(i4) , pointer :: flag_iter  (:) => null() ! 1 = true, 0 = false
 
   character(*),parameter :: u_FILE_u =  __FILE__
 
@@ -117,7 +119,7 @@ contains
     use ESMF  , only : ESMF_FieldBundleCreate, ESMF_FieldBundleAdd, ESMF_FieldBundleGet
     use ESMF  , only : ESMF_FieldRegridGetArea
     use ESMF  , only : ESMF_Field, ESMF_FieldGet, ESMF_FieldCreate
-    use ESMF  , only : ESMF_TYPEKIND_LOGICAL, ESMF_TYPEKIND_R8
+    use ESMF  , only : ESMF_TYPEKIND_LOGICAL, ESMF_TYPEKIND_R8, ESMF_TYPEKIND_I4
     use NUOPC , only : NUOPC_CompAttributeGet
     use ESMF  , only : operator(==)
 
@@ -138,7 +140,7 @@ contains
     type(InternalState)      :: is_local
     real(R8), pointer        :: ownedElemCoords(:)
     real(r8), pointer        :: dataptr1d(:)
-    logical , pointer        :: logptr1d(:)
+    integer(i4), pointer     :: intptr1d(:)
     character(len=CL)        :: tempc1,tempc2
     character(len=CS)        :: cvalue
     logical                  :: isPresent, isSet
@@ -166,16 +168,9 @@ contains
     call ESMF_GridCompGetInternalState(gcomp, is_local, rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
-    ! ocean mask
-    call FB_GetFldPtr(is_local%wrap%FBImp(compocn,compocn), 'So_omask', dataptr1d, rc=rc)
+    ! ocean surface temperature from ocean
+    call FB_GetFldPtr(is_local%wrap%FBImp(compocn,compocn), 'So_t', ocnnst%tsfco, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    do n = 1,size(dataptr1d)
-       if (dataptr1d(n) == 0._r8) then
-          ocnnst%mask(n) = 0
-       else
-          ocnnst%mask(n) = 1
-       end if
-    enddo
 
     !----------------------------------
     ! Get lat, lon, which are time-invariant
@@ -212,6 +207,19 @@ contains
        ocnnst%lats(n) = ownedElemCoords(2*n)
     end do
 
+
+    ! ocean mask
+    call FB_GetFldPtr(is_local%wrap%FBImp(compocn,compocn), 'So_omask', dataptr1d, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    allocate(ocnnst%mask(numOwnedElements))
+    do n = 1,size(dataptr1d)
+       if (dataptr1d(n) == 0._r8) then
+          ocnnst%mask(n) = 0
+       else
+          ocnnst%mask(n) = 1
+       end if
+    enddo
+
     ! ocean grid ara
     allocate(ocnnst%area(numOwnedElements))
     call ESMF_FieldBundleGet(is_local%wrap%FBImp(compocn,compocn), fieldname='So_omask', field=lfield, rc=rc)
@@ -245,24 +253,31 @@ contains
     call ESMF_FieldGet(lfield, farrayPtr=dataptr1d, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     dataptr1d = 0.0
-#ifdef test
-    lfield = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_LOGICAL, name='flag_iter', meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldBundleAdd(FBnst, (/lfield/), rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldGet(lfield, farrayPtr=logptr1d, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    logptr1d = .true.
-    where (ocnnst%mask == 0) logptr1d = .false.
 
-    lfield = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_LOGICAL, name='flag_guess', meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
+    lfield = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_R8, name='sfcnsw', meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     call ESMF_FieldBundleAdd(FBnst, (/lfield/), rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldGet(lfield, farrayPtr=logptr1d, rc=rc)
+    call ESMF_FieldGet(lfield, farrayPtr=dataptr1d, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    logptr1d = .false.
-#endif
+    dataptr1d = 0.0
+
+    lfield = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_I4, name='flag_iter', meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_FieldBundleAdd(FBnst, (/lfield/), rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_FieldGet(lfield, farrayPtr=intptr1d, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    intptr1d = 1
+    where (ocnnst%mask == 0) intptr1d = 0
+
+    lfield = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_I4, name='flag_guess', meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_FieldBundleAdd(FBnst, (/lfield/), rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_FieldGet(lfield, farrayPtr=intptr1d, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    intptr1d = 0
 
     if (dbug_flag > 5) then
       call ESMF_LogWrite(trim(subname)//": done", ESMF_LOGMSG_INFO)
@@ -309,6 +324,10 @@ contains
     type(ESMF_Time)         :: currTime
     type(ESMF_Time)         :: nextTime
     type(ESMF_TimeInterval) :: timeStep
+    real(R8), pointer       :: swnet_vdr(:)
+    real(R8), pointer       :: swnet_vdf(:)
+    real(R8), pointer       :: swnet_idr(:)
+    real(R8), pointer       :: swnet_idf(:)
     character(CL)           :: cvalue
     character(CS)           :: starttype        ! config start type
     character(CL)           :: runtype          ! initial, continue, hybrid, branch
@@ -462,7 +481,13 @@ contains
     call FB_GetFldPtr(is_local%wrap%FBImp(compocn,compocn), 'So_t', ocnnst%tsfco, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     ! ocean netsw from prep_ocn_custom (nst must run after ocn_accum, which calls prep_ocn_custom)
-    call FB_GetFldPtr(is_local%wrap%FBExp(compocn), 'Foxx_swnet',  ocnnst%sfcnsw, rc=rc)
+    call FB_GetFldPtr(is_local%wrap%FBExp(compocn), 'Foxx_swnet_vdr',  swnet_vdr, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(is_local%wrap%FBExp(compocn), 'Foxx_swnet_vdf',  swnet_vdf, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(is_local%wrap%FBExp(compocn), 'Foxx_swnet_idr',  swnet_idr, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(is_local%wrap%FBExp(compocn), 'Foxx_swnet_idf',  swnet_idf, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     ! set pointers
     call set_ocnnst_pointers(is_local%wrap%FBImp(compatm,compocn), is_local%wrap%FBMed_ocnnst_o, &
@@ -472,24 +497,28 @@ contains
     call FB_GetFldPtr(FBnst, 'wind', wind, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     wind = sqrt(ocnnst%u1*ocnnst%u1 + ocnnst%v1*ocnnst%v1)
-    !call ESMF_FieldBundleGet(FBnst, field_name='flag_iter', field=lfield, rc=rc)
-    !if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    !call ESMF_FieldGet(lfield, farrayPtr=flag_iter, rc=rc)
-    !if (chkerr(rc,__LINE__,u_FILE_u)) return
-    !call ESMF_FieldBundleGet(FBnst, field_name='flag_guess', field=lfield, rc=rc)
-    !if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    !call ESMF_FieldGet(lfield, farrayPtr=flag_guess, rc=rc)
-    !if (chkerr(rc,__LINE__,u_FILE_u)) return
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call FB_GetFldPtr(FBnst, 'sfcnsw', sfcnsw, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    sfcnsw = swnet_vdr + swnet_vdf + swnet_idr + swnet_idf
+
+    call ESMF_FieldBundleGet(FBnst, fieldname='flag_iter', field=lfield, rc=rc)
+    call ESMF_FieldGet(lfield, farrayPtr=flag_iter, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_FieldBundleGet(FBnst, fieldname='flag_guess', field=lfield, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_FieldGet(lfield, farrayPtr=flag_guess, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
 
     ! NST
     do iter = 1,2
-
 
        ! loop_control_part1
        do i = 1,lsize
           if (ocnnst%mask(i) == 1) then
              if (iter == 1 .and. wind(i) < 2.0d0) then
-                flag_guess(i) = .true.
+                flag_guess(i) = 1
              end if
           end if
        end do
@@ -536,11 +565,11 @@ contains
        ! loop_control_part2
        do i = 1, lsize
           if (ocnnst%mask(i) == 0) then
-             flag_iter(i)  = .false.
-             flag_guess(i) = .false.
+             flag_iter(i)  = 0
+             flag_guess(i) = 0
           else
              if (iter == 1 .and. wind(i) < 2.0d0) then
-                flag_iter(i) = .true.
+                flag_iter(i) = 1
              endif
           endif
        end do
@@ -595,7 +624,7 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(fldbun_a, 'Sa_v' ,              ocnnst%v1,         rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Sa_qbot' ,           ocnnst%q1,         rc=rc)
+    call FB_GetFldPtr(fldbun_a, 'Sa_shum' ,           ocnnst%q1,         rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(fldbun_a, 'Sa_tbot' ,           ocnnst%t1,         rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -646,7 +675,7 @@ contains
 
     call FB_GetFldPtr(fldbun_m, 'Snst_tseal' ,       ocnnst%tseal,       rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_tsfc_wat' ,    ocnnst%tsfc_wat,    rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_tsfc_water' ,  ocnnst%tsfc_wat,    rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(fldbun_m, 'Snst_tsurf_water' , ocnnst%tsurf_wat,   rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
