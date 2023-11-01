@@ -167,8 +167,8 @@ contains
        end do
        deallocate(flds)
 
-       allocate(flds(4))
-       flds = (/'tseal      ', 'tsfc_water ', 'tsurf_water', 'dtzm       '/)
+       allocate(flds(5))
+       flds = (/'tseal      ', 'tsfc_water ', 'tsurf_water', 'dtzm       ', 'dtm        '/)
        do n = 1,size(flds)
           fldname = 'Snst_'//trim(flds(n))
           call addfld_ocnnst(fldname)

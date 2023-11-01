@@ -117,7 +117,7 @@ contains
     use ESMF  , only : ESMF_VM, ESMF_VMGet, ESMF_Mesh, ESMF_MeshGet
     use ESMF  , only : ESMF_GridComp, ESMF_GridCompGet, ESMF_MESHLOC_ELEMENT
     use ESMF  , only : ESMF_FieldBundleCreate, ESMF_FieldBundleAdd, ESMF_FieldBundleGet
-    use ESMF  , only : ESMF_FieldRegridGetArea
+    use ESMF  , only : ESMF_FieldRegridGetArea, ESMF_FieldBundleIsCreated
     use ESMF  , only : ESMF_Field, ESMF_FieldGet, ESMF_FieldCreate
     use ESMF  , only : ESMF_TYPEKIND_LOGICAL, ESMF_TYPEKIND_R8, ESMF_TYPEKIND_I4
     use NUOPC , only : NUOPC_CompAttributeGet
@@ -207,7 +207,6 @@ contains
        ocnnst%lats(n) = ownedElemCoords(2*n)
     end do
 
-
     ! ocean mask
     call FB_GetFldPtr(is_local%wrap%FBImp(compocn,compocn), 'So_omask', dataptr1d, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -246,6 +245,10 @@ contains
 
     FBnst = ESMF_FieldBundleCreate(name='FBnst', rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
+    !if(ESMF_FieldBundleIsCreated(fieldbundle=FBnst))write(msg,*)'FB FBnst created in init'
+    !if(.not.ESMF_FieldBundleIsCreated(fieldbundle=FBnst))write(msg,*)'FB FBnst NOT created in init'
+    !call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
+
     lfield = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_R8, name='wind', meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     call ESMF_FieldBundleAdd(FBnst, (/lfield/), rc=rc)
@@ -316,8 +319,7 @@ contains
     type(ESMF_VM)           :: vm
     type(ESMF_Field)        :: lfield
     integer                 :: iam
-    integer                 :: iter
-    logical                 :: update_nst
+    integer                 :: iter, day, jday
     type(InternalState)     :: is_local
     type(ESMF_Clock)        :: clock
     type(ESMF_Clock)        :: dclock
@@ -345,6 +347,10 @@ contains
     character(CL)           :: msg
     logical                 :: first_call = .true.
     character(len=*)  , parameter :: subname='(med_phases_ocnnst_run)'
+    ! debug
+    integer :: fieldcount
+    character(len=CL) :: fieldname
+    character(CL) ,pointer :: fieldnamelist(:)
     !---------------------------------------
 
     rc = ESMF_SUCCESS
@@ -360,6 +366,7 @@ contains
     call ESMF_GridCompGetInternalState(gcomp, is_local, rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
+    ! TODO: revisit this initialization
     ! Determine if ocnnst data type will be initialized - and if not return
     if (first_call) then
        if (ESMF_FieldBundleIsCreated(is_local%wrap%FBMed_ocnnst_o, rc=rc)) then
@@ -372,106 +379,46 @@ contains
        return
     end if
 
-    ! Note that in the mct version the atm was initialized first so
-    ! that nextsw_cday could be passed to the other components - this
-    ! assumed that atmosphere component was ALWAYS initialized first.
-    ! In the nuopc version it will be easier to assume that on startup
-    ! - nextsw_cday is just what cam was setting it as the current calendar day
+    if (first_call) then
+       ! Initialize ocean NST calculation
+       call med_phases_ocnnst_init(gcomp, ocnnst, rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       first_call = .false.
+    end if
 
     if (dbug_flag > 5) then
        call ESMF_LogWrite(trim(subname)//": called", ESMF_LOGMSG_INFO)
     endif
+    ! if(ESMF_FieldBundleIsCreated(fieldbundle=FBnst))write(msg,*)'FB FBnst created'
+    ! if(.not.ESMF_FieldBundleIsCreated(fieldbundle=FBnst))write(msg,*)'FB FBnst NOT created'
+    ! call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
+
+    ! call ESMF_FieldBundleGet(FBnst, fieldCount=fieldcount, rc=rc)
+    ! if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    ! write(msg,*)'field count = ',fieldcount
+    ! call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
+    ! allocate(fieldnamelist(fieldCount))
+    ! call ESMF_FieldBundleGet(FBnst, fieldNameList=fieldnamelist, rc=rc)
+    ! if (chkerr(rc,__LINE__,u_FILE_u)) return
 
     call t_startf('MED:'//subname)
 
-    ! get clock
+    ! get clock, current time and timestep
     call ESMF_GridCompGet(gcomp, clock=clock)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-
-    if (first_call) then
-
-       ! Initialize ocean NST calculation
-       call med_phases_ocnnst_init(gcomp, ocnnst, rc)
-       if (chkerr(rc,__LINE__,u_FILE_u)) return
-
-       call NUOPC_CompAttributeGet(gcomp, name='start_type', value=cvalue, rc=rc)
-       if (chkerr(rc,__LINE__,u_FILE_u)) return
-       read(cvalue,*) starttype
-
-       if (trim(starttype) == trim('startup')) then
-          runtype = "initial"
-       else if (trim(starttype) == trim('continue') ) then
-          runtype = "continue"
-       else if (trim(starttype) == trim('branch')) then
-          runtype = "continue"
-       else
-          call ESMF_LogWrite( subname//' ERROR: unknown starttype', ESMF_LOGMSG_INFO)
-          rc = ESMF_FAILURE
-          return
-       end if
-
-       call ESMF_ClockGet( clock, currTime=currTime, timeStep=timeStep, rc=rc)
-       if (chkerr(rc,__LINE__,u_FILE_u)) return
-
-    !    if (trim(runtype) == 'initial') then
-    !       call ESMF_TimeGet( currTime, dayOfYear_r8=nextsw_cday, rc=rc )
-    !       if (chkerr(rc,__LINE__,u_FILE_u)) return
-    !    else
-    !       ! obtain nextsw_cday from atm if it is in the import state
-    !       if (use_nextswcday) then
-    !          call State_GetScalar(&
-    !               state=is_local%wrap%NstateImp(compatm), &
-    !               flds_scalar_name=is_local%wrap%flds_scalar_name, &
-    !               flds_scalar_num=is_local%wrap%flds_scalar_num, &
-    !               scalar_id=is_local%wrap%flds_scalar_index_nextsw_cday, &
-    !               scalar_value=nextsw_cday, rc=rc)
-    !          if (chkerr(rc,__LINE__,u_FILE_u)) return
-    !       else
-    !          call ESMF_TimeGet( currTime, dayOfYear_r8=nextsw_cday, rc=rc )
-    !          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    !       end if
-    !    end if
-    !    first_call = .false.
-    ! else
-    !    ! Note that med_methods_State_GetScalar includes a broadcast to all other pets
-    !    if (use_nextswcday) then
-    !       call State_GetScalar(&
-    !            state=is_local%wrap%NstateImp(compatm), &
-    !            flds_scalar_name=is_local%wrap%flds_scalar_name, &
-    !            flds_scalar_num=is_local%wrap%flds_scalar_num, &
-    !            scalar_id=is_local%wrap%flds_scalar_index_nextsw_cday, &
-    !            scalar_value=nextsw_cday, rc=rc)
-    !       if (chkerr(rc,__LINE__,u_FILE_u)) return
-    !    else
-    !       call ESMF_ClockGetNextTime(clock, nextTime, rc=rc)
-    !       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    !       call ESMF_TimeGet(nextTime, dayOfYear_r8=nextsw_cday, rc=rc)
-    !       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    !    end if
-    ! end if
-
-       if (trim(runtype) == 'initial') then
-          call ESMF_TimeGet( currTime, dayOfYear_r8=nextsw_cday, rc=rc )
-          if (chkerr(rc,__LINE__,u_FILE_u)) return
-          first_call = .false.
-       else
-          call ESMF_ClockGetNextTime(clock, nextTime, rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          call ESMF_TimeGet(nextTime, dayOfYear_r8=nextsw_cday, rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       end if
-    end if
-
+    call ESMF_ClockGet( clock, currTime=currTime, timeStep=timeStep, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
     ! Clock is not advanced until the end of ModelAdvance
-    call ESMF_TimeGet( currTime, h_r8=solhr, rc=rc )
+    call ESMF_TimeGet( currTime, dd=day, h_r8=solhr, rc=rc )
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_TimeGet( currTime, dayOfYear=jday, rc=rc )
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
-    !write(msg,*)trim(subname)//' nextsw_cday = ',nextsw_cday
-    !call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
+    write(msg,*)trim(subname)//' jday = ',jday,' solhr = ',solhr
+    call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
     !
     ! Calculate ocean NST on the ocean grid
     !
-    update_nst = .false.
     lsize = size(ocnnst%mask)
 
     ! ice fraction on ocean
@@ -481,6 +428,7 @@ contains
     call FB_GetFldPtr(is_local%wrap%FBImp(compocn,compocn), 'So_t', ocnnst%tsfco, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     ! ocean netsw from prep_ocn_custom (nst must run after ocn_accum, which calls prep_ocn_custom)
+    ! maybe ocnnst should run from same place as prep_ocn_custom call
     call FB_GetFldPtr(is_local%wrap%FBExp(compocn), 'Foxx_swnet_vdr',  swnet_vdr, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(is_local%wrap%FBExp(compocn), 'Foxx_swnet_vdf',  swnet_vdf, rc=rc)
@@ -498,7 +446,6 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     wind = sqrt(ocnnst%u1*ocnnst%u1 + ocnnst%v1*ocnnst%v1)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
     call FB_GetFldPtr(FBnst, 'sfcnsw', sfcnsw, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     sfcnsw = swnet_vdr + swnet_vdf + swnet_idr + swnet_idf
@@ -513,6 +460,8 @@ contains
 
     ! NST
     do iter = 1,2
+    write(msg,*)trim(subname)//' julian day ',jday,' solhr = ',solhr,' iter = ',iter
+    call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
 
        ! loop_control_part1
        do i = 1,lsize
@@ -547,7 +496,6 @@ contains
        !      rlon = const_deg2rad * ocnnst%lons(n)
        !   end if
        !end do
-       !update_nst = .true.
 
        ! nst_post
        !zsea1 = 0.001_kp*real(nstf_name4)
@@ -574,6 +522,8 @@ contains
           endif
        end do
     end do
+    write(msg,*)trim(subname)//' done iter loop '
+    call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
 
     if (ESMF_FieldBundleIsCreated(is_local%wrap%FBMed_ocnnst_o, rc=rc)) then
        call NUOPC_MediatorGet(gcomp, driverClock=dClock, rc=rc)
