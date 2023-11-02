@@ -1,6 +1,4 @@
-.module med_phases_ocnnst_mod
-
-  use ESMF                  , only : ESMF_FieldBundle
+module med_phases_ocnnst_mod
 
   use med_kind_mod          , only : CX=>SHR_KIND_CX, CS=>SHR_KIND_CS, CL=>SHR_KIND_CL, R8=>SHR_KIND_R8, I4=>SHR_KIND_I4
   use med_internalstate_mod , only : InternalState, logunit
@@ -9,7 +7,7 @@
   use med_methods_mod       , only : FB_diagnose     => med_methods_FB_diagnose
   use med_methods_mod       , only : FB_getFldPtr    => med_methods_FB_getFldPtr
   use med_methods_mod       , only : State_GetScalar => med_methods_State_GetScalar
-  use med_internalstate_mod , only : mapconsf, mapnames, compatm, compocn, maintask
+  use med_internalstate_mod , only : mapconsf, mapnames, compatm, compocn, compice, maintask
   use perf_mod              , only : t_startf, t_stopf
 
   implicit none
@@ -49,9 +47,11 @@
      real(r8) , pointer :: dlwflx      (:) => null() ! total sky sfc downward lw flux (W/m2)
      real(r8) , pointer :: rain        (:) => null() ! rainfall rate (kg/m2/s)
      real(r8) , pointer :: evap        (:) => null() ! evap rate (!TODO)
-     real(r8) , pointer :: taux        (:) => null() ! zonal momentum stress (!TODO)
-     real(r8) , pointer :: tauy        (:) => null() ! merid momentum stress (!TODO)
+     !real(r8) , pointer :: taux        (:) => null() ! zonal momentum stress (!TODO)
+     !real(r8) , pointer :: tauy        (:) => null() ! merid momentum stress (!TODO)
      real(r8) , pointer :: sfcnsw      (:) => null() ! net SW down (calculated from bands)
+     real(r8) , pointer :: wind        (:) => null() ! wind magnitude, from Sa_u,Sa_v
+     real(r8) , pointer :: stress      (:) => null() ! stress magnitude, from Faxa_taux,Faxa_tauy
      ! input from ice
      real(r8) , pointer :: ifrac       (:) => null() ! sea ice fraction (nd); ofrac=1.0-ifrac
      ! input from ocean
@@ -93,7 +93,8 @@
                                                     ! when iter = 1, flag_iter = .true. for all grids
                                                     ! when iter = 2, flag_iter = .true. when wind < 2
                                                     ! for both land and ocean (when nstf_name1 > 0)
-
+  integer, parameter     :: kp = R8
+  real(R8), parameter    :: zero = 0.0_R8, one = 1.0_R8
   character(*),parameter :: u_FILE_u =  __FILE__
 
 !===============================================================================
@@ -111,9 +112,7 @@ contains
     use ESMF  , only : ESMF_LogWrite, ESMF_LOGMSG_INFO, ESMF_SUCCESS, ESMF_FAILURE
     use ESMF  , only : ESMF_VM, ESMF_VMGet, ESMF_Mesh, ESMF_MeshGet
     use ESMF  , only : ESMF_GridComp, ESMF_GridCompGet, ESMF_MESHLOC_ELEMENT
-    use ESMF  , only : ESMF_FieldBundleCreate, ESMF_FieldBundleAdd, ESMF_FieldBundleGet
-    use ESMF  , only : ESMF_FieldRegridGetArea, ESMF_FieldBundleIsCreated
-    use ESMF  , only : ESMF_Field, ESMF_FieldGet, ESMF_FieldCreate
+    use ESMF  , only : ESMF_Field, ESMF_FieldGet, ESMF_FieldCreate, ESMF_FieldBundleGet
     use ESMF  , only : ESMF_TYPEKIND_LOGICAL, ESMF_TYPEKIND_R8, ESMF_TYPEKIND_I4
     use NUOPC , only : NUOPC_CompAttributeGet
     use ESMF  , only : operator(==)
@@ -214,8 +213,8 @@ contains
        end if
     enddo
     ! initialize flags
-    allocate(flag_iter(1:size(dataptr1d))
-    allocate(flag_guess(1:size(dataptr1d))
+    allocate(flag_iter(1:size(dataptr1d)))
+    allocate(flag_guess(1:size(dataptr1d)))
     flag_iter(:) = .true.
     flag_guess(:) = .false.
 
@@ -275,7 +274,7 @@ contains
     real(R8)                :: rlat             ! gridcell latitude in radians
     real(R8)                :: rlon             ! gridcell longitude in radians
     real(R8), parameter     :: tgice = 271.20_R8  ! TODO? actually f(s)
-    real(R8), parameter     :: zero = 0.0_R8, one = 1.0_R8, omz1 = 2.0_R8
+    real(R8), parameter     :: omz1 = 2.0_R8
     character(CL)           :: msg
     logical                 :: first_call = .true.
     character(len=*)  , parameter :: subname='(med_phases_ocnnst_run)'
@@ -321,7 +320,7 @@ contains
     if (dbug_flag > 5) then
        call ESMF_LogWrite(trim(subname)//": called", ESMF_LOGMSG_INFO)
     endif
-    t_startf('MED:'//subname)
+    call t_startf('MED:'//subname)
 
     ! get clock, current time and timestep
     call ESMF_GridCompGet(gcomp, clock=clock)
@@ -359,7 +358,7 @@ contains
        ! loop_control_part1
        do i = 1,lsize
           if (ocnnst%mask(i) == 1) then
-             if (iter == 1 .and. wind(i) < 2.0d0) then
+             if (iter == 1 .and. ocnnst%wind(i) < 2.0d0) then
                 flag_guess(i) = .true.
              end if
           end if
@@ -388,11 +387,11 @@ contains
        zsea1 = 0.0_r8
        zsea2 = 0.0_r8
        call sfc_nst_run(lsize, mask=ocnnst%mask, flag_iter=flag_iter, flag_guess=flag_guess,              &
-            zsea1=zsea1, zsea2=zsea2, xlon=ocnnst%lons, solhr=solhr, t1=ocnnst%t1, prsl=ocnnst%prsl,      &
-            q1=ocnnst%q1, evap=ocnnst%evap, nswsfc=ocnnst%sfcnsw, stress=ocnnst%stress, wind=ocnnst%wind, &
+            zsea1=zsea1, zsea2=zsea2, xlon=ocnnst%lons, solhr=solhr, t1=ocnnst%t1, prsl1=ocnnst%prsl,     &
+            q1=ocnnst%q1, evap=ocnnst%evap, sfcnsw=ocnnst%sfcnsw, stress=ocnnst%stress, wind=ocnnst%wind, &
             tskin=ocnnst%tseal, tsurf=ocnnst%tsurf_wat, xt=ocnnst%xt, xs=ocnnst%xs, xu=ocnnst%xu,         &
-            xv=ocnnst%xv, xz=ocnnst%xz, xtts=ocnnst%xtts, xzts=ocnnst%xzts, dt_cool=ocnnst%dtcool,        &
-            z_c=ocnnst%zc, c_0=ocnnst%c0, c_d=ocnnst%cd, w_0=ocnnst%w0, w_d=ocnnst%xd, d_conv=ocnnst%dconv)
+            xv=ocnnst%xv, xz=ocnnst%xz, xtts=ocnnst%xtts, xzts=ocnnst%xzts, dt_cool=ocnnst%dt_cool,       &
+            z_c=ocnnst%zc, c_0=ocnnst%c_0, c_d=ocnnst%c_d, w_0=ocnnst%w_0, w_d=ocnnst%w_d, d_conv=ocnnst%d_conv)
 
        ! nst_post
        do i = 1,lsize
@@ -405,10 +404,10 @@ contains
        ! loop_control_part2
        do i = 1, lsize
           if (ocnnst%mask(i) == 0) then
-             flag_iter(i)  = .false
+             flag_iter(i)  = .false.
              flag_guess(i) = .false.
           else
-             if (iter == 1 .and. wind(i) < 2.0d0) then
+             if (iter == 1 .and. ocnnst%wind(i) < 2.0d0) then
                 flag_iter(i) = .true.
              endif
           endif
@@ -438,7 +437,7 @@ contains
 
 !===============================================================================
 
-  subroutine set_ocnnst_pointers(fldbun_a, fldbun_o, fldbund_alb, fldbun_m, lsize, ocnnst, rc)
+  subroutine set_ocnnst_pointers(fldbun_a, fldbun_o, fldbun_alb, fldbun_m, lsize, ocnnst, rc)
 
     use ESMF  , only : ESMF_FieldBundle, ESMF_SUCCESS
 
@@ -473,7 +472,8 @@ contains
     real(R8), pointer   :: Fioi_swpen_idr(:)
     real(R8), pointer   :: Fioi_swpen_idf(:)
 
-    real(R8)            :: fswabsv, fswbsi, fswpen
+    real(R8) :: fswabsv, fswabsi, fswpen
+    integer  :: n
 
     !-----------------------------------------------------------------------
 
@@ -496,22 +496,18 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(fldbun_a, 'Faxa_lwdn' , ocnnst%dlwflx, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Faxa_taux' , ocnnst%taux,   rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Faxa_tauy' , ocnnst%tauy,   rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !---------------------------------------
     ! Compute |stress| and |wind| for ocean
     !---------------------------------------
 
-    call FB_GetFldPtr(fldbun_a, 'Sa_u' , Sa_u1, rc=rc)
+    call FB_GetFldPtr(fldbun_a, 'Sa_u' , Sa_u, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Sa_v' , Sa_v1, rc=rc)
+    call FB_GetFldPtr(fldbun_a, 'Sa_v' , Sa_v, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ocnnst%wind = 0.0_R8
-    ocnnst%wind = sqrt(Sa_u1*Sa_u1 + Sa_v1*Sa_v1)
+    ocnnst%wind = sqrt(Sa_u*Sa_u + Sa_v*Sa_v)
 
     call FB_GetFldPtr(fldbun_a, 'Faxa_taux' , Faxa_taux, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -615,18 +611,17 @@ contains
 !       nswsfc=ocnnst%sfcnsw, stress=ocnnst%stress, wind=ocnnst%wind, tskin=ocnnst%tseal,             &
 !       tsurf=ocnnst%tsurf_wat, xt=ocnnst%xt, xs=ocnnst%xs, xu=ocnnst%xu, xv=ocnnst%xv, xz=ocnnst%xz, &
 !       xtts=ocnnst%xtts, xzts=ocnnst%xzts, dt_cool=ocnnst%dtcool, z_c=ocnnst%zc, c_0=ocnnst%c0,      &
-!       c_d=ocnnst%cd, w_0=ocnnst%w0, w_d=ocnnst%xd, d_conv=ocnnst%dconv)
+!       c_d=ocnnst%cd, w_0=ocnnst%w0, x_d=ocnnst%xd, d_conv=ocnnst%dconv)
 
   !TODO: add SSS
-  subroutine sfc_nst_run(im, mask, flag_iter, flag_guess, zsea1, zsea2, xlon, solhr, t1, prsl, &
-       q1, evap, nswsfc, stress, wind, tskin, tsurf, xt, xs, xu, xv, xz, xtts, xzts, dt_cool,  &
+  subroutine sfc_nst_run(im, mask, flag_iter, flag_guess, zsea1, zsea2, xlon, solhr, t1, prsl1,    &
+       q1, evap, sfcnsw, stress, wind, tskin, tsurf, xt, xs, xu, xv, xz, xtts, xzts, dt_cool,      &
        z_c, c_0, c_d, w_0, w_d, d_conv)
 
-    use module_nst_water_prop, only: get_dtzm_point
-    use module_nst_parameters, only : t0k,cp_w,omg_m,omg_sh, sigma_r,solar_time_6am,ri_c,      &
-         z_w_max,delz,wd_max, rad2deg,const_rot,tau_min,tw_max,sst_max
-    use module_nst_water_prop, only: solar_time_from_julian, density,rhocoef,compjd,grv, sw_ps_9b
-    use nst_module, only : cool_skin,dtm_1p,cal_w,cal_ttop, convdepth,dtm_1p_fca,dtm_1p_tla,   &
+    use module_nst_water_prop, only: get_dtzm_point, density, rhocoef, sw_ps_9b, sw_ps_9b_aw
+    use module_nst_parameters, only : t0k,cp_w,omg_m,omg_sh, sigma_r,solar_time_6am,ri_c,          &
+         z_w_max,delz,wd_max, rad2deg,const_rot,tau_min,tw_max,sst_max,rvrdm1,rd,cp_a
+    use nst_module, only : cool_skin,dtm_1p,cal_w,cal_ttop, convdepth,dtm_1p_fca,dtm_1p_tla,       &
          dtm_1p_mwa,dtm_1p_mda,dtm_1p_mta, dtl_reset
 
     integer, intent(in) :: im
@@ -636,9 +631,11 @@ contains
 
     real (R8), intent(in) :: zsea1, zsea2, solhr
     real (R8), intent(in) :: xlon(:)
+    real (R8), intent(in) :: t1(:)
     real (R8), intent(in) :: q1(:)
+    real (R8), intent(in) :: prsl1(:)
     real (R8), intent(in) :: evap(:)
-    real (R8), intent(in) :: nswsfc(:)
+    real (R8), intent(in) :: sfcnsw(:)
     real (R8), intent(in) :: stress(:)
     real (R8), intent(in) :: wind(:)
 
@@ -649,20 +646,33 @@ contains
     real (R8), intent(inout) :: z_c(:) , c_0(:) , c_d(:)
     real (R8), intent(inout) :: w_0(:) , w_d(:)
 
-    integer, parameter :: kp = R8
     ! local variables
+    integer :: i, kdt
+    ! TODO
+    real (R8) :: timestep
     logical :: flag(im)
+    real (R8) :: tsea, t12, alon, soltim, sss, alpha, le, dwat, dtmp, wetc, alfac, tem
+    real (R8) :: f_nsol, sep, ustar_a, rnl_ts, hs_ts, sbc, rho_w, cp, grav, alpha, beta
+    real (R8) :: fw, fc, taux, tauy, q_ts, sina, cosa
     real (R8), dimension(im) :: xt_old, xs_old, xu_old, xv_old, xz_old, zm_old, xtts_old
     real (R8), dimension(im) :: xzts_old, ifd_old, tref_old, tskin_old, dt_cool_old, z_c_old
-    real (R8), dimension(im) :: ulwflx, nswsfc, q0, tv1, rho_a
+    real (R8), dimension(im) :: wndmag, ulwflx, nswsfc, q0, tv1, rho_a, sfcemis, sinlat, hflx
+    real (R8), dimension(im) :: qss, rch
 
     !TODO: do what with this?
     real (R8), dimension(im) :: qrain
 
+    kdt = 1 ! only used for prints
+    timestep = 1.0_R8 ! only used for prints
+    cp = cp_a
+    sss = 34.0_R8
+    sbc = sigma_r
+    sfcemis = 0.97_R8
+    sinlat = sin(xlon)
 !
 ! flag for open water and where the iteration is on
 !
-      flag(i) = .false
+      flag(i) = .false.
       do i = 1,im
          flag(i) = (mask(i) == 1 .and. flag_iter(i))
       end do
@@ -679,7 +689,7 @@ contains
           !zm_old(i)      = zm(i)
           xtts_old(i)    = xtts(i)
           xzts_old(i)    = xzts(i)
-          ifd_old(i)     = ifd(i)
+          !ifd_old(i)     = ifd(i)
           tskin_old(i)   = tskin(i)
           dt_cool_old(i) = dt_cool(i)
           z_c_old(i)     = z_c(i)
@@ -696,6 +706,7 @@ contains
            q0(i)     = max(q1(i), 1.0e-8_kp)
            tv1(i)    = t1(i) * (one + rvrdm1*q0(i))
            rho_a(i)  = prsl1(i) / (rd*tv1(i))
+           rch(i)    = rho_a(i) * cp * ch(i) * wind(i)
         end if
      end do
      !
