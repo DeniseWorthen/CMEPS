@@ -1,4 +1,4 @@
-module med_phases_ocnnst_mod
+.module med_phases_ocnnst_mod
 
   use ESMF                  , only : ESMF_FieldBundle
 
@@ -11,7 +11,6 @@ module med_phases_ocnnst_mod
   use med_methods_mod       , only : State_GetScalar => med_methods_State_GetScalar
   use med_internalstate_mod , only : mapconsf, mapnames, compatm, compocn, maintask
   use perf_mod              , only : t_startf, t_stopf
-  use module_nst_water_prop , only : get_dtzm_point
 
   implicit none
   private
@@ -36,28 +35,35 @@ module med_phases_ocnnst_mod
   type ocnnst_type
      real(r8) , pointer :: lats        (:) => null() ! latitudes  (degrees)
      real(r8) , pointer :: lons        (:) => null() ! longitudes (degrees)
-     real(r8) , pointer :: area        (:) => null() ! area (m2)
+     !real(r8) , pointer :: area        (:) => null() ! area (m2)
      integer  , pointer :: mask        (:) => null() ! ocn domain mask: 0 <=> inactive cell
-     !inputs
-     real(r8) , pointer :: ifrac       (:) => null() ! sea ice fraction (nd); ofrac=1.0-ifrac
-     real(r8) , pointer :: tsfco       (:) => null() ! sea surface temperature (K)
-     real(r8) , pointer :: ps          (:) => null() ! surface pressure (Pa)
-     real(r8) , pointer :: u1          (:) => null() ! zonal component of surface layer wind (m/s)
-     real(r8) , pointer :: v1          (:) => null() ! merid component of surface layer wind (m/s)
+     !inputs from atm
+     real(r8) , pointer :: prsl          (:) => null() ! surface pressure (Pa)
+     !real(r8) , pointer :: u1          (:) => null() ! zonal component of surface layer wind (m/s)
+     !real(r8) , pointer :: v1          (:) => null() ! merid component of surface layer wind (m/s)
      real(r8) , pointer :: t1          (:) => null() ! surface layer mean temperature (K)
      real(r8) , pointer :: q1          (:) => null() ! surface layer mean spec humidity (kg/kg)
-     real(r8) , pointer :: z1          (:) => null() ! layer 1 height above ground (not MSL) (m)
-     real(r8) , pointer :: u10m        (:) => null() ! zonal component of 10m wind (m/s)
-     real(r8) , pointer :: v10m        (:) => null() ! merid component of 10m wind (m/s)
+     !real(r8) , pointer :: z1          (:) => null() ! layer 1 height above ground (not MSL) (m)
+     !real(r8) , pointer :: u10m        (:) => null() ! zonal component of 10m wind (m/s)
+     !real(r8) , pointer :: v10m        (:) => null() ! merid component of 10m wind (m/s)
      real(r8) , pointer :: dlwflx      (:) => null() ! total sky sfc downward lw flux (W/m2)
      real(r8) , pointer :: rain        (:) => null() ! rainfall rate (kg/m2/s)
-     ! ?
+     real(r8) , pointer :: evap        (:) => null() ! evap rate (!TODO)
+     real(r8) , pointer :: taux        (:) => null() ! zonal momentum stress (!TODO)
+     real(r8) , pointer :: tauy        (:) => null() ! merid momentum stress (!TODO)
+     real(r8) , pointer :: sfcnsw      (:) => null() ! net SW down (calculated from bands)
+     ! input from ice
+     real(r8) , pointer :: ifrac       (:) => null() ! sea ice fraction (nd); ofrac=1.0-ifrac
+     ! input from ocean
+     real(r8) , pointer :: tsfco       (:) => null() ! sea surface temperature (K)
+
+     ! nst variables
      real(r8) , pointer :: tseal       (:) => null() ! ocean surface skin temperature (K)
      real(r8) , pointer :: tsfc_wat    (:) => null() ! surface skin temperature over water (K)
      real(r8) , pointer :: tsurf_wat   (:) => null() ! surface skin temperature after iteration over water (K)
      real(r8) , pointer :: dtzm        (:) => null() ! mean of dT(z)  (z1 to z2) (?)
      real(r8) , pointer :: dtm         (:) => null() ! ?
-     ! in sfcf file
+     ! in sfcf file, need mapping back to atm
      real(r8) , pointer :: c_0         (:) => null() ! coefficient1 to calculate d(tz)/d(ts) (nd)
      real(r8) , pointer :: c_d         (:) => null() ! coefficient2 to calculate d(tz)/d(ts) (nd)
      real(r8) , pointer :: d_conv      (:) => null() ! thickness of free convection layer (m)
@@ -76,30 +82,19 @@ module med_phases_ocnnst_mod
      real(r8) , pointer :: xz          (:) => null() ! diurnal thermocline layer thickness (m)
      real(r8) , pointer :: xzts        (:) => null() ! d(xz)/d(ts) (m K-1)
      real(r8) , pointer :: zc          (:) => null() ! sub-layer cooling thickness (m)
-     logical            :: created   ! has memory been allocated here
+     logical            :: created                   ! has memory been allocated here
   end type ocnnst_type
 
-  ! local
-  type(ESMF_FieldBundle) :: FBnst
-  real(r8) , pointer     :: wind        (:) => null() ! wind speed (m/s)
-  real(r8) , pointer     :: sfcnsw      (:) => null() ! total sfc netsw flx into ocean (W/m2)
-  ! logical  , pointer     :: flag_guess  (:) => null() ! .true.=  guess step to get CD et al
-  !                                                     ! when iter = 1, flag_guess = .true. when wind < 2
-  !                                                     ! when iter = 2, flag_guess = .false. for all grids
-  ! logical  , pointer     :: flag_iter   (:) => null() ! execution or not
-  !                                                     ! when iter = 1, flag_iter = .true. for all grids
-  !                                                     ! when iter = 2, flag_iter = .true. when wind < 2
-  !                                                     ! for both land and ocean (when nstf_name1 > 0)
-  integer(i4) , pointer :: flag_guess (:) => null() ! 1 = true, 0 = false
-  integer(i4) , pointer :: flag_iter  (:) => null() ! 1 = true, 0 = false
+  ! used, reused in module
+  logical , allocatable, save :: flag_guess  (:)    ! .true.=  guess step to get CD et al
+                                                    ! when iter = 1, flag_guess = .true. when wind < 2
+                                                    ! when iter = 2, flag_guess = .false. for all grids
+  logical , allocatable, save :: flag_iter   (:)    ! execution or not
+                                                    ! when iter = 1, flag_iter = .true. for all grids
+                                                    ! when iter = 2, flag_iter = .true. when wind < 2
+                                                    ! for both land and ocean (when nstf_name1 > 0)
 
   character(*),parameter :: u_FILE_u =  __FILE__
-
-  !--- potential temperature definition in surface layer physics
-  logical              :: thsfc_loc      = .true.     !< flag for local vs. standard potential temperature
-
-  ! used, reused in module
-  !logical  :: use_nextswcday  ! use the scalar field for next time (otherwise, will be set using clock)
 
 !===============================================================================
 contains
@@ -218,69 +213,11 @@ contains
           ocnnst%mask(n) = 1
        end if
     enddo
-
-    ! ocean grid ara
-    allocate(ocnnst%area(numOwnedElements))
-    call ESMF_FieldBundleGet(is_local%wrap%FBImp(compocn,compocn), fieldname='So_omask', field=lfield, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldRegridGetArea(lfield, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldGet(lfield, farrayPtr=dataptr1d, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    ocnnst%area(:) = dataptr1d(:)
-
-    ! Allow setting of NST timestep using the clock instead of the atm's next timestep
-    ! use_nextswcday = .true.
-    ! call NUOPC_CompAttributeGet(gcomp, name="ScalarFieldIdxNextSwCday", isPresent=isPresent, rc=rc)
-    ! if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    ! if (.not. isPresent ) then
-    !    use_nextswcday = .false.
-    ! endif
-    ! write(msg,'(A,l)') trim(subname)//': use_nextswcday setting is ',use_nextswcday
-    ! call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
-
-    !----------------------------------
-    ! local FB needed for NST calculation
-    !----------------------------------
-
-    FBnst = ESMF_FieldBundleCreate(name='FBnst', rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    !if(ESMF_FieldBundleIsCreated(fieldbundle=FBnst))write(msg,*)'FB FBnst created in init'
-    !if(.not.ESMF_FieldBundleIsCreated(fieldbundle=FBnst))write(msg,*)'FB FBnst NOT created in init'
-    !call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
-
-    lfield = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_R8, name='wind', meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldBundleAdd(FBnst, (/lfield/), rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldGet(lfield, farrayPtr=dataptr1d, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    dataptr1d = 0.0
-
-    lfield = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_R8, name='sfcnsw', meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldBundleAdd(FBnst, (/lfield/), rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldGet(lfield, farrayPtr=dataptr1d, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    dataptr1d = 0.0
-
-    lfield = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_I4, name='flag_iter', meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldBundleAdd(FBnst, (/lfield/), rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldGet(lfield, farrayPtr=intptr1d, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    intptr1d = 1
-    where (ocnnst%mask == 0) intptr1d = 0
-
-    lfield = ESMF_FieldCreate(lmesh, ESMF_TYPEKIND_I4, name='flag_guess', meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldBundleAdd(FBnst, (/lfield/), rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldGet(lfield, farrayPtr=intptr1d, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    intptr1d = 0
+    ! initialize flags
+    allocate(flag_iter(1:size(dataptr1d))
+    allocate(flag_guess(1:size(dataptr1d))
+    flag_iter(:) = .true.
+    flag_guess(:) = .false.
 
     if (dbug_flag > 5) then
       call ESMF_LogWrite(trim(subname)//": done", ESMF_LOGMSG_INFO)
@@ -308,8 +245,8 @@ contains
     use ESMF          , only : ESMF_FieldBundleGet, ESMF_FieldBundleIsCreated
     use ESMF          , only : operator(+)
     use NUOPC         , only : NUOPC_CompAttributeGet
-    use med_constants_mod , only : shr_const_pi
     use med_phases_history_mod, only : med_phases_history_write_med
+    use module_nst_water_prop , only : get_dtzm_point
 
     ! input/output variables
     type(ESMF_GridComp)  :: gcomp
@@ -326,10 +263,6 @@ contains
     type(ESMF_Time)         :: currTime
     type(ESMF_Time)         :: nextTime
     type(ESMF_TimeInterval) :: timeStep
-    real(R8), pointer       :: swnet_vdr(:)
-    real(R8), pointer       :: swnet_vdf(:)
-    real(R8), pointer       :: swnet_idr(:)
-    real(R8), pointer       :: swnet_idf(:)
     character(CL)           :: cvalue
     character(CS)           :: starttype        ! config start type
     character(CL)           :: runtype          ! initial, continue, hybrid, branch
@@ -341,7 +274,6 @@ contains
     integer                 :: i                ! indices
     real(R8)                :: rlat             ! gridcell latitude in radians
     real(R8)                :: rlon             ! gridcell longitude in radians
-    real(R8), parameter     :: const_deg2rad = shr_const_pi/180.0_R8  ! deg to rads
     real(R8), parameter     :: tgice = 271.20_R8  ! TODO? actually f(s)
     real(R8), parameter     :: zero = 0.0_R8, one = 1.0_R8, omz1 = 2.0_R8
     character(CL)           :: msg
@@ -389,19 +321,7 @@ contains
     if (dbug_flag > 5) then
        call ESMF_LogWrite(trim(subname)//": called", ESMF_LOGMSG_INFO)
     endif
-    ! if(ESMF_FieldBundleIsCreated(fieldbundle=FBnst))write(msg,*)'FB FBnst created'
-    ! if(.not.ESMF_FieldBundleIsCreated(fieldbundle=FBnst))write(msg,*)'FB FBnst NOT created'
-    ! call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
-
-    ! call ESMF_FieldBundleGet(FBnst, fieldCount=fieldcount, rc=rc)
-    ! if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    ! write(msg,*)'field count = ',fieldcount
-    ! call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
-    ! allocate(fieldnamelist(fieldCount))
-    ! call ESMF_FieldBundleGet(FBnst, fieldNameList=fieldnamelist, rc=rc)
-    ! if (chkerr(rc,__LINE__,u_FILE_u)) return
-
-    call t_startf('MED:'//subname)
+    t_startf('MED:'//subname)
 
     ! get clock, current time and timestep
     call ESMF_GridCompGet(gcomp, clock=clock)
@@ -420,42 +340,15 @@ contains
     ! Calculate ocean NST on the ocean grid
     !
     lsize = size(ocnnst%mask)
-
-    ! ice fraction on ocean
-    call FB_GetFldPtr(is_local%wrap%FBfrac(compocn), 'ifrac', ocnnst%ifrac, rc=rc)
+    ! ice fraction
+    call FB_GetFldPtr(is_local%wrap%FBImp(compice,compocn), 'ifrac', ocnnst%ifrac, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     ! ocean surface temperature from ocean
-    call FB_GetFldPtr(is_local%wrap%FBImp(compocn,compocn), 'So_t', ocnnst%tsfco, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    ! ocean netsw from prep_ocn_custom (nst must run after ocn_accum, which calls prep_ocn_custom)
-    ! maybe ocnnst should run from same place as prep_ocn_custom call
-    call FB_GetFldPtr(is_local%wrap%FBExp(compocn), 'Foxx_swnet_vdr',  swnet_vdr, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(is_local%wrap%FBExp(compocn), 'Foxx_swnet_vdf',  swnet_vdf, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(is_local%wrap%FBExp(compocn), 'Foxx_swnet_idr',  swnet_idr, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(is_local%wrap%FBExp(compocn), 'Foxx_swnet_idf',  swnet_idf, rc=rc)
+    call FB_GetFldPtr(is_local%wrap%FBImp(compocn,compocn),  'So_t', ocnnst%tsfco, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     ! set pointers
-    call set_ocnnst_pointers(is_local%wrap%FBImp(compatm,compocn), is_local%wrap%FBMed_ocnnst_o, &
-         ocnnst, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-
-    call FB_GetFldPtr(FBnst, 'wind', wind, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    wind = sqrt(ocnnst%u1*ocnnst%u1 + ocnnst%v1*ocnnst%v1)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(FBnst, 'sfcnsw', sfcnsw, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    sfcnsw = swnet_vdr + swnet_vdf + swnet_idr + swnet_idf
-
-    call ESMF_FieldBundleGet(FBnst, fieldname='flag_iter', field=lfield, rc=rc)
-    call ESMF_FieldGet(lfield, farrayPtr=flag_iter, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldBundleGet(FBnst, fieldname='flag_guess', field=lfield, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldGet(lfield, farrayPtr=flag_guess, rc=rc)
+    call set_ocnnst_pointers(is_local%wrap%FBImp(compatm,compocn), is_local%wrap%FBImp(compice,compocn), &
+         is_local%wrap%FBMed_ocnalb_o, is_local%wrap%FBMed_ocnnst_o, lsize, ocnnst, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
     ! NST
@@ -467,7 +360,7 @@ contains
        do i = 1,lsize
           if (ocnnst%mask(i) == 1) then
              if (iter == 1 .and. wind(i) < 2.0d0) then
-                flag_guess(i) = 1
+                flag_guess(i) = .true.
              end if
           end if
        end do
@@ -489,20 +382,19 @@ contains
        enddo
 
        ! nst_run
-       ! Compute NST
-       !do n = 1,lsize
-       !   if (ocnnst%mask(n) == 1) then
-       !      rlat = const_deg2rad * ocnnst%lats(n)
-       !      rlon = const_deg2rad * ocnnst%lons(n)
-       !   end if
-       !end do
-
-       ! nst_post
        !zsea1 = 0.001_kp*real(nstf_name4)
        !zsea2 = 0.001_kp*real(nstf_name5)
        ! nstf_name4,5 are both 0 right now
        zsea1 = 0.0_r8
        zsea2 = 0.0_r8
+       call sfc_nst_run(lsize, mask=ocnnst%mask, flag_iter=flag_iter, flag_guess=flag_guess,              &
+            zsea1=zsea1, zsea2=zsea2, xlon=ocnnst%lons, solhr=solhr, t1=ocnnst%t1, prsl=ocnnst%prsl,      &
+            q1=ocnnst%q1, evap=ocnnst%evap, nswsfc=ocnnst%sfcnsw, stress=ocnnst%stress, wind=ocnnst%wind, &
+            tskin=ocnnst%tseal, tsurf=ocnnst%tsurf_wat, xt=ocnnst%xt, xs=ocnnst%xs, xu=ocnnst%xu,         &
+            xv=ocnnst%xv, xz=ocnnst%xz, xtts=ocnnst%xtts, xzts=ocnnst%xzts, dt_cool=ocnnst%dtcool,        &
+            z_c=ocnnst%zc, c_0=ocnnst%c0, c_d=ocnnst%cd, w_0=ocnnst%w0, w_d=ocnnst%xd, d_conv=ocnnst%dconv)
+
+       ! nst_post
        do i = 1,lsize
           if (ocnnst%mask(i) == 1) then
              call get_dtzm_point(ocnnst%xt(i), ocnnst%xz(i), ocnnst%dt_cool(i), ocnnst%zc(i), zsea1, zsea2, ocnnst%dtzm(i))
@@ -513,11 +405,11 @@ contains
        ! loop_control_part2
        do i = 1, lsize
           if (ocnnst%mask(i) == 0) then
-             flag_iter(i)  = 0
-             flag_guess(i) = 0
+             flag_iter(i)  = .false
+             flag_guess(i) = .false.
           else
              if (iter == 1 .and. wind(i) < 2.0d0) then
-                flag_iter(i) = 1
+                flag_iter(i) = .true.
              endif
           endif
        end do
@@ -546,7 +438,7 @@ contains
 
 !===============================================================================
 
-  subroutine set_ocnnst_pointers(fldbun_a, fldbun_m, ocnnst, rc)
+  subroutine set_ocnnst_pointers(fldbun_a, fldbun_o, fldbund_alb, fldbun_m, lsize, ocnnst, rc)
 
     use ESMF  , only : ESMF_FieldBundle, ESMF_SUCCESS
 
@@ -556,9 +448,33 @@ contains
 
     ! input/output variables
     type(ESMF_FieldBundle)     , intent(inout) :: fldbun_a
+    type(ESMF_FieldBundle)     , intent(inout) :: fldbun_o
+    type(ESMF_FieldBundle)     , intent(inout) :: fldbun_alb
     type(ESMF_FieldBundle)     , intent(inout) :: fldbun_m
+    integer                    , intent(in)    :: lsize
     type(ocnnst_type)          , intent(inout) :: ocnnst
     integer                    , intent(out)   :: rc
+
+    ! local variables
+    real(R8), pointer   :: Faxa_taux(:)
+    real(R8), pointer   :: Faxa_tauy(:)
+    real(R8), pointer   :: Sa_u(:)
+    real(R8), pointer   :: Sa_v(:)
+    real(R8), pointer   :: avsdr(:)
+    real(R8), pointer   :: avsdf(:)
+    real(R8), pointer   :: anidr(:)
+    real(R8), pointer   :: anidf(:)
+    real(R8), pointer   :: Faxa_swvdf(:)
+    real(R8), pointer   :: Faxa_swndf(:)
+    real(R8), pointer   :: Faxa_swvdr(:)
+    real(R8), pointer   :: Faxa_swndr(:)
+    real(R8), pointer   :: Fioi_swpen_vdr(:)
+    real(R8), pointer   :: Fioi_swpen_vdf(:)
+    real(R8), pointer   :: Fioi_swpen_idr(:)
+    real(R8), pointer   :: Fioi_swpen_idf(:)
+
+    real(R8)            :: fswabsv, fswbsi, fswpen
+
     !-----------------------------------------------------------------------
 
     rc = ESMF_SUCCESS
@@ -567,245 +483,446 @@ contains
     ! Set pointers to fields needed for NST calculations
     !----------------------------------
 
-    ! Import from atm, 'inst, height_lowest fields'
-    call FB_GetFldPtr(fldbun_a, 'Sa_pbot' ,           ocnnst%ps,         rc=rc)
+    ! Import from atm
+    call FB_GetFldPtr(fldbun_a, 'Sa_pbot' ,   ocnnst%prsl,   rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Sa_u' ,              ocnnst%u1,         rc=rc)
+    call FB_GetFldPtr(fldbun_a, 'Sa_shum' ,   ocnnst%q1,     rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Sa_v' ,              ocnnst%v1,         rc=rc)
+    call FB_GetFldPtr(fldbun_a, 'Sa_tbot' ,   ocnnst%t1,     rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Sa_shum' ,           ocnnst%q1,         rc=rc)
+    call FB_GetFldPtr(fldbun_a, 'Faxa_evap' , ocnnst%evap,   rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Sa_tbot' ,           ocnnst%t1,         rc=rc)
+    call FB_GetFldPtr(fldbun_a, 'Faxa_rain' , ocnnst%rain,   rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Sa_z' ,              ocnnst%z1,         rc=rc)
+    call FB_GetFldPtr(fldbun_a, 'Faxa_lwdn' , ocnnst%dlwflx, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Sa_u10m' ,           ocnnst%u10m,       rc=rc)
+    call FB_GetFldPtr(fldbun_a, 'Faxa_taux' , ocnnst%taux,   rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Sa_v10m' ,           ocnnst%v10m,       rc=rc)
+    call FB_GetFldPtr(fldbun_a, 'Faxa_tauy' , ocnnst%tauy,   rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Faxa_rain' ,         ocnnst%rain,       rc=rc)
+
+    !---------------------------------------
+    ! Compute |stress| and |wind| for ocean
+    !---------------------------------------
+
+    call FB_GetFldPtr(fldbun_a, 'Sa_u' , Sa_u1, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Faxa_lwdn' ,         ocnnst%dlwflx,     rc=rc)
+    call FB_GetFldPtr(fldbun_a, 'Sa_v' , Sa_v1, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ocnnst%wind = 0.0_R8
+    ocnnst%wind = sqrt(Sa_u1*Sa_u1 + Sa_v1*Sa_v1)
+
+    call FB_GetFldPtr(fldbun_a, 'Faxa_taux' , Faxa_taux, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Faxa_tauy' , Faxa_tauy, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ocnnst%stress = 0.0_R8
+    ocnnst%stress = sqrt(Faxa_taux*Faxa_taux + Faxa_tauy*Faxa_tauy)
+
+    !---------------------------------------
+    ! Compute netsw for ocean
+    !---------------------------------------
+    ! netsw_for_ocn = downsw_from_atm * (1-ocn_albedo) * (1-ice_fraction) + pensw_from_ice * (ice_fraction)
+
+    ! Input from atm
+    call FB_GetFldPtr(fldbun_a, 'Faxa_swvdr', Faxa_swvdr, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Faxa_swndr', Faxa_swndr, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Faxa_swvdf', Faxa_swvdf, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Faxa_swndf', Faxa_swndf, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    ! Input from mediator, ocean albedos
+    call FB_GetFldPtr(fldbun_alb, 'So_avsdr' , avsdr, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_alb, 'So_anidr' , anidr, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_alb, 'So_avsdf' , avsdf, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_alb, 'So_anidf' , anidf, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    ! Input from ice, sw pen through ice
+    call FB_GetFldPtr(fldbun_o, 'Fioi_swpen_vdr', Fioi_swpen_vdr, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_o, 'Fioi_swpen_vdf', Fioi_swpen_vdf, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_o, 'Fioi_swpen_idr', Fioi_swpen_idr, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_o, 'Fioi_swpen_idf', Fioi_swpen_idf, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ocnnst%sfcnsw = 0.0_R8
+    do n = 1,lsize
+       ! Compute total swnet to ocean
+       fswpen   = Fioi_swpen_vdr(n) + Fioi_swpen_vdf(n) + Fioi_swpen_idr(n) + Fioi_swpen_idf(n)
+       fswabsv  = Faxa_swvdr(n) * (1.0_R8 - avsdr(n)) + Faxa_swvdf(n) * (1.0_R8 - avsdf(n))
+       fswabsi  = Faxa_swndr(n) * (1.0_R8 - anidr(n)) + Faxa_swndf(n) * (1.0_R8 - anidf(n))
+       ocnnst%sfcnsw(n) = (fswabsv + fswabsi)*(1.0_R8 - ocnnst%ifrac(n)) + fswpen*ocnnst%ifrac(n)
+    end do
 
     ! Ocean NST fields (mapped back to ATM)
-    call FB_GetFldPtr(fldbun_m, 'Snst_tref' ,         ocnnst%tref,       rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_tref' ,        ocnnst%tref,      rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_dconv' ,        ocnnst%d_conv,     rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_dconv' ,       ocnnst%d_conv,    rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_dtcool' ,       ocnnst%dt_cool,    rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_dtcool' ,      ocnnst%dt_cool,   rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_qrain' ,        ocnnst%qrain,      rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_qrain' ,       ocnnst%qrain,     rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_xtts' ,         ocnnst%xtts,       rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_xtts' ,        ocnnst%xtts,      rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_xzts' ,         ocnnst%xzts,       rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_xzts' ,        ocnnst%xzts,      rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_c0' ,           ocnnst%c_0,        rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_c0' ,          ocnnst%c_0,       rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_cd' ,           ocnnst%c_d,        rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_cd' ,          ocnnst%c_d,       rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_w0' ,           ocnnst%w_0,        rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_w0' ,          ocnnst%w_0,       rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_wd' ,           ocnnst%w_d,        rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_wd' ,          ocnnst%w_d,       rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_xs' ,           ocnnst%xs,         rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_xs' ,          ocnnst%xs,        rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_xt' ,           ocnnst%xt,         rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_xt' ,          ocnnst%xt,        rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_xu' ,           ocnnst%xu,         rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_xu' ,          ocnnst%xu,        rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_xv' ,           ocnnst%xv,         rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_xv' ,          ocnnst%xv,        rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_xz' ,           ocnnst%xz,         rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_xz' ,          ocnnst%xz,        rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_zc' ,           ocnnst%zc,         rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_zc' ,          ocnnst%zc,        rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    call FB_GetFldPtr(fldbun_m, 'Snst_tseal' ,       ocnnst%tseal,       rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_tseal' ,       ocnnst%tseal,     rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_tsfc_water' ,  ocnnst%tsfc_wat,    rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_tsfc_water' ,  ocnnst%tsfc_wat,  rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_tsurf_water' , ocnnst%tsurf_wat,   rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_tsurf_water' , ocnnst%tsurf_wat, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_dtzm' ,        ocnnst%dtzm,        rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_dtzm' ,        ocnnst%dtzm,      rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_dtm' ,         ocnnst%dtm,         rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_dtm' ,         ocnnst%dtm,       rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
   end subroutine set_ocnnst_pointers
 
-  subroutine stability                                                &
- !  ---  inputs:
-       ( z1, zvfun, gdx, tv1, thv1, wind, z0max, ztmax, tvs, grav,    &
-       thsfc_loc,                                                     &
- !  ---  outputs:
-       rb, fm, fh, fm10, fh2, cm, ch, stress, ustar)
+!  call sfc_nst_run(lsize, mask=ocnnst%mask, flag_iter=flag_iter, flag_guess=flag_guess,              &
+!       zsea1=zsea1, zsea2=zsea2, xlon=ocnnst%lons, solhr=solhr, q1=ocnnst%q1, evap=ocnnst%evap,      &
+!       nswsfc=ocnnst%sfcnsw, stress=ocnnst%stress, wind=ocnnst%wind, tskin=ocnnst%tseal,             &
+!       tsurf=ocnnst%tsurf_wat, xt=ocnnst%xt, xs=ocnnst%xs, xu=ocnnst%xu, xv=ocnnst%xv, xz=ocnnst%xz, &
+!       xtts=ocnnst%xtts, xzts=ocnnst%xzts, dt_cool=ocnnst%dtcool, z_c=ocnnst%zc, c_0=ocnnst%c0,      &
+!       c_d=ocnnst%cd, w_0=ocnnst%w0, w_d=ocnnst%xd, d_conv=ocnnst%dconv)
 
-    integer, parameter :: kind_phys = R8
-    integer, parameter :: kp = kind_phys
-    real (kind=kind_phys), parameter :: ca=0.4_kind_phys  ! ca - von karman constant
+  !TODO: add SSS
+  subroutine sfc_nst_run(im, mask, flag_iter, flag_guess, zsea1, zsea2, xlon, solhr, t1, prsl, &
+       q1, evap, nswsfc, stress, wind, tskin, tsurf, xt, xs, xu, xv, xz, xtts, xzts, dt_cool,  &
+       z_c, c_0, c_d, w_0, w_d, d_conv)
 
-    !  ---  inputs:
-    real(kind=kind_phys), intent(in) ::                               &
-         z1, zvfun, gdx, tv1, thv1, wind, z0max, ztmax, tvs, grav
-    logical,              intent(in) :: thsfc_loc
+    use module_nst_water_prop, only: get_dtzm_point
+    use module_nst_parameters, only : t0k,cp_w,omg_m,omg_sh, sigma_r,solar_time_6am,ri_c,      &
+         z_w_max,delz,wd_max, rad2deg,const_rot,tau_min,tw_max,sst_max
+    use module_nst_water_prop, only: solar_time_from_julian, density,rhocoef,compjd,grv, sw_ps_9b
+    use nst_module, only : cool_skin,dtm_1p,cal_w,cal_ttop, convdepth,dtm_1p_fca,dtm_1p_tla,   &
+         dtm_1p_mwa,dtm_1p_mda,dtm_1p_mta, dtl_reset
 
-    !  ---  outputs:
-    real(kind=kind_phys), intent(out) ::                              &
-         rb, fm, fh, fm10, fh2, cm, ch, stress, ustar
+    integer, intent(in) :: im
+    integer, intent(in) :: mask(:)
+    logical, intent(in) :: flag_iter(:)
+    logical, intent(in) :: flag_guess(:)
 
-    !  ---  locals:
-    real(kind=kind_phys), parameter :: alpha=5.0_kp, a0=-3.975_kp,    &
-         a1=12.32_kp, alpha4=4.0_kp*alpha,                            &
-         b1=-7.755_kp, b2=6.041_kp,                                   &
-         xkrefsqr=0.3_kp, xkmin=0.05_kp,                              &
-         xkgdx=3000.0_kp,                                             &
-         a0p=-7.941_kp, a1p=24.75_kp, b1p=-8.705_kp, b2p=7.899_kp,    &
-         zolmin=-10.0_kp, zero=0.0_kp, one=1.0_kp
+    real (R8), intent(in) :: zsea1, zsea2, solhr
+    real (R8), intent(in) :: xlon(:)
+    real (R8), intent(in) :: q1(:)
+    real (R8), intent(in) :: evap(:)
+    real (R8), intent(in) :: nswsfc(:)
+    real (R8), intent(in) :: stress(:)
+    real (R8), intent(in) :: wind(:)
 
-    real(kind=kind_phys) :: aa,     aa0,    bb,     bb0, dtv,   adtv, &
-         hl1,    hl12,   pm,     ph,  pm10,  ph2,                     &
-         z1i,                                                         &
-         fms,    fhs,    hl0,    hl0inf, hlinf,                       &
-         hl110,  hlt,    hltinf, olinf,                               &
-         tem1,   tem2,   zolmax
+    real (R8), intent(inout) :: tskin(:)
+    real (R8), intent(inout) :: tsurf(:)
+    real (R8), intent(inout) :: xt(:)  , xs(:)  , xu(:)     , xv(:)    , xz(:)
+    real (R8), intent(inout) :: xtts(:), xzts(:), dt_cool(:), d_conv(:)
+    real (R8), intent(inout) :: z_c(:) , c_0(:) , c_d(:)
+    real (R8), intent(inout) :: w_0(:) , w_d(:)
 
-    real(kind=kind_phys) :: xkzo
+    integer, parameter :: kp = R8
+    ! local variables
+    logical :: flag(im)
+    real (R8), dimension(im) :: xt_old, xs_old, xu_old, xv_old, xz_old, zm_old, xtts_old
+    real (R8), dimension(im) :: xzts_old, ifd_old, tref_old, tskin_old, dt_cool_old, z_c_old
+    real (R8), dimension(im) :: ulwflx, nswsfc, q0, tv1, rho_a
 
-    z1i = one / z1
+    !TODO: do what with this?
+    real (R8), dimension(im) :: qrain
 
-    !
-    !  set background diffusivities with one for gdx >= xkgdx and
-    !   as a function of horizontal grid size for gdx < xkgdx
-    !   (i.e., gdx/xkgdx for gdx < xkgdx)
-    !
-    if(gdx >= xkgdx) then
-       xkzo = one
-    else
-       xkzo = gdx / xkgdx
-    endif
-
-    tem1 = tv1 - tvs
-    if(tem1 > zero) then
-       tem2 = xkzo * zvfun
-       xkzo = min(max(tem2, xkmin), xkzo)
-    endif
-
-    zolmax = xkrefsqr / sqrt(xkzo)
-
-    !  compute stability indices (rb and hlinf)
-
-    dtv     = thv1 - tvs
-    adtv    = max(abs(dtv),0.001_kp)
-    dtv     = sign(1.0_kp,dtv) * adtv
-
-    if(thsfc_loc) then ! Use local potential temperature
-       rb      = max(-5000.0_kp, (grav+grav) * dtv * z1 / ((thv1 + tvs) * wind * wind))
-    else ! Use potential temperature referenced to 1000 hPa
-       rb      = max(-5000.0_kp, grav * dtv * z1 / (tv1 * wind * wind))
-    endif
-
-    tem1    = one / z0max
-    tem2    = one / ztmax
-    fm      = log((z0max+z1)  * tem1)
-    fh      = log((ztmax+z1)  * tem2)
-    fm10    = log((z0max+10.0_kp) * tem1)
-    fh2     = log((ztmax+2.0_kp)  * tem2)
-    hlinf   = rb * fm * fm / fh
-    hlinf   = min(max(hlinf,zolmin),zolmax)
-    !
-    !  stable case
-    !
-    if (dtv >= zero) then
-       hl1 = hlinf
-       if(hlinf > 0.25_kp) then
-          tem1   = hlinf * z1i
-          hl0inf = z0max * tem1
-          hltinf = ztmax * tem1
-          aa     = sqrt(one + alpha4 * hlinf)
-          aa0    = sqrt(one + alpha4 * hl0inf)
-          bb     = aa
-          bb0    = sqrt(one + alpha4 * hltinf)
-          pm     = aa0 - aa + log( (aa + one)/(aa0 + one) )
-          ph     = bb0 - bb + log( (bb + one)/(bb0 + one) )
-          fms    = fm - pm
-          fhs    = fh - ph
-          hl1    = fms * fms * rb / fhs
-          hl1    = min(hl1, zolmax)
+!
+! flag for open water and where the iteration is on
+!
+      flag(i) = .false
+      do i = 1,im
+         flag(i) = (mask(i) == 1 .and. flag_iter(i))
+      end do
+!
+!  save nst-related prognostic fields for guess run
+!
+      do i=1, im
+         if (mask(i) == 1 .and. flag_guess(i)) then
+          xt_old(i)      = xt(i)
+          xs_old(i)      = xs(i)
+          xu_old(i)      = xu(i)
+          xv_old(i)      = xv(i)
+          xz_old(i)      = xz(i)
+          !zm_old(i)      = zm(i)
+          xtts_old(i)    = xtts(i)
+          xzts_old(i)    = xzts(i)
+          ifd_old(i)     = ifd(i)
+          tskin_old(i)   = tskin(i)
+          dt_cool_old(i) = dt_cool(i)
+          z_c_old(i)     = z_c(i)
        endif
-       !
-       !  second iteration
-       !
-       tem1  = hl1 * z1i
-       hl0   = z0max * tem1
-       hlt   = ztmax * tem1
-       aa    = sqrt(one + alpha4 * hl1)
-       aa0   = sqrt(one + alpha4 * hl0)
-       bb    = aa
-       bb0   = sqrt(one + alpha4 * hlt)
-       pm    = aa0 - aa + log( (one+aa)/(one+aa0) )
-       ph    = bb0 - bb + log( (one+bb)/(one+bb0) )
-       hl110 = hl1 * 10.0_kp * z1i
-       aa    = sqrt(one + alpha4 * hl110)
-       pm10  = aa0 - aa + log( (one+aa)/(one+aa0) )
-       hl12  = (hl1+hl1) * z1i
-       !           aa    = sqrt(one + alpha4 * hl12)
-       bb    = sqrt(one + alpha4 * hl12)
-       ph2   = bb0 - bb + log( (one+bb)/(one+bb0) )
-       !
-       !  unstable case - check for unphysical obukhov length
-       !
-    else                          ! dtv < 0 case
-       olinf = z1 / hlinf
-       tem1  = 50.0_kp * z0max
-       if(abs(olinf) <= tem1) then
-          hlinf = -z1 / tem1
-          hlinf = max(hlinf, zolmin)
-       endif
-       !
-       !  get pm and ph
-       !
-       if (hlinf >= -0.5_kp) then
-          hl1   = hlinf
-          pm    = (a0  + a1*hl1)  * hl1   / (one+ (b1+b2*hl1)  *hl1)
-          ph    = (a0p + a1p*hl1) * hl1   / (one+ (b1p+b2p*hl1)*hl1)
-          hl110 = hl1 * 10.0_kp * z1i
-          pm10  = (a0 + a1*hl110) * hl110/(one+(b1+b2*hl110)*hl110)
-          hl12  = (hl1+hl1) * z1i
-          ph2   = (a0p + a1p*hl12) * hl12/(one+(b1p+b2p*hl12)*hl12)
-       else                       ! hlinf < 0.05
-          hl1   = -hlinf
-          tem1  = one / sqrt(hl1)
-          pm    = log(hl1) + 2.0_kp * sqrt(tem1) - .8776_kp
-          ph    = log(hl1) + 0.5_kp * tem1 + 1.386_kp
-          !             pm    = log(hl1) + 2.0 * hl1 ** (-.25) - .8776
-          !             ph    = log(hl1) + 0.5 * hl1 ** (-.5) + 1.386
-          hl110 = hl1 * 10.0_kp * z1i
-          pm10  = log(hl110) + 2.0_kp/sqrt(sqrt(hl110)) - 0.8776_kp
-          !             pm10  = log(hl110) + 2. * hl110 ** (-.25) - .8776
-          hl12  = (hl1+hl1) * z1i
-          ph2   = log(hl12) + 0.5_kp / sqrt(hl12) + 1.386_kp
-          !             ph2   = log(hl12) + .5 * hl12 ** (-.5) + 1.386
-       endif
+     enddo
+     !  --- ...  initialize variables. all units are m.k.s. unless specified.
+     !           ps is in pascals, wind is wind speed, theta1 is surface air
+     !           estimated from level 1 temperature, rho_a is air density and
+     !           qss is saturation specific humidity at the water surface
+     do i = 1, im
+        if ( flag(i) ) then
+           nswsfc(i) = sfcnsw(i) ! net solar radiation at the air-sea surface (positive downward)
+           wndmag(i) = wind(i)
+           q0(i)     = max(q1(i), 1.0e-8_kp)
+           tv1(i)    = t1(i) * (one + rvrdm1*q0(i))
+           rho_a(i)  = prsl1(i) / (rd*tv1(i))
+        end if
+     end do
+     !
+     ! run nst model: dtm + slm
+     !
+     !> - Call module_nst_water_prop::density() to compute sea water density.
+     !> - Call module_nst_water_prop::rhocoef() to compute thermal expansion
+     !! coefficient (\a alpha) and saline contraction coefficient (\a beta).
+     do i = 1, im
+        if ( flag(i) ) then
+           tsea      = tsurf(i)
+           t12       = tsea*tsea
+           ulwflx(i) = sfcemis(i) * sbc * t12 * t12
+           alon      = xlon(i)*rad2deg
+           grav      = grv(sinlat(i))
+           soltim  = mod(alon/15.0_kp + solhr, 24.0_kp)*3600.0_kp
+           call density(tsea,sss,rho_w)                     ! sea water density
+           call rhocoef(tsea,sss,rho_w,alpha,beta)          ! alpha & beta
+           !
+           !> - Calculate sensible heat flux (\a qrain) due to rainfall.
+           !
+           le       = (2.501_kp-0.00237_kp*tsea)*1e6_kp
+           dwat     = 2.11e-5_kp*(t1(i)/t0k)**1.94_kp               ! water vapor diffusivity
+           dtmp     = (one+3.309e-3_kp*(t1(i)-t0k)-1.44e-6_kp*(t1(i)-t0k) &
+                * (t1(i)-t0k))*0.02411_kp/(rho_a(i)*cp)             ! heat diffusivity
+           wetc     = 622.0_kp*le*qss(i)/(rd*t1(i)*t1(i))
+           alfac    = one / (one + (wetc*le*dwat)/(cp*dtmp))        ! wet bulb factor
+           tem      = (1.0e3_kp * rain(i) / rho_w) * alfac * cp_w
+           qrain(i) =  tem * (tsea-t1(i)+1.0e3_kp*(qss(i)-q0(i))*le/cp)
 
-    endif          ! end of if (dtv >= 0 ) then loop
-    !
-    !  finish the exchange coefficient computation to provide fm and fh
-    !
-    fm        = fm - pm
-    fh        = fh - ph
-    fm10      = fm10 - pm10
-    fh2       = fh2 - ph2
-    cm        = ca * ca / (fm * fm)
-    ch        = ca * ca / (fm * fh)
-    tem1      = 0.00001_kp/z1
-    cm        = max(cm, tem1)
-    ch        = max(ch, tem1)
-    stress    = cm * wind * wind
-    ustar     = sqrt(stress)
+           !> - Calculate input non solar heat flux as upward = positive to models here
 
-  end subroutine stability
+           f_nsol   = hflx(i) + evap(i) + ulwflx(i) - dlwflx(i) + omg_sh*qrain(i)
 
+           sep      = sss*(evap(i)/le-rain(i))/rho_w
+           ustar_a  = sqrt(stress(i)/rho_a(i))          ! air friction velocity
+           !
+           !  sensitivities of heat flux components to ts
+           !
+           rnl_ts = 4.0_kp*sfcemis(i)*sbc*tsea*tsea*tsea     ! d(rnl)/d(ts)
+           hs_ts  = rch(i)
+           hl_ts  = rch(i)*elocp*eps*hvap*qss(i)/(rd*t12)
+           rf_ts  = tem * (one+rch(i)*hl_ts)
+           q_ts   = rnl_ts + hs_ts + hl_ts + omg_sh*rf_ts
+           !
+           !> - Call cool_skin(), which is the sub-layer cooling parameterization
+           !! (Fairfall et al. (1996) \cite fairall_et_al_1996).
+           ! & calculate c_0, c_d
+           !
+           call cool_skin(ustar_a,f_nsol,nswsfc(i),evap(i),sss,alpha,beta, &
+                rho_w,rho_a(i),tsea,q_ts,hl_ts,grav,le,                    &
+                dt_cool(i),z_c(i),c_0(i),c_d(i))
+
+           tem  = one / wndmag(i)
+           cosa = u1(i)*tem
+           sina = v1(i)*tem
+           taux = max(stress(i),tau_min)*cosa
+           tauy = max(stress(i),tau_min)*sina
+           fc   = const_rot*sinlat(i)
+           !
+           !  Run DTM-1p system.
+           !
+           if ( (soltim > solar_time_6am .and. ifd(i) == zero) ) then
+           else
+              ifd(i) = one
+              !
+              !     calculate fcl thickness with current forcing and previous time's profile
+              !
+
+              !> - Call convdepth() to calculate depth for convective adjustments.
+              if ( f_nsol > zero .and. xt(i) > zero ) then
+                 call convdepth(kdt,timestep,nswsfc(i),f_nsol,sss,sep,rho_w, &
+                      alpha,beta,xt(i),xs(i),xz(i),d_conv(i))
+              else
+                 d_conv(i) = zero
+              endif
+              !
+              !    determine rich: wind speed dependent (right now)
+              !
+              !           if ( wind(i) < 1.0 ) then
+              !             rich = 0.25 + 0.03*wind(i)
+              !           elseif ( wind(i) >= 1.0 .and. wind(i) < 1.5 ) then
+              !             rich = 0.25 + 0.1*wind(i)
+              !           elseif ( wind(i) >= 1.5 .and. wind(i) < 6.0 ) then
+              !             rich = 0.25 + 0.6*wind(i)
+              !           elseif ( wind(i) >= 6.0 ) then
+              !             rich = 0.25 + min(0.8*wind(i),0.50)
+              !           endif
+
+              rich = ri_c
+
+              !> - Call the diurnal thermocline layer model dtm_1p().
+              call dtm_1p(kdt,timestep,rich,taux,tauy,nswsfc(i),    &
+                   f_nsol,sss,sep,q_ts,hl_ts,rho_w,alpha,beta,alon, &
+                   sinlat(i),soltim,grav,le,d_conv(i),              &
+                   xt(i),xs(i),xu(i),xv(i),xz(i),xzts(i),xtts(i))
+
+
+              !  apply mda
+              if ( xt(i) > zero ) then
+                 !>  - If \a dtl heat content \a xt > 0.0, call dtm_1p_mda() to apply
+                 !!  minimum depth adjustment (mda).
+                 call dtm_1p_mda(xt(i),xtts(i),xz(i),xzts(i))
+                 if ( xz(i) >= z_w_max ) then
+                    !>   - If \a dtl thickness >= module_nst_parameters::z_w_max, call dtl_reset()
+                    !! to reset xt/xs/x/xv to zero, and xz to module_nst_parameters::z_w_max.
+                    call dtl_reset(xt(i),xs(i),xu(i),xv(i),xz(i),xtts(i), xzts(i))
+                 endif
+
+                 !  apply fca
+                 if ( d_conv(i) > zero ) then
+                    !>  - If thickness of free convection layer > 0.0, call dtm_1p_fca()
+                    !! to apply free convection adjustment.
+                    !>   - If \a dtl thickness >= module_nst_parameters::z_w_max(), call dtl_reset()
+                    !! to reset xt/xs/x/xv to zero, and xz to module_nst_parameters::z_w_max().
+                    call dtm_1p_fca(d_conv(i),xt(i),xtts(i),xz(i),xzts(i))
+                    if ( xz(i) >= z_w_max ) then
+                       call dtl_reset (xt(i),xs(i),xu(i),xv(i),xz(i),xzts(i),xtts(i))
+                    endif
+                 endif
+
+                 !  apply tla
+                 dz = min(xz(i),max(d_conv(i),delz))
+                 !
+                 !>  - Call sw_ps_9b() to compute the fraction of the solar radiation
+                 !! absorbed by the depth \a delz (Paulson and Simpson (1981) \cite paulson_and_simpson_1981).
+                 !! And calculate the total heat absorbed in warm layer.
+                 call sw_ps_9b(delz,fw)
+                 q_warm = fw*nswsfc(i)-f_nsol    !total heat absorbed in warm layer
+
+                 !>  - Call cal_ttop() to calculate the diurnal warming amount at the top layer with
+                 !! thickness of \a dz.
+                 if ( q_warm > zero ) then
+                    call cal_ttop(kdt,timestep,q_warm,rho_w,dz, xt(i),xz(i),ttop0)
+                    ttop = ((xt(i)+xt(i))/xz(i))*(one-dz/((xz(i)+xz(i))))
+
+                    !>  - Call dtm_1p_tla() to apply top layer adjustment.
+                    if ( ttop > ttop0 ) then
+                       call dtm_1p_tla(dz,ttop0,xt(i),xtts(i),xz(i),xzts(i))
+                       if ( xz(i) >= z_w_max ) then
+                          call dtl_reset (xt(i),xs(i),xu(i),xv(i),xz(i),xzts(i),xtts(i))
+                       endif
+                    endif
+                 endif           ! if ( q_warm > 0.0 ) then
+
+                 !  apply mwa
+                 !>  - Call dt_1p_mwa() to apply maximum warming adjustment.
+                 t0 = (xt(i)+xt(i))/xz(i)
+                 if ( t0 > tw_max ) then
+                    call dtm_1p_mwa(xt(i),xtts(i),xz(i),xzts(i))
+                    if ( xz(i) >= z_w_max ) then
+                       call dtl_reset (xt(i),xs(i),xu(i),xv(i),xz(i),xzts(i),xtts(i))
+                    endif
+                 endif
+
+                 !  apply mta
+                 !>  - Call dtm_1p_mta() to apply maximum temperature adjustment.
+                 sstc = tref(i) + (xt(i)+xt(i))/xz(i) - dt_cool(i)
+
+                 if ( sstc > sst_max ) then
+                    dta = sstc - sst_max
+                    call  dtm_1p_mta(dta,xt(i),xtts(i),xz(i),xzts(i))
+                    if ( xz(i) >= z_w_max ) then
+                       call dtl_reset (xt(i),xs(i),xu(i),xv(i),xz(i),xzts(i),xtts(i))
+                    endif
+                 endif
+                 !
+              endif             ! if ( xt(i) > 0.0 ) then
+              !           reset dtl at midnight and when solar zenith angle > 89.994 degree
+              if ( abs(soltim) < 2.0_kp*timestep ) then
+                 call dtl_reset (xt(i),xs(i),xu(i),xv(i),xz(i),xzts(i),xtts(i))
+              endif
+
+           endif             ! if (solar_time > solar_time_6am .and. ifd(i) == 0.0 ) then: too late to start the first day
+
+
+           !     update tsurf  (when flag(i) .eqv. .true. )
+           !>  - Call get_dtzm_point() to computes \a dtz and \a tsurf.
+           call get_dtzm_point(xt(i),xz(i),dt_cool(i),z_c(i), zsea1,zsea2,dtz)
+           tsurf(i) = max(tgice, tref(i) + dtz )
+
+           !>  - Call cal_w() to calculate \a w_0 and \a w_d.
+           if ( xt(i) > zero ) then
+              call cal_w(kdt,xz(i),xt(i),xzts(i),xtts(i),w_0(i),w_d(i))
+           else
+              w_0(i) = zero
+              w_d(i) = zero
+           endif
+
+           !         if ( xt(i) > 0.0 ) then
+           !           rig(i) = grav*xz(i)*xz(i)*(alpha*xt(i)-beta*xs(i))
+           !    &             /(2.0*(xu(i)*xu(i)+xv(i)*xv(i)))
+           !         else
+           !           rig(i) = 0.25
+           !         endif
+
+           !         qrain(i) = rig(i)
+           !zm(i) = wind(i)
+
+        endif
+     enddo
+
+     ! restore nst-related prognostic fields for guess run
+     do i=1, im
+        if (mask(i) == 1) then
+           if (flag_guess(i)) then    ! when it is guess of
+              xt(i)      = xt_old(i)
+              xs(i)      = xs_old(i)
+              xu(i)      = xu_old(i)
+              xv(i)      = xv_old(i)
+              xz(i)      = xz_old(i)
+              !zm(i)      = zm_old(i)
+              xtts(i)    = xtts_old(i)
+              xzts(i)    = xzts_old(i)
+              ifd(i)     = ifd_old(i)
+              tskin(i)   = tskin_old(i)
+              dt_cool(i) = dt_cool_old(i)
+              z_c(i)     = z_c_old(i)
+           else
+              !
+              !         update tskin when coupled and not guess run
+              !         (all other NSST variables have been updated in this case)
+              !
+              tskin(i) = tsurf(i)
+           endif                 ! if flag_guess(i) then
+        endif                   ! if mask==1
+     enddo
+
+  end subroutine sfc_nst_run
 end module med_phases_ocnnst_mod
