@@ -36,17 +36,18 @@ module med_phases_ocnnst_mod
      !real(r8) , pointer :: area        (:) => null() ! area (m2)
      integer  , pointer :: mask        (:) => null() ! ocn domain mask: 0 <=> inactive cell
      !inputs from atm
-     real(r8) , pointer :: prsl          (:) => null() ! surface pressure (Pa)
-     !real(r8) , pointer :: u1          (:) => null() ! zonal component of surface layer wind (m/s)
-     !real(r8) , pointer :: v1          (:) => null() ! merid component of surface layer wind (m/s)
+     real(r8) , pointer :: prsl        (:) => null() ! surface pressure (Pa)
+     real(r8) , pointer :: u1          (:) => null() ! zonal component of surface layer wind (m/s)
+     real(r8) , pointer :: v1          (:) => null() ! merid component of surface layer wind (m/s)
      real(r8) , pointer :: t1          (:) => null() ! surface layer mean temperature (K)
      real(r8) , pointer :: q1          (:) => null() ! surface layer mean spec humidity (kg/kg)
-     !real(r8) , pointer :: z1          (:) => null() ! layer 1 height above ground (not MSL) (m)
+     real(r8) , pointer :: z1          (:) => null() ! layer 1 height above ground (not MSL) (m)
      !real(r8) , pointer :: u10m        (:) => null() ! zonal component of 10m wind (m/s)
      !real(r8) , pointer :: v10m        (:) => null() ! merid component of 10m wind (m/s)
      real(r8) , pointer :: dlwflx      (:) => null() ! total sky sfc downward lw flux (W/m2)
      real(r8) , pointer :: rain        (:) => null() ! rainfall rate (kg/m2/s)
      real(r8) , pointer :: evap        (:) => null() ! evap rate (!TODO)
+     real(r8) , pointer :: sen         (:) => null() ! sensible heat flux (W/m2)
      !real(r8) , pointer :: taux        (:) => null() ! zonal momentum stress (!TODO)
      !real(r8) , pointer :: tauy        (:) => null() ! merid momentum stress (!TODO)
      real(r8) , pointer :: sfcnsw      (:) => null() ! net SW down (calculated from bands)
@@ -64,14 +65,14 @@ module med_phases_ocnnst_mod
      real(r8) , pointer :: dtzm        (:) => null() ! mean of dT(z)  (z1 to z2) (?)
      real(r8) , pointer :: dtm         (:) => null() ! ?
      ! in sfcf file, need mapping back to atm
-     real(r8) , pointer :: c_0         (:) => null() ! coefficient1 to calculate d(tz)/d(ts) (nd)
-     real(r8) , pointer :: c_d         (:) => null() ! coefficient2 to calculate d(tz)/d(ts) (nd)
-     real(r8) , pointer :: d_conv      (:) => null() ! thickness of free convection layer (m)
-     real(r8) , pointer :: dt_cool     (:) => null() ! sub-layer cooling amount (K)
+     real(r8) , pointer :: c0          (:) => null() ! coefficient1 to calculate d(tz)/d(ts) (nd)
+     real(r8) , pointer :: cd          (:) => null() ! coefficient2 to calculate d(tz)/d(ts) (nd)
+     real(r8) , pointer :: dconv       (:) => null() ! thickness of free convection layer (m)
+     real(r8) , pointer :: dtcool      (:) => null() ! sub-layer cooling amount (K)
      real(r8) , pointer :: qrain       (:) => null() ! sensible heat flux due to rainfall (W)
      real(r8) , pointer :: tref        (:) => null() ! sea surface reference temperature (K)
-     real(r8) , pointer :: w_0         (:) => null() ! coefficient3 to calculate d(tz)/d(ts) (nd)
-     real(r8) , pointer :: w_d         (:) => null() ! coefficient4 to calculate d(tz)/d(ts) (nd)
+     real(r8) , pointer :: w0          (:) => null() ! coefficient3 to calculate d(tz)/d(ts) (nd)
+     real(r8) , pointer :: wd          (:) => null() ! coefficient4 to calculate d(tz)/d(ts) (nd)
 
      real(r8) , pointer :: xs          (:) => null() ! salinity  content in diurnal thermocline layer (ppt m)
      real(r8) , pointer :: xt          (:) => null() ! heat content in diurnal thermocline layer (K m)
@@ -82,17 +83,18 @@ module med_phases_ocnnst_mod
      real(r8) , pointer :: xz          (:) => null() ! diurnal thermocline layer thickness (m)
      real(r8) , pointer :: xzts        (:) => null() ! d(xz)/d(ts) (m K-1)
      real(r8) , pointer :: zc          (:) => null() ! sub-layer cooling thickness (m)
-     logical            :: created                   ! has memory been allocated here
   end type ocnnst_type
 
   ! used, reused in module
-  logical , allocatable, save :: flag_guess  (:)    ! .true.=  guess step to get CD et al
+  real(r8) , allocatable, save :: ifd         (:)   ! index to start DTM run or not
+  logical  , allocatable, save :: flag_guess  (:)   ! .true.=  guess step to get CD et al
                                                     ! when iter = 1, flag_guess = .true. when wind < 2
                                                     ! when iter = 2, flag_guess = .false. for all grids
-  logical , allocatable, save :: flag_iter   (:)    ! execution or not
+  logical  , allocatable, save :: flag_iter   (:)   ! execution or not
                                                     ! when iter = 1, flag_iter = .true. for all grids
                                                     ! when iter = 2, flag_iter = .true. when wind < 2
                                                     ! for both land and ocean (when nstf_name1 > 0)
+  real(R8), parameter    :: tgice = 271.20_R8       ! TODO: actually f(sss)
   integer, parameter     :: kp = R8
   real(R8), parameter    :: zero = 0.0_R8, one = 1.0_R8
   character(*),parameter :: u_FILE_u =  __FILE__
@@ -125,20 +127,18 @@ contains
     ! Local variables
     type(ESMF_VM)            :: vm
     integer                  :: iam
-    type(ESMF_Field)         :: lfield
     type(ESMF_Mesh)          :: lmesh
     integer                  :: n
     integer                  :: lsize
     integer                  :: spatialDim
     integer                  :: numOwnedElements
+    integer                  :: fieldcount
     type(InternalState)      :: is_local
     real(R8), pointer        :: ownedElemCoords(:)
     real(r8), pointer        :: dataptr1d(:)
-    integer(i4), pointer     :: intptr1d(:)
     character(len=CL)        :: tempc1,tempc2
     character(len=CS)        :: cvalue
     logical                  :: isPresent, isSet
-    integer                  :: fieldCount
     character(CL)            :: msg
     type(ESMF_Field), pointer :: fieldlist(:)
     character(*), parameter  :: subname = '(med_phases_ocnnst_init) '
@@ -213,8 +213,10 @@ contains
        end if
     enddo
     ! initialize flags
+    allocate(ifd(1:size(dataptr1d)))
     allocate(flag_iter(1:size(dataptr1d)))
     allocate(flag_guess(1:size(dataptr1d)))
+    ifd = 0.0_r8
     flag_iter(:) = .true.
     flag_guess(:) = .false.
 
@@ -253,7 +255,6 @@ contains
     ! local variables
     type(ocnnst_type), save :: ocnnst
     type(ESMF_VM)           :: vm
-    type(ESMF_Field)        :: lfield
     integer                 :: iam
     integer                 :: iter, day, jday
     type(InternalState)     :: is_local
@@ -271,17 +272,11 @@ contains
     real(R8)                :: tem2
     integer                 :: lsize            ! local size
     integer                 :: i                ! indices
-    real(R8)                :: rlat             ! gridcell latitude in radians
-    real(R8)                :: rlon             ! gridcell longitude in radians
-    real(R8), parameter     :: tgice = 271.20_R8  ! TODO? actually f(s)
     real(R8), parameter     :: omz1 = 2.0_R8
     character(CL)           :: msg
-    logical                 :: first_call = .true.
+    logical         , save  :: ocnnst_created
+    logical         , save  :: first_call = .true.
     character(len=*)  , parameter :: subname='(med_phases_ocnnst_run)'
-    ! debug
-    integer :: fieldcount
-    character(len=CL) :: fieldname
-    character(CL) ,pointer :: fieldnamelist(:)
     !---------------------------------------
 
     rc = ESMF_SUCCESS
@@ -301,19 +296,17 @@ contains
     ! Determine if ocnnst data type will be initialized - and if not return
     if (first_call) then
        if (ESMF_FieldBundleIsCreated(is_local%wrap%FBMed_ocnnst_o, rc=rc)) then
-          ocnnst%created = .true.
-       else
-          ocnnst%created = .false.
-       end if
-    end if
-    if (.not. ocnnst%created) then
-       return
-    end if
 
-    if (first_call) then
-       ! Initialize ocean NST calculation
-       call med_phases_ocnnst_init(gcomp, ocnnst, rc)
-       if (chkerr(rc,__LINE__,u_FILE_u)) return
+          ! Initialize ocean NST calculation
+          call med_phases_ocnnst_init(gcomp, ocnnst, rc)
+          if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+          ocnnst_created = .true.
+       else
+          ocnnst_created = .false.
+       end if
+
+       ! Now set first_call to .false.
        first_call = .false.
     end if
 
@@ -322,114 +315,122 @@ contains
     endif
     call t_startf('MED:'//subname)
 
-    ! get clock, current time and timestep
-    call ESMF_GridCompGet(gcomp, clock=clock)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_ClockGet( clock, currTime=currTime, timeStep=timeStep, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    ! Clock is not advanced until the end of ModelAdvance
-    call ESMF_TimeGet( currTime, dd=day, h_r8=solhr, rc=rc )
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_TimeGet( currTime, dayOfYear=jday, rc=rc )
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-
-    write(msg,*)trim(subname)//' jday = ',jday,' solhr = ',solhr
-    call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
-    !
-    ! Calculate ocean NST on the ocean grid
-    !
-    lsize = size(ocnnst%mask)
-    ! ice fraction
-    call FB_GetFldPtr(is_local%wrap%FBImp(compice,compocn), 'ifrac', ocnnst%ifrac, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    ! ocean surface temperature from ocean
-    call FB_GetFldPtr(is_local%wrap%FBImp(compocn,compocn),  'So_t', ocnnst%tsfco, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    ! set pointers
-    call set_ocnnst_pointers(is_local%wrap%FBImp(compatm,compocn), is_local%wrap%FBImp(compice,compocn), &
-         is_local%wrap%FBMed_ocnalb_o, is_local%wrap%FBMed_ocnnst_o, lsize, ocnnst, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-
-    ! NST
-    do iter = 1,2
-    write(msg,*)trim(subname)//' julian day ',jday,' solhr = ',solhr,' iter = ',iter
-    call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
-
-       ! loop_control_part1
-       do i = 1,lsize
-          if (ocnnst%mask(i) == 1) then
-             if (iter == 1 .and. ocnnst%wind(i) < 2.0d0) then
-                flag_guess(i) = .true.
-             end if
-          end if
-       end do
-
-       ! nst_pre
-       z_c_0 = zero
-       do i = 1,lsize
-          if (ocnnst%mask(i) == 1) then
-             call get_dtzm_point(ocnnst%xt(i), ocnnst%xz(i), ocnnst%dt_cool(i), z_c_0, zero, omz1, ocnnst%dtzm(i))
-             ocnnst%tref(i) = max(tgice, ocnnst%tsfco(i) - ocnnst%dtzm(i))
-             if (abs(ocnnst%xz(i)) > zero) then
-                tem2 = one / ocnnst%xz(i)
-             else
-                tem2 = zero
-             endif
-             ocnnst%tseal(i)     = ocnnst%tref(i) + (ocnnst%xt(i)+ocnnst%xt(i)) * tem2 - ocnnst%dt_cool(i)
-             ocnnst%tsurf_wat(i) = ocnnst%tseal(i)
-          endif
-       enddo
-
-       ! nst_run
-       !zsea1 = 0.001_kp*real(nstf_name4)
-       !zsea2 = 0.001_kp*real(nstf_name5)
-       ! nstf_name4,5 are both 0 right now
-       zsea1 = 0.0_r8
-       zsea2 = 0.0_r8
-       call sfc_nst_run(lsize, mask=ocnnst%mask, flag_iter=flag_iter, flag_guess=flag_guess,              &
-            zsea1=zsea1, zsea2=zsea2, xlon=ocnnst%lons, solhr=solhr, t1=ocnnst%t1, prsl1=ocnnst%prsl,     &
-            q1=ocnnst%q1, evap=ocnnst%evap, sfcnsw=ocnnst%sfcnsw, stress=ocnnst%stress, wind=ocnnst%wind, &
-            tskin=ocnnst%tseal, tsurf=ocnnst%tsurf_wat, xt=ocnnst%xt, xs=ocnnst%xs, xu=ocnnst%xu,         &
-            xv=ocnnst%xv, xz=ocnnst%xz, xtts=ocnnst%xtts, xzts=ocnnst%xzts, dt_cool=ocnnst%dt_cool,       &
-            z_c=ocnnst%zc, c_0=ocnnst%c_0, c_d=ocnnst%c_d, w_0=ocnnst%w_0, w_d=ocnnst%w_d, d_conv=ocnnst%d_conv)
-
-       ! nst_post
-       do i = 1,lsize
-          if (ocnnst%mask(i) == 1) then
-             call get_dtzm_point(ocnnst%xt(i), ocnnst%xz(i), ocnnst%dt_cool(i), ocnnst%zc(i), zsea1, zsea2, ocnnst%dtzm(i))
-             ocnnst%tsfc_wat(i) = max(tgice, ocnnst%tref(i) + ocnnst%dtzm(i))
-          end if
-       end do
-
-       ! loop_control_part2
-       do i = 1, lsize
-          if (ocnnst%mask(i) == 0) then
-             flag_iter(i)  = .false.
-             flag_guess(i) = .false.
-          else
-             if (iter == 1 .and. ocnnst%wind(i) < 2.0d0) then
-                flag_iter(i) = .true.
-             endif
-          endif
-       end do
-    end do
-    write(msg,*)trim(subname)//' done iter loop '
-    call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
-
-    if (ESMF_FieldBundleIsCreated(is_local%wrap%FBMed_ocnnst_o, rc=rc)) then
-       call NUOPC_MediatorGet(gcomp, driverClock=dClock, rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       if (ESMF_ClockIsCreated(dclock)) then
-          call med_phases_history_write_med(gcomp, rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       end if
-    end if
-
-    if (dbug_flag > 1) then
-       call FB_diagnose(is_local%wrap%FBMed_ocnnst_o, string=trim(subname)//' FBMed_ocnnst_o', rc=rc)
+    if (ocnnst_created) then
+       ! get clock, current time and timestep
+       call ESMF_GridCompGet(gcomp, clock=clock)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_ClockGet( clock, currTime=currTime, timeStep=timeStep, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       ! Clock is not advanced until the end of ModelAdvance
+       call ESMF_TimeGet( currTime, dd=day, h_r8=solhr, rc=rc )
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_TimeGet( currTime, dayOfYear=jday, rc=rc )
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+       write(msg,*)trim(subname)//' jday = ',jday,' solhr = ',solhr
+       call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
+       !
+       ! Calculate ocean NST on the ocean grid
+       !
+       lsize = size(ocnnst%mask)
+       ! ice fraction
+       call FB_GetFldPtr(is_local%wrap%FBImp(compice,compice), 'Si_ifrac', ocnnst%ifrac, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       ! ocean surface temperature from ocean
+       call FB_GetFldPtr(is_local%wrap%FBImp(compocn,compocn),  'So_t', ocnnst%tsfco, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       ! set pointers
+       call set_ocnnst_pointers(is_local%wrap%FBImp(compatm,compocn), is_local%wrap%FBImp(compice,compocn), &
+            is_local%wrap%FBMed_ocnalb_o, is_local%wrap%FBMed_ocnnst_o, lsize, ocnnst, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+       if (dbug_flag > 1) then
+          call FB_diagnose(is_local%wrap%FBMed_ocnnst_o, string=trim(subname)//' b4 FBMed_ocnnst_o', rc=rc)
+          if (chkerr(rc,__LINE__,u_FILE_u)) return
+       end if
+
+       ! NST
+       do iter = 1,2
+          write(msg,*)trim(subname)//' julian day ',jday,' solhr = ',solhr,' iter = ',iter
+          call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
+
+          ! loop_control_part1
+          do i = 1,lsize
+             if (ocnnst%mask(i) == 1) then
+                if (iter == 1 .and. ocnnst%wind(i) < 2.0d0) then
+                   flag_guess(i) = .true.
+                end if
+             end if
+          end do
+
+          ! nst_pre
+          z_c_0 = zero
+          do i = 1,lsize
+             if (ocnnst%mask(i) == 1) then
+                call get_dtzm_point(ocnnst%xt(i), ocnnst%xz(i), ocnnst%dtcool(i), z_c_0, zero, omz1, ocnnst%dtzm(i))
+                ocnnst%tref(i) = max(tgice, ocnnst%tsfco(i) - ocnnst%dtzm(i))
+                if (abs(ocnnst%xz(i)) > zero) then
+                   tem2 = one / ocnnst%xz(i)
+                else
+                   tem2 = zero
+                endif
+                ocnnst%tseal(i)     = ocnnst%tref(i) + (ocnnst%xt(i)+ocnnst%xt(i)) * tem2 - ocnnst%dtcool(i)
+                ocnnst%tsurf_wat(i) = ocnnst%tseal(i)
+             endif
+          enddo
+
+          ! nst_run
+          !zsea1 = 0.001_kp*real(nstf_name4)
+          !zsea2 = 0.001_kp*real(nstf_name5)
+          ! nstf_name4,5 are both 0 right now
+          zsea1 = 0.0_r8
+          zsea2 = 0.0_r8
+          call sfc_nst_run(lsize, mask=ocnnst%mask, flag_iter=flag_iter, flag_guess=flag_guess, ifd=ifd,             &
+               zsea1=zsea1, zsea2=zsea2, xlon=ocnnst%lons, solhr=solhr, z1=ocnnst%z1, t1=ocnnst%t1, ps=ocnnst%prsl,  &
+               u1=ocnnst%u1, v1=ocnnst%v1, q1=ocnnst%q1, hflx=ocnnst%sen, evap=ocnnst%evap, rain=ocnnst%rain,        &
+               dlwflx=ocnnst%dlwflx, sfcnsw=ocnnst%sfcnsw, stress=ocnnst%stress, wind=ocnnst%wind, tref=ocnnst%tref, &
+               tskin=ocnnst%tseal, tsurf=ocnnst%tsurf_wat, xt=ocnnst%xt, xs=ocnnst%xs, xu=ocnnst%xu,                 &
+               xv=ocnnst%xv, xz=ocnnst%xz, xtts=ocnnst%xtts, xzts=ocnnst%xzts, dt_cool=ocnnst%dtcool,                &
+               z_c=ocnnst%zc, c_0=ocnnst%c0, c_d=ocnnst%cd, w_0=ocnnst%w0, w_d=ocnnst%wd, d_conv=ocnnst%dconv)
+          ! nst_post
+          do i = 1,lsize
+             if (ocnnst%mask(i) == 1) then
+                call get_dtzm_point(ocnnst%xt(i), ocnnst%xz(i), ocnnst%dtcool(i), ocnnst%zc(i), zsea1, zsea2, &
+                     ocnnst%dtzm(i))
+                ocnnst%tsfc_wat(i) = max(tgice, ocnnst%tref(i) + ocnnst%dtzm(i))
+             end if
+          end do
+
+          ! loop_control_part2
+          do i = 1, lsize
+             if (ocnnst%mask(i) == 0) then
+                flag_iter(i)  = .false.
+                flag_guess(i) = .false.
+             else
+                if (iter == 1 .and. ocnnst%wind(i) < 2.0d0) then
+                   flag_iter(i) = .true.
+                endif
+             endif
+          end do
+       end do
+       write(msg,*)trim(subname)//' done iter loop '
+       call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
+
+       if (ESMF_FieldBundleIsCreated(is_local%wrap%FBMed_ocnnst_o, rc=rc)) then
+          call NUOPC_MediatorGet(gcomp, driverClock=dClock, rc=rc)
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+          if (ESMF_ClockIsCreated(dclock)) then
+             call med_phases_history_write_med(gcomp, rc=rc)
+             if (ChkErr(rc,__LINE__,u_FILE_u)) return
+          end if
+       end if
+
+       if (dbug_flag > 1) then
+          call FB_diagnose(is_local%wrap%FBMed_ocnnst_o, string=trim(subname)//' FBMed_ocnnst_o', rc=rc)
+          if (chkerr(rc,__LINE__,u_FILE_u)) return
+       end if
+       call t_stopf('MED:'//subname)
     end if
-    call t_stopf('MED:'//subname)
 
   end subroutine med_phases_ocnnst_run
 
@@ -457,8 +458,6 @@ contains
     ! local variables
     real(R8), pointer   :: Faxa_taux(:)
     real(R8), pointer   :: Faxa_tauy(:)
-    real(R8), pointer   :: Sa_u(:)
-    real(R8), pointer   :: Sa_v(:)
     real(R8), pointer   :: avsdr(:)
     real(R8), pointer   :: avsdf(:)
     real(R8), pointer   :: anidr(:)
@@ -486,11 +485,21 @@ contains
     ! Import from atm
     call FB_GetFldPtr(fldbun_a, 'Sa_pbot' ,   ocnnst%prsl,   rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Sa_z' ,      ocnnst%z1,     rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(fldbun_a, 'Sa_shum' ,   ocnnst%q1,     rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(fldbun_a, 'Sa_tbot' ,   ocnnst%t1,     rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Sa_u' ,      ocnnst%u1,     rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Sa_v' ,      ocnnst%v1,     rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(fldbun_a, 'Faxa_evap' , ocnnst%evap,   rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Faxa_rain' , ocnnst%rain,   rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Faxa_sen' ,  ocnnst%sen,    rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(fldbun_a, 'Faxa_rain' , ocnnst%rain,   rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -501,19 +510,18 @@ contains
     ! Compute |stress| and |wind| for ocean
     !---------------------------------------
 
-    call FB_GetFldPtr(fldbun_a, 'Sa_u' , Sa_u, rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_wind' , ocnnst%wind, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Sa_v' , Sa_v, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
     ocnnst%wind = 0.0_R8
-    ocnnst%wind = sqrt(Sa_u*Sa_u + Sa_v*Sa_v)
+    ocnnst%wind = sqrt(ocnnst%u1*ocnnst%u1 + ocnnst%v1*ocnnst%v1)
 
     call FB_GetFldPtr(fldbun_a, 'Faxa_taux' , Faxa_taux, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(fldbun_a, 'Faxa_tauy' , Faxa_tauy, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
+    call FB_GetFldPtr(fldbun_m, 'Snst_stress' , ocnnst%stress, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     ocnnst%stress = 0.0_R8
     ocnnst%stress = sqrt(Faxa_taux*Faxa_taux + Faxa_tauy*Faxa_tauy)
 
@@ -550,6 +558,8 @@ contains
     call FB_GetFldPtr(fldbun_o, 'Fioi_swpen_idf', Fioi_swpen_idf, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
+    call FB_GetFldPtr(fldbun_m, 'Snst_sfcnsw' , ocnnst%sfcnsw, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     ocnnst%sfcnsw = 0.0_R8
     do n = 1,lsize
        ! Compute total swnet to ocean
@@ -560,37 +570,37 @@ contains
     end do
 
     ! Ocean NST fields (mapped back to ATM)
-    call FB_GetFldPtr(fldbun_m, 'Snst_tref' ,        ocnnst%tref,      rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_tref' ,        ocnnst%tref,   rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_dconv' ,       ocnnst%d_conv,    rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_dconv' ,       ocnnst%dconv,  rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_dtcool' ,      ocnnst%dt_cool,   rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_dtcool' ,      ocnnst%dtcool, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_qrain' ,       ocnnst%qrain,     rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_qrain' ,       ocnnst%qrain,  rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_xtts' ,        ocnnst%xtts,      rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_xtts' ,        ocnnst%xtts,   rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_xzts' ,        ocnnst%xzts,      rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_xzts' ,        ocnnst%xzts,   rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_c0' ,          ocnnst%c_0,       rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_c0' ,          ocnnst%c0,     rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_cd' ,          ocnnst%c_d,       rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_cd' ,          ocnnst%cd,     rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_w0' ,          ocnnst%w_0,       rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_w0' ,          ocnnst%w0,     rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_wd' ,          ocnnst%w_d,       rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_wd' ,          ocnnst%wd,     rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_xs' ,          ocnnst%xs,        rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_xs' ,          ocnnst%xs,     rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_xt' ,          ocnnst%xt,        rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_xt' ,          ocnnst%xt,     rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_xu' ,          ocnnst%xu,        rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_xu' ,          ocnnst%xu,     rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_xv' ,          ocnnst%xv,        rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_xv' ,          ocnnst%xv,     rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_xz' ,          ocnnst%xz,        rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_xz' ,          ocnnst%xz,     rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_zc' ,          ocnnst%zc,        rc=rc)
+    call FB_GetFldPtr(fldbun_m, 'Snst_zc' ,          ocnnst%zc,     rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     call FB_GetFldPtr(fldbun_m, 'Snst_tseal' ,       ocnnst%tseal,     rc=rc)
@@ -605,23 +615,24 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
   end subroutine set_ocnnst_pointers
-
-!  call sfc_nst_run(lsize, mask=ocnnst%mask, flag_iter=flag_iter, flag_guess=flag_guess,              &
-!       zsea1=zsea1, zsea2=zsea2, xlon=ocnnst%lons, solhr=solhr, q1=ocnnst%q1, evap=ocnnst%evap,      &
-!       nswsfc=ocnnst%sfcnsw, stress=ocnnst%stress, wind=ocnnst%wind, tskin=ocnnst%tseal,             &
-!       tsurf=ocnnst%tsurf_wat, xt=ocnnst%xt, xs=ocnnst%xs, xu=ocnnst%xu, xv=ocnnst%xv, xz=ocnnst%xz, &
-!       xtts=ocnnst%xtts, xzts=ocnnst%xzts, dt_cool=ocnnst%dtcool, z_c=ocnnst%zc, c_0=ocnnst%c0,      &
-!       c_d=ocnnst%cd, w_0=ocnnst%w0, x_d=ocnnst%xd, d_conv=ocnnst%dconv)
+  ! call sfc_nst_run(lsize, mask=ocnnst%mask, flag_iter=flag_iter, flag_guess=flag_guess,              &
+  !      zsea1=zsea1, zsea2=zsea2, xlon=ocnnst%lons, solhr=solhr, t1=ocnnst%t1, prsl1=ocnnst%prsl,     &
+  !      u1=ocnnst%u1, v1=ocnnst%v1, q1=ocnnst%q1, hflx=ocnnst%sen, evap=ocnnst%evap, sfcnsw=ocnnst%sfcnsw, &
+  !      stress=ocnnst%stress, wind=ocnnst%wind, &
+  !      tskin=ocnnst%tseal, tsurf=ocnnst%tsurf_wat, xt=ocnnst%xt, xs=ocnnst%xs, xu=ocnnst%xu,         &
+  !      xv=ocnnst%xv, xz=ocnnst%xz, xtts=ocnnst%xtts, xzts=ocnnst%xzts, dt_cool=ocnnst%dt_cool,       &
+  !      z_c=ocnnst%zc, c_0=ocnnst%c_0, c_d=ocnnst%c_d, w_0=ocnnst%w_0, w_d=ocnnst%w_d, d_conv=ocnnst%d_conv)
 
   !TODO: add SSS
-  subroutine sfc_nst_run(im, mask, flag_iter, flag_guess, zsea1, zsea2, xlon, solhr, t1, prsl1,    &
-       q1, evap, sfcnsw, stress, wind, tskin, tsurf, xt, xs, xu, xv, xz, xtts, xzts, dt_cool,      &
-       z_c, c_0, c_d, w_0, w_d, d_conv)
+  subroutine sfc_nst_run(im, mask, flag_iter, flag_guess, ifd, zsea1, zsea2, xlon, solhr, z1, t1, ps,  &
+       u1, v1, q1, evap, rain, hflx, dlwflx, sfcnsw, stress, wind, tref, tskin, tsurf, xt, xs, xu, xv, &
+       xz, xtts, xzts, dt_cool, z_c, c_0, c_d, w_0, w_d, d_conv)
 
-    use module_nst_water_prop, only: get_dtzm_point, density, rhocoef, sw_ps_9b, sw_ps_9b_aw
-    use module_nst_parameters, only : t0k,cp_w,omg_m,omg_sh, sigma_r,solar_time_6am,ri_c,          &
-         z_w_max,delz,wd_max, rad2deg,const_rot,tau_min,tw_max,sst_max,rvrdm1,rd,cp_a
-    use nst_module, only : cool_skin,dtm_1p,cal_w,cal_ttop, convdepth,dtm_1p_fca,dtm_1p_tla,       &
+    use funcphys              , only : fpvs
+    use module_nst_water_prop , only : get_dtzm_point, density, rhocoef, sw_ps_9b, sw_ps_9b_aw, grv
+    use module_nst_parameters , only : eps, epsm1, t0k,cp_w,omg_m,omg_sh, sigma_r,solar_time_6am,ri_c, &
+         z_w_max,delz,wd_max, rad2deg,const_rot,tau_min,tw_max,sst_max,rvrdm1,rd,cp_a, hvap
+    use nst_module, only : cool_skin,dtm_1p,cal_w,cal_ttop, convdepth,dtm_1p_fca,dtm_1p_tla,           &
          dtm_1p_mwa,dtm_1p_mda,dtm_1p_mta, dtl_reset
 
     integer, intent(in) :: im
@@ -631,14 +642,22 @@ contains
 
     real (R8), intent(in) :: zsea1, zsea2, solhr
     real (R8), intent(in) :: xlon(:)
+    real (R8), intent(in) :: z1(:)
     real (R8), intent(in) :: t1(:)
+    real (R8), intent(in) :: u1(:)
+    real (R8), intent(in) :: v1(:)
     real (R8), intent(in) :: q1(:)
-    real (R8), intent(in) :: prsl1(:)
+    real (R8), intent(in) :: ps(:)
+    real (R8), intent(in) :: hflx(:)
     real (R8), intent(in) :: evap(:)
+    real (R8), intent(in) :: rain(:)
+    real (R8), intent(in) :: dlwflx(:)
     real (R8), intent(in) :: sfcnsw(:)
     real (R8), intent(in) :: stress(:)
     real (R8), intent(in) :: wind(:)
+    real (R8), intent(in) :: tref(:)
 
+    real (R8), intent(inout) :: ifd(:)
     real (R8), intent(inout) :: tskin(:)
     real (R8), intent(inout) :: tsurf(:)
     real (R8), intent(inout) :: xt(:)  , xs(:)  , xu(:)     , xv(:)    , xz(:)
@@ -650,13 +669,14 @@ contains
     integer :: i, kdt
     ! TODO
     real (R8) :: timestep
-    logical :: flag(im)
-    real (R8) :: tsea, t12, alon, soltim, sss, alpha, le, dwat, dtmp, wetc, alfac, tem
+    logical   :: flag(im)
+    real (R8) :: tsea, t12, alon, soltim, sss, le, dwat, dtmp, wetc, alfac, tem
     real (R8) :: f_nsol, sep, ustar_a, rnl_ts, hs_ts, sbc, rho_w, cp, grav, alpha, beta
-    real (R8) :: fw, fc, taux, tauy, q_ts, sina, cosa
-    real (R8), dimension(im) :: xt_old, xs_old, xu_old, xv_old, xz_old, zm_old, xtts_old
-    real (R8), dimension(im) :: xzts_old, ifd_old, tref_old, tskin_old, dt_cool_old, z_c_old
-    real (R8), dimension(im) :: wndmag, ulwflx, nswsfc, q0, tv1, rho_a, sfcemis, sinlat, hflx
+    real (R8) :: fw, fc, taux, tauy, q_ts, sina, cosa, dz, q_warm, ttop0, t0, dta, dtz
+    real (R8) :: cpinv, hvapi, elocp, hl_ts, rf_ts, rich, ttop, sstc
+    real (R8), dimension(im) :: xt_old, xs_old, xu_old, xv_old, xz_old, xtts_old
+    real (R8), dimension(im) :: xzts_old, ifd_old, tskin_old, dt_cool_old, z_c_old
+    real (R8), dimension(im) :: wndmag, ulwflx, nswsfc, q0, tv1, rho_a, sfcemis, sinlat
     real (R8), dimension(im) :: qss, rch
 
     !TODO: do what with this?
@@ -669,10 +689,18 @@ contains
     sbc = sigma_r
     sfcemis = 0.97_R8
     sinlat = sin(xlon)
+    cpinv = one/cp
+    hvapi = one/hvap
+    elocp = hvap/cp
+    q0 = zero
+    tv1 = zero
+    rho_a = zero
+    rch = zero
+    qss = zero
 !
 ! flag for open water and where the iteration is on
 !
-      flag(i) = .false.
+      flag = .false.
       do i = 1,im
          flag(i) = (mask(i) == 1 .and. flag_iter(i))
       end do
@@ -689,7 +717,7 @@ contains
           !zm_old(i)      = zm(i)
           xtts_old(i)    = xtts(i)
           xzts_old(i)    = xzts(i)
-          !ifd_old(i)     = ifd(i)
+          ifd_old(i)     = ifd(i)
           tskin_old(i)   = tskin(i)
           dt_cool_old(i) = dt_cool(i)
           z_c_old(i)     = z_c(i)
@@ -705,8 +733,13 @@ contains
            wndmag(i) = wind(i)
            q0(i)     = max(q1(i), 1.0e-8_kp)
            tv1(i)    = t1(i) * (one + rvrdm1*q0(i))
-           rho_a(i)  = prsl1(i) / (rd*tv1(i))
-           rch(i)    = rho_a(i) * cp * ch(i) * wind(i)
+           print *,'XXX ',i,tv1(i),q0(i),ps(i),rd*tv1(i)
+           rho_a(i)  = ps(i) / (rd*tv1(i))
+           qss(i)    = fpvs(tsurf(i))                          ! pa
+           qss(i)    = eps*qss(i) / (ps(i) + epsm1*qss(i))     ! pa
+           rch(i)    = evap(i)/(elocp * (qss(i) - q0(i)))      ! iffy
+           tem       = 0.00001_kp/z1(i)                        ! from sfc_diff
+           rch(i)    = max(rch(i), tem)
         end if
      end do
      !
