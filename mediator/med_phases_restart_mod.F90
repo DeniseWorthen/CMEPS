@@ -54,14 +54,18 @@ contains
     integer, intent(out) :: rc
 
     ! local variables
-    type(ESMF_Alarm)        :: alarm
+    type(ESMF_Alarm), allocatable :: alarms(:)
     type(ESMF_Clock)        :: mclock
     type(ESMF_TimeInterval) :: mtimestep
     type(ESMF_Time)         :: mCurrTime
     integer                 :: timestep_length
+    character(CS)           :: alarmtype
     character(CL)           :: cvalue          ! attribute string
     character(CL)           :: restart_option  ! freq_option setting (ndays, nsteps, etc)
     integer                 :: restart_n       ! freq_n setting relative to freq_option
+    integer, parameter      :: alarmmax=200    ! max number of ESMF alarms
+    integer                 :: alarmcount
+    integer                 :: alarmfreq(alarmmax)
     logical                 :: isPresent
     logical                 :: isSet
     character(len=*), parameter :: subname='(med_phases_restart_alarm_init)'
@@ -74,29 +78,53 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! Determine restart frequency
-    call NUOPC_CompAttributeGet(gcomp, name='restart_option', value=restart_option, rc=rc)
+    call NUOPC_CompAttributeGet(gcomp, name='restart_n', value=alarmfreq, itemCount=alarmcount, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call NUOPC_CompAttributeGet(gcomp, name='restart_n', value=cvalue, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    read(cvalue,*) restart_n
+    if (alarmcount > alarmmax) then
+       call ESMF_LogWrite(trim(subname)//': alarmcount > alarmmax', ESMF_LOGMSG_ERROR)
+       rc = ESMF_FAILURE
+       return
+    end if
+    if (alarmcount == 1) then
+       ! this is an interval alarm
+       restart_n = alarmfreq(1)
+       call NUOPC_CompAttributeGet(gcomp, name='restart_option', value=restart_option, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       alarmtype = 'interval'
+    else
+       ! this is a set-time alarm, valid only for restart_option=hours
+       restart_option = 'hours'
+       alarmtype = 'set-time'
+    end if
 
     ! Set alarm for instantaneous mediator restart output
     call ESMF_ClockGet(mclock, currTime=mCurrTime,  rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call med_time_alarmInit(mclock, alarm, option=restart_option, opt_n=restart_n, &
-         reftime=mcurrTime, alarmname='alarm_restart', rc=rc)
-    call ESMF_AlarmSet(alarm, clock=mclock, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    ! Advance model clock to trigger alarm then reset model clock back to currtime
-    call ESMF_ClockGet(mclock, currTime=mCurrTime, timeStep=mtimestep, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_TimeIntervalGet(mtimestep, s=timestep_length, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_ClockAdvance(mclock,rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_ClockSet(mclock, currTime=mcurrtime, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    allocate(alarms(1:alarmcount))
+    if (alarmcount == 1) then
+       call med_time_alarmInit(mclock, alarms(1), option=restart_option, opt_n=restart_n, &
+            reftime=mcurrTime, alarmname='alarm_restart', alarmtype=trim(alarmtype), rc=rc)
+       call ESMF_AlarmSet(alarm, clock=mclock, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       ! Advance model clock to trigger alarm then reset model clock back to currtime
+       call ESMF_ClockGet(mclock, currTime=mCurrTime, timeStep=mtimestep, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_TimeIntervalGet(mtimestep, s=timestep_length, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_ClockAdvance(mclock,rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_ClockSet(mclock, currTime=mcurrtime, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    else
+       do n = 1,alarmcount
+          write(cvalue,'(i3.3)')alarmfreq(n)
+          alarmname = 'alarm_restart'//trim(cvalue)
+          call med_time_alarmInit(mclock, alarms(n), option=restart_option, opt_n=alarmfreq(n), &
+               reftime=mcurrTime, alarmname=trim(alarmname), alarmtype='set-time',rc=rc)
+       end do
+    end if
 
     ! Handle end of run restart
     call NUOPC_CompAttributeGet(gcomp, name="write_restart_at_endofrun", value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
