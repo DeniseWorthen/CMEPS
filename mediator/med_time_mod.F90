@@ -26,19 +26,19 @@ module med_time_mod
 
   ! Clock and alarm options
   character(len=*), private, parameter :: &
-       optNONE           = "none"    ,    &
-       optNever          = "never"   ,    &
-       optNSteps         = "nstep"   ,    &
-       optNSeconds       = "nsecond" ,    &
-       optNMinutes       = "nminute" ,    &
-       optNHours         = "nhour"   ,    &
-       optNDays          = "nday"    ,    &
-       optNMonths        = "nmonth"  ,    &
-       optNYears         = "nyear"   ,    &
-       optMonthly        = "monthly" ,    &
-       optYearly         = "yearly"  ,    &
-       optDate           = "date"    ,    &
-       optEnd            = "end"     ,    &
+       optNONE           = "none"      , &
+       optNever          = "never"     , &
+       optNSteps         = "nstep"    , &
+       optNSeconds       = "nsecond"  , &
+       optNMinutes       = "nminute"  , &
+       optNHours         = "nhour"    , &
+       optNDays          = "nday"     , &
+       optNMonths        = "nmonth"   , &
+       optNYears         = "nyear"    , &
+       optMonthly        = "monthly"   , &
+       optYearly         = "yearly"    , &
+       optDate           = "date"      , &
+       optEnd            = "end"       , &
        optGLCCouplingPeriod = "glc_coupling_period"
 
   ! Module data
@@ -51,7 +51,7 @@ contains
 !===============================================================================
 
   subroutine med_time_alarmInit( clock, alarm, option, &
-       opt_n, opt_ymd, opt_tod, reftime, alarmname, advance_clock, alarmtype, rc)
+       opt_n, opt_ymd, opt_tod, reftime, alarmname, advance_clock, rc)
 
     ! Setup an alarm in a clock
     ! Notes: The ringtime sent to AlarmCreate MUST be the next alarm
@@ -74,7 +74,6 @@ contains
     type(ESMF_Time)  , optional , intent(in)    :: reftime       ! reference time
     character(len=*) , optional , intent(in)    :: alarmname     ! alarm name
     logical          , optional , intent(in)    :: advance_clock ! advance clock to trigger alarm
-    character(len=*) , optional , intent(in)    :: alarmtype     ! on intervals or at set times
     integer                     , intent(out)   :: rc            ! Return code
 
     ! local variables
@@ -87,8 +86,6 @@ contains
     type(ESMF_Time)         :: CurrTime         ! Current Time
     type(ESMF_Time)         :: NextAlarm        ! Next alarm time
     type(ESMF_TimeInterval) :: AlarmInterval    ! Alarm interval
-    type(ESMF_Time)         :: AlarmTime        ! Alarm time for non-interval alarms
-    type(ESMF_TimeInterval) :: alarmtimeStep    ! Clock advance for non-interval alarms
     character(len=*), parameter :: subname = '(med_time_alarmInit): '
     !-------------------------------------------------------------------------------
 
@@ -149,127 +146,123 @@ contains
        end if
     end if
 
-    if (alarmtype = 'interval') then
-       ! Determine inputs for call to create alarm
-       selectcase (trim(option))
+    ! Determine inputs for call to create alarm
+    selectcase (trim(option))
 
-       case (optNONE)
-          call ESMF_TimeIntervalSet(AlarmInterval, yy=9999, rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          call ESMF_TimeSet( NextAlarm, yy=9999, mm=12, dd=1, s=0, calendar=cal, rc=rc )
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          update_nextalarm  = .false.
-
-       case (optNever)
-          call ESMF_TimeIntervalSet(AlarmInterval, yy=9999, rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          call ESMF_TimeSet( NextAlarm, yy=9999, mm=12, dd=1, s=0, calendar=cal, rc=rc )
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          update_nextalarm  = .false.
-
-       case (optEnd)
-          call ESMF_TimeIntervalSet(AlarmInterval, yy=9999, rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          call ESMF_TimeSet( NextAlarm, yy=9999, mm=12, dd=1, s=0, calendar=cal, rc=rc )
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          update_nextalarm  = .false.
-
-       case (optDate)
-          call ESMF_TimeIntervalSet(AlarmInterval, yy=9999, rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          call med_time_date2ymd(opt_ymd, cyy, cmm, cdd)
-
-          call ESMF_TimeSet( NextAlarm, yy=cyy, mm=cmm, dd=cdd, s=ltod, calendar=cal, rc=rc )
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          update_nextalarm  = .false.
-
-       case (optNSteps,trim(optNSteps)//'s')
-          call ESMF_ClockGet(clock, TimeStep=AlarmInterval, rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          AlarmInterval = AlarmInterval * opt_n
-          update_nextalarm  = .true.
-
-       case (optNSeconds,trim(optNSeconds)//'s')
-          call ESMF_TimeIntervalSet(AlarmInterval, s=1, rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          AlarmInterval = AlarmInterval * opt_n
-          update_nextalarm  = .true.
-
-       case (optNMinutes,trim(optNMinutes)//'s')
-          call ESMF_TimeIntervalSet(AlarmInterval, s=60, rc=rc)
-          AlarmInterval = AlarmInterval * opt_n
-          update_nextalarm  = .true.
-
-       case (optNHours,trim(optNHours)//'s')
-          call ESMF_TimeIntervalSet(AlarmInterval, s=3600, rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          AlarmInterval = AlarmInterval * opt_n
-          update_nextalarm  = .true.
-
-       case (optNDays,trim(optNDays)//'s')
-          call ESMF_TimeIntervalSet(AlarmInterval, d=1, rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          AlarmInterval = AlarmInterval * opt_n
-          update_nextalarm  = .true.
-
-       case (optNMonths,trim(optNMonths)//'s')
-          call ESMF_TimeIntervalSet(AlarmInterval, mm=1, rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          AlarmInterval = AlarmInterval * opt_n
-          update_nextalarm  = .true.
-
-       case (optMonthly)
-          call ESMF_TimeIntervalSet(AlarmInterval, mm=1, rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          call ESMF_TimeSet( NextAlarm, yy=cyy, mm=cmm, dd=1, s=0, calendar=cal, rc=rc )
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          update_nextalarm  = .true.
-
-       case (optNYears, trim(optNYears)//'s')
-          call ESMF_TimeIntervalSet(AlarmInterval, yy=1, rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          AlarmInterval = AlarmInterval * opt_n
-          update_nextalarm  = .true.
-
-       case (optYearly)
-          call ESMF_TimeIntervalSet(AlarmInterval, yy=1, rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          call ESMF_TimeSet( NextAlarm, yy=cyy, mm=1, dd=1, s=0, calendar=cal, rc=rc )
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          update_nextalarm  = .true.
-       case default
-          call ESMF_LogWrite(subname//'unknown option '//trim(option), ESMF_LOGMSG_ERROR)
-          rc = ESMF_FAILURE
-          return
-
-       end select
-
-       ! --------------------------------------------------------------------------------
-       ! --- AlarmInterval and NextAlarm should be set ---
-       ! --------------------------------------------------------------------------------
-
-       ! --- advance Next Alarm so it won't ring on first timestep for
-       ! --- most options above. go back one alarminterval just to be careful
-
-       if (update_nextalarm) then
-          NextAlarm = NextAlarm - AlarmInterval
-          do while (NextAlarm <= CurrTime)
-             NextAlarm = NextAlarm + AlarmInterval
-          enddo
-       endif
-
-       if (maintask) then
-          write(logunit,*)
-          write(logunit,'(a)') trim(subname) //' creating alarm '// trim(lalarmname)
-       end if
-
-       alarm = ESMF_AlarmCreate( name=lalarmname, clock=clock, ringTime=NextAlarm, &
-            ringInterval=AlarmInterval, rc=rc)
+    case (optNONE)
+       call ESMF_TimeIntervalSet(AlarmInterval, yy=9999, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_TimeSet( NextAlarm, yy=9999, mm=12, dd=1, s=0, calendar=cal, rc=rc )
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       update_nextalarm  = .false.
 
-    else
+    case (optNever)
+       call ESMF_TimeIntervalSet(AlarmInterval, yy=9999, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_TimeSet( NextAlarm, yy=9999, mm=12, dd=1, s=0, calendar=cal, rc=rc )
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       update_nextalarm  = .false.
 
+    case (optEnd)
+       call ESMF_TimeIntervalSet(AlarmInterval, yy=9999, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_TimeSet( NextAlarm, yy=9999, mm=12, dd=1, s=0, calendar=cal, rc=rc )
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       update_nextalarm  = .false.
+
+   case (optDate)
+      call ESMF_TimeIntervalSet(AlarmInterval, yy=9999, rc=rc)
+      if (ChkErr(rc,__LINE__,u_FILE_u)) return
+      call med_time_date2ymd(opt_ymd, cyy, cmm, cdd)
+
+      call ESMF_TimeSet( NextAlarm, yy=cyy, mm=cmm, dd=cdd, s=ltod, calendar=cal, rc=rc )
+      if (ChkErr(rc,__LINE__,u_FILE_u)) return
+      update_nextalarm  = .false.
+
+   case (optNSteps,trim(optNSteps)//'s')
+      call ESMF_ClockGet(clock, TimeStep=AlarmInterval, rc=rc)
+      if (ChkErr(rc,__LINE__,u_FILE_u)) return
+      AlarmInterval = AlarmInterval * opt_n
+      update_nextalarm  = .true.
+
+   case (optNSeconds,trim(optNSeconds)//'s')
+      call ESMF_TimeIntervalSet(AlarmInterval, s=1, rc=rc)
+      if (ChkErr(rc,__LINE__,u_FILE_u)) return
+      AlarmInterval = AlarmInterval * opt_n
+      update_nextalarm  = .true.
+
+   case (optNMinutes,trim(optNMinutes)//'s')
+      call ESMF_TimeIntervalSet(AlarmInterval, s=60, rc=rc)
+      AlarmInterval = AlarmInterval * opt_n
+      update_nextalarm  = .true.
+
+   case (optNHours,trim(optNHours)//'s')
+      call ESMF_TimeIntervalSet(AlarmInterval, s=3600, rc=rc)
+      if (ChkErr(rc,__LINE__,u_FILE_u)) return
+      AlarmInterval = AlarmInterval * opt_n
+      update_nextalarm  = .true.
+
+   case (optNDays,trim(optNDays)//'s')
+      call ESMF_TimeIntervalSet(AlarmInterval, d=1, rc=rc)
+      if (ChkErr(rc,__LINE__,u_FILE_u)) return
+      AlarmInterval = AlarmInterval * opt_n
+      update_nextalarm  = .true.
+
+   case (optNMonths,trim(optNMonths)//'s')
+      call ESMF_TimeIntervalSet(AlarmInterval, mm=1, rc=rc)
+      if (ChkErr(rc,__LINE__,u_FILE_u)) return
+      AlarmInterval = AlarmInterval * opt_n
+      update_nextalarm  = .true.
+
+    case (optMonthly)
+       call ESMF_TimeIntervalSet(AlarmInterval, mm=1, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_TimeSet( NextAlarm, yy=cyy, mm=cmm, dd=1, s=0, calendar=cal, rc=rc )
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       update_nextalarm  = .true.
+
+    case (optNYears, trim(optNYears)//'s')
+       call ESMF_TimeIntervalSet(AlarmInterval, yy=1, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       AlarmInterval = AlarmInterval * opt_n
+       update_nextalarm  = .true.
+
+    case (optYearly)
+       call ESMF_TimeIntervalSet(AlarmInterval, yy=1, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_TimeSet( NextAlarm, yy=cyy, mm=1, dd=1, s=0, calendar=cal, rc=rc )
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       update_nextalarm  = .true.
+    case default
+       call ESMF_LogWrite(subname//'unknown option '//trim(option), ESMF_LOGMSG_ERROR)
+       rc = ESMF_FAILURE
+       return
+
+    end select
+
+    ! --------------------------------------------------------------------------------
+    ! --- AlarmInterval and NextAlarm should be set ---
+    ! --------------------------------------------------------------------------------
+
+    ! --- advance Next Alarm so it won't ring on first timestep for
+    ! --- most options above. go back one alarminterval just to be careful
+
+    if (update_nextalarm) then
+       NextAlarm = NextAlarm - AlarmInterval
+       do while (NextAlarm <= CurrTime)
+          NextAlarm = NextAlarm + AlarmInterval
+       enddo
+    endif
+
+    if (maintask) then
+       write(logunit,*)
+       write(logunit,'(a)') trim(subname) //' creating alarm '// trim(lalarmname)
     end if
+
+    alarm = ESMF_AlarmCreate( name=lalarmname, clock=clock, ringTime=NextAlarm, &
+         ringInterval=AlarmInterval, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
     ! Advance model clock to trigger alarm then reset model clock back to currtime
     if (present(advance_clock)) then
        if (advance_clock) then
