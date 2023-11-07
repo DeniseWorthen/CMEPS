@@ -49,7 +49,9 @@ contains
     use NUOPC_Model  , only : NUOPC_ModelGet
     use med_time_mod , only : med_time_AlarmInit
     ! debug
-    use ESMF, only : ESMF_ClockPrint, ESMF_AlarmPrint
+    use ESMF, only : ESMF_ClockPrint, ESMF_AlarmPrint, ESMF_Finalize, ESMF_END_ABORT, ESMF_ClockGetAlarmList
+    use ESMF, only : ESMF_ALARMLIST_RINGING, ESMF_ALARMLIST_ALL, ESMF_AlarmList_Flag, ESMF_AlarmIsRinging
+    use ESMF, only : ESMF_AlarmGet, ESMF_AlarmRingerOff
 
     ! input/output variables
     type(ESMF_GridComp)  :: gcomp
@@ -69,14 +71,16 @@ contains
     integer                 :: restart_n       ! freq_n setting relative to freq_option
     integer                 :: fhcount
     integer                 :: restart_fh(3)
-    character(CS)           :: alarmname
+    character(CS)           :: alarm_name
     logical                 :: isPresent
     logical                 :: isSet
     integer                 :: n
     character(len=*), parameter :: subname='(med_phases_restart_alarm_init)'
     ! debug
     character(CL) :: msg
-    !---------------------------------------
+    integer :: alarmcount
+    type(ESMF_Alarm), allocatable :: alarms(:)
+   !---------------------------------------
 
     rc = ESMF_SUCCESS
 
@@ -126,34 +130,69 @@ contains
     call ESMF_ClockPrint(mclock, options="currTime", unit=cvalue,rc=rc)
     call ESMF_LogWrite(trim(subname)//": currtime b4 restart_fh alarm set = "//trim(cvalue), ESMF_LOGMSG_INFO)
 
-    restart_fh = (/3,9,15/)
+    restart_fh = (/1,3,5/)
     do n = 1,size(restart_fh)
        write(cvalue,'(i3.3)')restart_fh(n)
-       alarmname = 'alarm_restart'//trim(cvalue)
+       alarm_name = 'alarm_restart'//trim(cvalue)
+       ! extra, non-interval alarms at specified forecast hours
+       call med_time_alarmInit(mclock, alarm, option='fhours', opt_n=restart_fh(n), &
+            reftime=mcurrTime, alarmname=trim(alarm_name), rc=rc)
+       call ESMF_AlarmSet(alarm, clock=mclock, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       ! Advance model clock to trigger alarm then reset model clock back to currtime
+       call ESMF_ClockGet(mclock, currTime=mCurrTime, timeStep=mtimestep, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_TimeIntervalGet(mtimestep, s=timestep_length, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_ClockAdvance(mclock,rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_ClockSet(mclock, currTime=mcurrtime, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    end do
+#ifdef test
+    restart_fh = (/1,3,5/)
+    do n = 1,size(restart_fh)
+       write(cvalue,'(i3.3)')restart_fh(n)
+       alarm_name = 'alarm_restart'//trim(cvalue)
        ! set an alarm at a specific time
        call ESMF_TimeIntervalSet(AlarmTimeStep, h=restart_fh(n), rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       call ESMF_ClockPrint(mclock, options="currTime", unit=cvalue, rc=rc)
+       write(msg,'(a,i6)')"currtime b4 advance  = "//trim(cvalue)//'  '//trim(alarm_name),restart_fh(n)
+       call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
+
        ! advance the clock to get the ring time
        call ESMF_ClockAdvance(mclock, timestep=AlarmTimeStep, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        call ESMF_ClockGet(mclock, currTime=alarmTime, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-       call ESMF_ClockPrint(mclock, options="currTime", unit=cvalue,rc=rc)
-       write(msg,'(a,i6)')trim(subname)//": currtime at restart_fh alarm  = "//trim(cvalue),restart_fh
+       call ESMF_ClockPrint(mclock, options="currTime", unit=cvalue, rc=rc)
+       write(msg,'(a,i6)')trim(subname)//": currtime at restart_fh alarm  = "//trim(cvalue),restart_fh(n)
        call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
 
-       ! create the alarm
-       alarm = ESMF_AlarmCreate(name=alarmname, clock=mclock, ringTime=alarmTime, rc=rc)
+       ! create the alarm and make sure it is off
+       alarm = ESMF_AlarmCreate(name=alarm_name, clock=mclock, ringTime=alarmTime, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       call ESMF_AlarmPrint(alarm, options="ringbegin",rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       ! set the clock back to the current time
-       call ESMF_ClockSet(mclock, currTime=mcurrTime, rc=rc)
+       if (ESMF_AlarmIsRinging(alarm, rc=rc)) then
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+          call ESMF_AlarmRingerOff( alarm, rc=rc )
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+          write(msg,'(a,2i6)')"XXX_alarm_init "//trim(alarm_name)//" is ringing at creation, turn off"
+          call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
+       end if
+       ! set the clock back to the current time and timestep
+       call ESMF_ClockSet(mclock, currTime=mcurrTime, timeStep=mtimestep, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
+       call ESMF_ClockPrint(mclock, options="currTime", unit=cvalue,rc=rc)
+       write(msg,'(a,i6)')"currtime after reset  = "//trim(cvalue),restart_fh(n)
+       call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
+
        if (maintask) then
-          write(logunit,'(a,i6)') trim(subname) //' creating set time alarm '// trim(alarmname) &
+          write(logunit,'(a,i6)') trim(subname) //' creating set time alarm '// trim(alarm_name) &
                //' at hour ',restart_fh(n)
        end if
     end do
@@ -168,6 +207,40 @@ contains
             trim(restart_option)//" and frequency ",restart_n
        write(logunit,'(a,l7)') trim(subname)//" write_restart_at_endofrun : ", write_restart_at_endofrun
        write(logunit,*)
+    end if
+#endif
+    call ESMF_ClockGetAlarmList(mclock, alarmlistflag=ESMF_ALARMLIST_RINGING, alarmCount=alarmcount, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    write(msg,'(a,2i6)')"XXX_alarm_init ringing count = ",alarmcount
+    call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
+
+    if (alarmcount > 0) then
+       allocate(alarms(alarmcount))
+       call ESMF_ClockGetAlarmList(mclock, alarmlistflag=ESMF_ALARMLIST_RINGING, alarmList=alarms, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       do n = 1,alarmcount
+          call ESMF_AlarmGet(alarms(n), name=alarm_name, rc=rc)
+          write(msg,'(a,2i6)')"XXX_alarm_init ringing = "//trim(alarm_name),n,alarmcount
+          call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
+       end do
+       deallocate(alarms)
+    end if
+
+    call ESMF_ClockGetAlarmList(mclock, alarmlistflag=ESMF_ALARMLIST_ALL, alarmCount=alarmcount, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    write(msg,'(a,2i6)')"XXX_alarm_init all count = ",alarmcount
+    call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
+
+    if (alarmcount > 0) then
+       allocate(alarms(alarmcount))
+       call ESMF_ClockGetAlarmList(mclock, alarmlistflag=ESMF_ALARMLIST_ALL, alarmList=alarms, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       do n = 1,alarmcount
+          call ESMF_AlarmGet(alarms(n), name=alarm_Name, rc=rc)
+          write(msg,'(a,2i6)')"XXX_alarm_init all = "//trim(alarm_name),n,alarmcount
+          call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
+       end do
+       deallocate(alarms)
     end if
 
   end subroutine med_phases_restart_alarm_init
@@ -208,8 +281,9 @@ contains
     type(ESMF_Time), save      :: lasttimewritten
     type(ESMF_TimeInterval)    :: timediff       ! Used to calculate curr_time
     type(ESMF_Alarm), allocatable :: alarms(:)
+    type(ESMF_Alarm)           :: alarm
     type(ESMF_Calendar)        :: calendar
-    character(len=CS)          :: alarmname
+    character(len=CS)          :: alarm_name
     character(len=CS)          :: currtimestr
     character(len=CS)          :: nexttimestr
     type(InternalState)        :: is_local
@@ -237,6 +311,8 @@ contains
     logical                    :: first_time = .true.
     integer                    :: alarmcount
     character(len=*), parameter :: subname='(med_phases_restart_write)'
+    !debug
+    character(CL) :: msg
     !---------------------------------------
 
     call t_startf('MED:'//subname)
@@ -272,8 +348,10 @@ contains
     endif
 
     if (first_time) then
+       call ESMF_LogWrite("XXX calling alarm_init", ESMF_LOGMSG_INFO)
        call med_phases_restart_alarm_init(gcomp, rc)
        first_time = .false.
+       call ESMF_LogWrite("XXX after alarm_init", ESMF_LOGMSG_INFO)
     end if
 
     !---------------------------------------
@@ -282,47 +360,58 @@ contains
 
     call NUOPC_ModelGet(gcomp, modelClock=clock, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
+!#ifdef test
     ! check if any alarms are ringing and get any ringing alarms
     call ESMF_ClockGetAlarmList(clock, alarmlistflag=ESMF_ALARMLIST_RINGING, alarmCount=alarmcount, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    write(msg,'(a,2i6)')"XXX_restart_mod ringing count = ",alarmcount
+    call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
 
     if (alarmcount > 0) then
        allocate(alarms(alarmcount))
        call ESMF_ClockGetAlarmList(clock, alarmlistflag=ESMF_ALARMLIST_RINGING, alarmList=alarms, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        do n = 1,alarmcount
-          if (ESMF_AlarmIsRinging(alarms(n), rc=rc)) then
-             call ESMF_AlarmGet(alarms(n), name=alarmName, rc=rc)
-             ! this is a ringing restart alarm
-             if(trim(alarmName(1:13)) == 'alarm_restart') then
-                alarmIsOn = .true.
-                call ESMF_AlarmRingerOff( alarms(n), rc=rc )
-                if (ChkErr(rc,__LINE__,u_FILE_u)) return
-             end if
-          end if
+          call ESMF_AlarmGet(alarms(n), name=alarm_Name, rc=rc)
+          write(msg,'(a,2i6)')"XXX_restart_mod ringing = "//trim(alarm_name),n,alarmcount
+          call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
        end do
+       deallocate(alarms)
     end if
-
-    ! ! Restart Alarm
-    ! call ESMF_ClockGetAlarm(clock, alarmname='alarm_restart', alarm=alarm, rc=rc)
-    ! if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    ! if (ESMF_AlarmIsRinging(alarm, rc=rc)) then
-    !    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    !    alarmIsOn = .true.
-    !    call ESMF_AlarmRingerOff( alarm, rc=rc )
-    !    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    ! else
-    !    ! Stop Alarm
-    !    call ESMF_ClockGetAlarm(clock, alarmname='alarm_stop', alarm=alarm, rc=rc)
-    !    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    !    if (ESMF_AlarmIsRinging(alarm, rc=rc) .and. write_restart_at_endofrun) then
-    !       AlarmIsOn = .true.
-    !    else
-    !       AlarmIsOn = .false.
-    !    endif
-    ! endif
-
+       !do n = 1,alarmcount
+          !if (ESMF_AlarmIsRinging(alarms(n), rc=rc)) then
+             !call ESMF_AlarmGet(alarms(n), name=alarm_Name, rc=rc)
+             ! this is a ringing restart alarm
+ !             if(trim(alarm_Name(1:13)) == 'alarm_restart') then
+!                 alarmIsOn = .true.
+!                 call ESMF_AlarmRingerOff( alarms(n), rc=rc )
+!                 if (ChkErr(rc,__LINE__,u_FILE_u)) return
+!              end if
+!           !end if
+!           end do
+!        end if
+! !
+!#endif
+!#ifdef test
+    ! Restart Alarm
+    call ESMF_ClockGetAlarm(clock, alarmname='alarm_restart', alarm=alarm, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (ESMF_AlarmIsRinging(alarm, rc=rc)) then
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       alarmIsOn = .true.
+       call ESMF_AlarmRingerOff( alarm, rc=rc )
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    else
+       ! Stop Alarm
+       call ESMF_ClockGetAlarm(clock, alarmname='alarm_stop', alarm=alarm, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (ESMF_AlarmIsRinging(alarm, rc=rc) .and. write_restart_at_endofrun) then
+          AlarmIsOn = .true.
+       else
+          AlarmIsOn = .false.
+       endif
+    endif
+!#endif
     if (alarmIsOn) then
        call ESMF_ClockGet(clock, currtime=currtime, starttime=starttime, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
