@@ -258,7 +258,7 @@ contains
     use ESMF       , only : ESMF_TimeGet, ESMF_ClockGetAlarm, ESMF_ClockPrint, ESMF_TimeIntervalGet
     use ESMF       , only : ESMF_AlarmIsRinging, ESMF_AlarmRingerOff, ESMF_FieldBundleIsCreated
     use ESMF       , only : ESMF_Calendar, ESMF_AlarmGet, ESMF_AlarmList_Flag, ESMF_ClockGetAlarmList
-    use ESMF       , only : ESMF_ALARMLIST_RINGING
+    use ESMF       , only : ESMF_ALARMLIST_RINGING,  ESMF_ALARMLIST_ALL
     use NUOPC      , only : NUOPC_CompAttributeGet
     use NUOPC_Model, only : NUOPC_ModelGet
     use med_io_mod , only : med_io_define_time, med_io_write_time
@@ -362,37 +362,47 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 !#ifdef test
     ! check if any alarms are ringing and get any ringing alarms
-    call ESMF_ClockGetAlarmList(clock, alarmlistflag=ESMF_ALARMLIST_RINGING, alarmCount=alarmcount, rc=rc)
+    alarmIsOn = .false.
+    call ESMF_ClockGetAlarmList(clock, alarmlistflag=ESMF_ALARMLIST_ALL, alarmCount=alarmcount, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    write(msg,'(a,2i6)')"XXX_restart_mod ringing count = ",alarmcount
+    write(msg,'(a,2i6)')"XXX_restart_mod all alarm count = ",alarmcount
     call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
 
     if (alarmcount > 0) then
        allocate(alarms(alarmcount))
-       call ESMF_ClockGetAlarmList(clock, alarmlistflag=ESMF_ALARMLIST_RINGING, alarmList=alarms, rc=rc)
+       call ESMF_ClockGetAlarmList(clock, alarmlistflag=ESMF_ALARMLIST_ALL, alarmList=alarms, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        do n = 1,alarmcount
-          call ESMF_AlarmGet(alarms(n), name=alarm_Name, rc=rc)
-          write(msg,'(a,2i6)')"XXX_restart_mod ringing = "//trim(alarm_name),n,alarmcount
-          call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
+          call ESMF_AlarmGet(alarms(n), name=alarm_name, rc=rc)
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+          if (ESMF_AlarmIsRinging(alarms(n), rc=rc)) then
+             if (ChkErr(rc,__LINE__,u_FILE_u)) return
+             write(msg,'(a,2i6)')"XXX_restart_mod ringing = "//trim(alarm_name),n,alarmcount
+             call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
+             if(trim(alarm_Name(1:13)) == 'alarm_restart') then
+                alarmIsOn = .true.
+                call ESMF_AlarmRingerOff( alarms(n), rc=rc )
+                if (ChkErr(rc,__LINE__,u_FILE_u)) return
+             end if
+          end if
        end do
        deallocate(alarms)
     end if
-       !do n = 1,alarmcount
-          !if (ESMF_AlarmIsRinging(alarms(n), rc=rc)) then
-             !call ESMF_AlarmGet(alarms(n), name=alarm_Name, rc=rc)
-             ! this is a ringing restart alarm
- !             if(trim(alarm_Name(1:13)) == 'alarm_restart') then
-!                 alarmIsOn = .true.
-!                 call ESMF_AlarmRingerOff( alarms(n), rc=rc )
-!                 if (ChkErr(rc,__LINE__,u_FILE_u)) return
-!              end if
-!           !end if
-!           end do
-!        end if
-! !
+    !    do n = 1,alarmcount
+    !       if (ESMF_AlarmIsRinging(alarms(n), rc=rc)) then
+    !          call ESMF_AlarmGet(alarms(n), name=alarm_Name, rc=rc)
+              !this is a ringing restart alarm
+    !          if(trim(alarm_Name(1:13)) == 'alarm_restart') then
+    !             alarmIsOn = .true.
+    !             call ESMF_AlarmRingerOff( alarms(n), rc=rc )
+    !             if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    !          end if
+    !       end if
+    !    end do
+    ! end if
+!
 !#endif
-!#ifdef test
+#ifdef test
     ! Restart Alarm
     call ESMF_ClockGetAlarm(clock, alarmname='alarm_restart', alarm=alarm, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -411,7 +421,7 @@ contains
           AlarmIsOn = .false.
        endif
     endif
-!#endif
+#endif
     if (alarmIsOn) then
        call ESMF_ClockGet(clock, currtime=currtime, starttime=starttime, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
