@@ -51,6 +51,7 @@ contains
     type(InternalState) :: is_local
     integer             :: n, maptype
     logical             :: med_aoflux_to_ocn
+    logical             :: med_ocnnst
     character(len=CX)   :: msgString
     character(len=CL)   :: cvalue
     character(len=CS)   :: fldname
@@ -152,28 +153,36 @@ contains
        call addfld_ocnalb('So_anidf')
     end if
 
-    ! from med: ocean nst
-    if (phase == 'advertise') then
-       call addfld_from(compatm, 'Sa_tskn')   ! to check
-       !sent back to ATM, will need have mapping added; So_nst should be done
-       !below instead of So_t
-       allocate(flds(16))
-       flds = (/'tref  ', 'dconv ', 'dtcool', 'qrain ', 'xtts  ', 'xzts  ', &
-                'c0    ', 'cd    ', 'w0    ', 'wd    ', 'xs    ', 'xt    ', &
-                'xu    ', 'xv    ', 'xz    ', 'zc    '/)
-       do n = 1,size(flds)
-          fldname = 'Snst_'//trim(flds(n))
-          call addfld_ocnnst(fldname)
-       end do
-       deallocate(flds)
 
-       allocate(flds(5))
-       flds = (/'tseal      ', 'tsfc_water ', 'tsurf_water', 'dtzm       ', 'dtm        '/)
-       do n = 1,size(flds)
-          fldname = 'Snst_'//trim(flds(n))
-          call addfld_ocnnst(fldname)
-       end do
-       deallocate(flds)
+    ! TODO: make configurable
+    med_ocnnst = .true.
+
+    if (med_ocnnst) then
+       ! from med: ocean nst
+       if (phase == 'advertise') then
+          call addfld_from(compatm, 'Sa_tskn')   ! to check
+          !sent back to ATM, will need have mapping added; So_nst should be done
+          !below instead of So_t
+          allocate(flds(16))
+          flds = (/'tref  ', 'dconv ', 'dtcool', 'qrain ', 'xtts  ', 'xzts  ', &
+                   'c0    ', 'cd    ', 'w0    ', 'wd    ', 'xs    ', 'xt    ', &
+                   'xu    ', 'xv    ', 'xz    ', 'zc    '/)
+          do n = 1,size(flds)
+             fldname = 'Snst_'//trim(flds(n))
+             call addfld_ocnnst(fldname)
+          end do
+          deallocate(flds)
+
+          ! wind,stress and sfcnsw should be local FB only---maybe some of these others too
+          allocate(flds(8))
+          flds = (/'tseal      ', 'tsfc_water ', 'tsurf_water', 'dtzm       ', 'dtm        ', &
+                   'wind       ', 'stress     ', 'sfcnsw     '/)
+          do n = 1,size(flds)
+             fldname = 'Snst_'//trim(flds(n))
+             call addfld_ocnnst(fldname)
+          end do
+          deallocate(flds)
+       end if
     end if
 
     !=====================================================================

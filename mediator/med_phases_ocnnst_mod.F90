@@ -1,5 +1,6 @@
 module med_phases_ocnnst_mod
 
+  use ESMF                  , only : ESMF_LogWrite, ESMF_LOGMSG_INFO, ESMF_SUCCESS, ESMF_FAILURE
   use med_kind_mod          , only : CX=>SHR_KIND_CX, CS=>SHR_KIND_CS, CL=>SHR_KIND_CL, R8=>SHR_KIND_R8, I4=>SHR_KIND_I4
   use med_internalstate_mod , only : InternalState, logunit
   use med_constants_mod     , only : dbug_flag       => med_constants_dbug_flag
@@ -9,7 +10,7 @@ module med_phases_ocnnst_mod
   use med_methods_mod       , only : State_GetScalar => med_methods_State_GetScalar
   use med_internalstate_mod , only : mapconsf, mapnames, compatm, compocn, compice, maintask
   use perf_mod              , only : t_startf, t_stopf
-
+  use med_constants_mod     , only : shr_const_pi
   implicit none
   private
 
@@ -31,8 +32,8 @@ module med_phases_ocnnst_mod
   !--------------------------------------------------------------------------
 
   type ocnnst_type
-     real(r8) , pointer :: lats        (:) => null() ! latitudes  (degrees)
-     real(r8) , pointer :: lons        (:) => null() ! longitudes (degrees)
+     real(r8) , pointer :: lats        (:) => null() ! latitudes  (radians)
+     real(r8) , pointer :: lons        (:) => null() ! longitudes (radians)
      !real(r8) , pointer :: area        (:) => null() ! area (m2)
      integer  , pointer :: mask        (:) => null() ! ocn domain mask: 0 <=> inactive cell
      !inputs from atm
@@ -97,6 +98,7 @@ module med_phases_ocnnst_mod
   real(R8), parameter    :: tgice = 271.20_R8       ! TODO: actually f(sss)
   integer, parameter     :: kp = R8
   real(R8), parameter    :: zero = 0.0_R8, one = 1.0_R8
+  real(R8), parameter    :: const_deg2rad = shr_const_pi/180.0_R8  ! deg to rads
   character(*),parameter :: u_FILE_u =  __FILE__
 
 !===============================================================================
@@ -111,7 +113,7 @@ contains
     ! All input field bundles are ASSUMED to be on the ocean grid
     !-----------------------------------------------------------------------
 
-    use ESMF  , only : ESMF_LogWrite, ESMF_LOGMSG_INFO, ESMF_SUCCESS, ESMF_FAILURE
+
     use ESMF  , only : ESMF_VM, ESMF_VMGet, ESMF_Mesh, ESMF_MeshGet
     use ESMF  , only : ESMF_GridComp, ESMF_GridCompGet, ESMF_MESHLOC_ELEMENT
     use ESMF  , only : ESMF_Field, ESMF_FieldGet, ESMF_FieldCreate, ESMF_FieldBundleGet
@@ -197,8 +199,9 @@ contains
     call ESMF_MeshGet(lmesh, ownedElemCoords=ownedElemCoords)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     do n = 1,lsize
-       ocnnst%lons(n) = ownedElemCoords(2*n-1)
-       ocnnst%lats(n) = ownedElemCoords(2*n)
+       ocnnst%lons(n) = const_deg2rad * ownedElemCoords(2*n-1)
+       ocnnst%lats(n) = const_deg2rad * ownedElemCoords(2*n)
+       if(iam.eq.82 .and. n .eq. 4)print *,'YYY0',ownedElemCoords(2*n-1),ocnnst%lons(n),ownedElemCoords(2*n),ocnnst%lats(n)
     end do
 
     ! ocean mask
@@ -241,13 +244,12 @@ contains
     use ESMF          , only : ESMF_ClockIsCreated, ESMF_ClockGetNextTime
     use ESMF          , only : ESMF_VM, ESMF_VMGet
     use ESMF          , only : ESMF_LogWrite, ESMF_LogFoundError
-    use ESMF          , only : ESMF_SUCCESS, ESMF_FAILURE, ESMF_LOGMSG_INFO
     use ESMF          , only : ESMF_Field, ESMF_FieldGet
     use ESMF          , only : ESMF_FieldBundleGet, ESMF_FieldBundleIsCreated
     use ESMF          , only : operator(+)
     use NUOPC         , only : NUOPC_CompAttributeGet
-    use med_phases_history_mod, only : med_phases_history_write_med
-    use module_nst_water_prop , only : get_dtzm_point
+    use med_phases_history_mod , only : med_phases_history_write_med
+    use module_nst_water_prop  , only : get_dtzm_point
 
     ! input/output variables
     type(ESMF_GridComp)  :: gcomp
@@ -385,12 +387,12 @@ contains
           ! nstf_name4,5 are both 0 right now
           zsea1 = 0.0_r8
           zsea2 = 0.0_r8
-          call sfc_nst_run(lsize, mask=ocnnst%mask, flag_iter=flag_iter, flag_guess=flag_guess, ifd=ifd,             &
-               zsea1=zsea1, zsea2=zsea2, xlon=ocnnst%lons, solhr=solhr, z1=ocnnst%z1, t1=ocnnst%t1, ps=ocnnst%prsl,  &
-               u1=ocnnst%u1, v1=ocnnst%v1, q1=ocnnst%q1, hflx=ocnnst%sen, evap=ocnnst%evap, rain=ocnnst%rain,        &
-               dlwflx=ocnnst%dlwflx, sfcnsw=ocnnst%sfcnsw, stress=ocnnst%stress, wind=ocnnst%wind, tref=ocnnst%tref, &
-               tskin=ocnnst%tseal, tsurf=ocnnst%tsurf_wat, xt=ocnnst%xt, xs=ocnnst%xs, xu=ocnnst%xu,                 &
-               xv=ocnnst%xv, xz=ocnnst%xz, xtts=ocnnst%xtts, xzts=ocnnst%xzts, dt_cool=ocnnst%dtcool,                &
+          call sfc_nst_run(iam,lsize, mask=ocnnst%mask, flag_iter=flag_iter, flag_guess=flag_guess, ifd=ifd,         &
+               zsea1=zsea1, zsea2=zsea2, xlon=ocnnst%lons, xlat=ocnnst%lats, solhr=solhr, z1=ocnnst%z1, t1=ocnnst%t1,&
+               ps=ocnnst%prsl, u1=ocnnst%u1, v1=ocnnst%v1, q1=ocnnst%q1, hflx=ocnnst%sen, evap=ocnnst%evap,          &
+               rain=ocnnst%rain, dlwflx=ocnnst%dlwflx, sfcnsw=ocnnst%sfcnsw, stress=ocnnst%stress, wind=ocnnst%wind, &
+               tref=ocnnst%tref, tskin=ocnnst%tseal, tsurf=ocnnst%tsurf_wat, xt=ocnnst%xt, xs=ocnnst%xs,             &
+               xu=ocnnst%xu, xv=ocnnst%xv, xz=ocnnst%xz, xtts=ocnnst%xtts, xzts=ocnnst%xzts, dt_cool=ocnnst%dtcool,  &
                z_c=ocnnst%zc, c_0=ocnnst%c0, c_d=ocnnst%cd, w_0=ocnnst%w0, w_d=ocnnst%wd, d_conv=ocnnst%dconv)
           ! nst_post
           do i = 1,lsize
@@ -413,8 +415,6 @@ contains
              endif
           end do
        end do
-       write(msg,*)trim(subname)//' done iter loop '
-       call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
 
        if (ESMF_FieldBundleIsCreated(is_local%wrap%FBMed_ocnnst_o, rc=rc)) then
           call NUOPC_MediatorGet(gcomp, driverClock=dClock, rc=rc)
@@ -440,7 +440,7 @@ contains
 
   subroutine set_ocnnst_pointers(fldbun_a, fldbun_o, fldbun_alb, fldbun_m, lsize, ocnnst, rc)
 
-    use ESMF  , only : ESMF_FieldBundle, ESMF_SUCCESS
+    use ESMF  , only : ESMF_FieldBundle
 
     ! Set pointers for ocnnst
 
@@ -615,18 +615,11 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
   end subroutine set_ocnnst_pointers
-  ! call sfc_nst_run(lsize, mask=ocnnst%mask, flag_iter=flag_iter, flag_guess=flag_guess,              &
-  !      zsea1=zsea1, zsea2=zsea2, xlon=ocnnst%lons, solhr=solhr, t1=ocnnst%t1, prsl1=ocnnst%prsl,     &
-  !      u1=ocnnst%u1, v1=ocnnst%v1, q1=ocnnst%q1, hflx=ocnnst%sen, evap=ocnnst%evap, sfcnsw=ocnnst%sfcnsw, &
-  !      stress=ocnnst%stress, wind=ocnnst%wind, &
-  !      tskin=ocnnst%tseal, tsurf=ocnnst%tsurf_wat, xt=ocnnst%xt, xs=ocnnst%xs, xu=ocnnst%xu,         &
-  !      xv=ocnnst%xv, xz=ocnnst%xz, xtts=ocnnst%xtts, xzts=ocnnst%xzts, dt_cool=ocnnst%dt_cool,       &
-  !      z_c=ocnnst%zc, c_0=ocnnst%c_0, c_d=ocnnst%c_d, w_0=ocnnst%w_0, w_d=ocnnst%w_d, d_conv=ocnnst%d_conv)
 
   !TODO: add SSS
-  subroutine sfc_nst_run(im, mask, flag_iter, flag_guess, ifd, zsea1, zsea2, xlon, solhr, z1, t1, ps,  &
-       u1, v1, q1, evap, rain, hflx, dlwflx, sfcnsw, stress, wind, tref, tskin, tsurf, xt, xs, xu, xv, &
-       xz, xtts, xzts, dt_cool, z_c, c_0, c_d, w_0, w_d, d_conv)
+  subroutine sfc_nst_run(iam, im, mask, flag_iter, flag_guess, ifd, zsea1, zsea2, xlon, xlat, solhr, z1, &
+       t1, ps, u1, v1, q1, evap, rain, hflx, dlwflx, sfcnsw, stress, wind, tref, tskin, tsurf, xt, xs,   &
+       xu, xv, xz, xtts, xzts, dt_cool, z_c, c_0, c_d, w_0, w_d, d_conv)
 
     use funcphys              , only : fpvs
     use module_nst_water_prop , only : get_dtzm_point, density, rhocoef, sw_ps_9b, sw_ps_9b_aw, grv
@@ -635,13 +628,15 @@ contains
     use nst_module, only : cool_skin,dtm_1p,cal_w,cal_ttop, convdepth,dtm_1p_fca,dtm_1p_tla,           &
          dtm_1p_mwa,dtm_1p_mda,dtm_1p_mta, dtl_reset
 
+    integer, intent(in) :: iam ! local pet
     integer, intent(in) :: im
     integer, intent(in) :: mask(:)
     logical, intent(in) :: flag_iter(:)
     logical, intent(in) :: flag_guess(:)
 
     real (R8), intent(in) :: zsea1, zsea2, solhr
-    real (R8), intent(in) :: xlon(:)
+    real (R8), intent(in) :: xlon(:)   ! longitude in radians
+    real (R8), intent(in) :: xlat(:)   ! latitude in radians
     real (R8), intent(in) :: z1(:)
     real (R8), intent(in) :: t1(:)
     real (R8), intent(in) :: u1(:)
@@ -681,6 +676,7 @@ contains
 
     !TODO: do what with this?
     real (R8), dimension(im) :: qrain
+    character(len=CL) :: msg
 
     kdt = 1 ! only used for prints
     timestep = 1.0_R8 ! only used for prints
@@ -688,7 +684,7 @@ contains
     sss = 34.0_R8
     sbc = sigma_r
     sfcemis = 0.97_R8
-    sinlat = sin(xlon)
+    sinlat = sin(xlat)
     cpinv = one/cp
     hvapi = one/hvap
     elocp = hvap/cp
@@ -723,6 +719,7 @@ contains
           z_c_old(i)     = z_c(i)
        endif
      enddo
+     !call ESMF_LogWrite('hereX0a', ESMF_LOGMSG_INFO)
      !  --- ...  initialize variables. all units are m.k.s. unless specified.
      !           ps is in pascals, wind is wind speed, theta1 is surface air
      !           estimated from level 1 temperature, rho_a is air density and
@@ -733,13 +730,14 @@ contains
            wndmag(i) = wind(i)
            q0(i)     = max(q1(i), 1.0e-8_kp)
            tv1(i)    = t1(i) * (one + rvrdm1*q0(i))
-           print *,'XXX ',i,tv1(i),q0(i),ps(i),rd*tv1(i)
            rho_a(i)  = ps(i) / (rd*tv1(i))
            qss(i)    = fpvs(tsurf(i))                          ! pa
            qss(i)    = eps*qss(i) / (ps(i) + epsm1*qss(i))     ! pa
            rch(i)    = evap(i)/(elocp * (qss(i) - q0(i)))      ! iffy
            tem       = 0.00001_kp/z1(i)                        ! from sfc_diff
            rch(i)    = max(rch(i), tem)
+           if(iam.eq.82 .and. i .eq. 4)print *,'XXX0',i,nswsfc(i),wndmag(i),q0(i),tv1(i),rho_a(i),qss(i),rch(i),tem,&
+                rch(i),tsurf(i),xlon(i),xlat(i),sinlat(i),grv(sinlat(i)),solhr
         end if
      end do
      !
@@ -753,7 +751,7 @@ contains
            tsea      = tsurf(i)
            t12       = tsea*tsea
            ulwflx(i) = sfcemis(i) * sbc * t12 * t12
-           alon      = xlon(i)*rad2deg
+           alon      = rad2deg * xlon(i)
            grav      = grv(sinlat(i))
            soltim  = mod(alon/15.0_kp + solhr, 24.0_kp)*3600.0_kp
            call density(tsea,sss,rho_w)                     ! sea water density
@@ -769,13 +767,17 @@ contains
            alfac    = one / (one + (wetc*le*dwat)/(cp*dtmp))        ! wet bulb factor
            tem      = (1.0e3_kp * rain(i) / rho_w) * alfac * cp_w
            qrain(i) =  tem * (tsea-t1(i)+1.0e3_kp*(qss(i)-q0(i))*le/cp)
-
            !> - Calculate input non solar heat flux as upward = positive to models here
 
            f_nsol   = hflx(i) + evap(i) + ulwflx(i) - dlwflx(i) + omg_sh*qrain(i)
-
+           if(iam.eq.82 .and. i .eq. 4)print *,'XXX2',i,hflx(i),evap(i),ulwflx(i),dlwflx(i),qrain(i)
            sep      = sss*(evap(i)/le-rain(i))/rho_w
            ustar_a  = sqrt(stress(i)/rho_a(i))          ! air friction velocity
+           !write(msg,'(A,i6,13f14.7)') 'XX0 ',i,real(ustar_a,4),real(f_nsol,4),real(nswsfc(i),4), &
+           !write(msg,*) 'XX0 ',i,real(ustar_a,4),real(f_nsol,4),real(nswsfc(i),4), &
+           !     real(evap(i),4),real(rho_a,4),real(tsea,4),real(q_ts,4),real(hl_ts,4),real(le,4), &
+           !     real(dt_cool(i),4),real(z_c(i),4),real(c_0(i),4),real(c_d(i),4)
+           !call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
            !
            !  sensitivities of heat flux components to ts
            !
@@ -784,11 +786,20 @@ contains
            hl_ts  = rch(i)*elocp*eps*hvap*qss(i)/(rd*t12)
            rf_ts  = tem * (one+rch(i)*hl_ts)
            q_ts   = rnl_ts + hs_ts + hl_ts + omg_sh*rf_ts
+           !write(msg,'(A,i6,13f14.7)') 'XX1 ',i,real(ustar_a,4),real(f_nsol,4),real(nswsfc(i),4), &
+           !     real(evap(i),4),real(rho_a,4),real(tsea,4),real(q_ts,4),real(hl_ts,4),real(le,4), &
+           !     real(dt_cool(i),4),real(z_c(i),4),real(c_0(i),4),real(c_d(i),4)
+           !call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
            !
            !> - Call cool_skin(), which is the sub-layer cooling parameterization
            !! (Fairfall et al. (1996) \cite fairall_et_al_1996).
            ! & calculate c_0, c_d
            !
+           !write(msg,'(A,i6,13f14.7)') 'XX2 ',i,real(ustar_a,4),real(f_nsol,4),real(nswsfc(i),4), &
+           !     real(evap(i),4),real(rho_a,4),real(tsea,4),real(q_ts,4),real(hl_ts,4),real(le,4), &
+           !     real(dt_cool(i),4),real(z_c(i),4),real(c_0(i),4),real(c_d(i),4)
+           !call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
+
            call cool_skin(ustar_a,f_nsol,nswsfc(i),evap(i),sss,alpha,beta, &
                 rho_w,rho_a(i),tsea,q_ts,hl_ts,grav,le,                    &
                 dt_cool(i),z_c(i),c_0(i),c_d(i))

@@ -2000,17 +2000,6 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     end if
 
-    !----------------------------------------------------------
-    ! Initialize ocean NST
-    !----------------------------------------------------------
-
-    if (is_local%wrap%comp_present(compocn) .or. is_local%wrap%comp_present(compatm)) then
-       if ( ESMF_FieldBundleIsCreated(is_local%wrap%FBMed_ocnnst_o) .and. &
-            ESMF_FieldBundleIsCreated(is_local%wrap%FBMed_ocnnst_a)) then
-          call med_phases_ocnnst_run(gcomp, rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       end if
-    end if
 
     !---------------------------------------
     ! Loop over components and determine if they are at correct time
@@ -2244,6 +2233,18 @@ contains
 
        call med_phases_profile(gcomp, rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       !----------------------------------------------------------
+       ! Initialize ocean NST
+       !----------------------------------------------------------
+
+       if (is_local%wrap%comp_present(compocn) .or. is_local%wrap%comp_present(compatm)) then
+          if ( ESMF_FieldBundleIsCreated(is_local%wrap%FBMed_ocnnst_o) .and. &
+               ESMF_FieldBundleIsCreated(is_local%wrap%FBMed_ocnnst_a)) then
+             call med_phases_ocnnst_run(gcomp, rc=rc)
+             if (ChkErr(rc,__LINE__,u_FILE_u)) return
+          end if
+       end if
 
     else ! Not all done
        call NUOPC_CompAttributeSet(gcomp, name="InitializeDataComplete", value="false", rc=rc)

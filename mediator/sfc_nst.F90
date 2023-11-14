@@ -146,7 +146,8 @@ contains
     !     ep       - real, potential evaporation                       im   !
     !                                                                       !
     ! ===================================================================== !
-    use machine , only : kind_phys
+    !use machine , only : kind_phys
+    use ufs_kind_mod, only : kind_phys => shr_kind_r8
     use funcphys, only : fpvs
     use date_def, only : idate
     use module_nst_water_prop, only: get_dtzm_point
