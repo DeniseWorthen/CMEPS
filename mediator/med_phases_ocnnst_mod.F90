@@ -719,7 +719,6 @@ contains
           z_c_old(i)     = z_c(i)
        endif
      enddo
-     !call ESMF_LogWrite('hereX0a', ESMF_LOGMSG_INFO)
      !  --- ...  initialize variables. all units are m.k.s. unless specified.
      !           ps is in pascals, wind is wind speed, theta1 is surface air
      !           estimated from level 1 temperature, rho_a is air density and
