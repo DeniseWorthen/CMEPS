@@ -621,12 +621,20 @@ contains
        t1, ps, u1, v1, q1, evap, rain, hflx, dlwflx, sfcnsw, stress, wind, tref, tskin, tsurf, xt, xs,   &
        xu, xv, xz, xtts, xzts, dt_cool, z_c, c_0, c_d, w_0, w_d, d_conv)
 
-    use funcphys              , only : fpvs
+    use funcphys ,              only : fpvs
+    use physcons,               only : &
+        eps     =>  con_eps            &         !< con_rd/con_rv (nd)
+       ,cp_a    => con_cp              &         !< spec heat air @p    (j/kg/k)
+       ,epsm1   => con_epsm1           &         !< eps - 1 (nd)
+       ,hvap    => con_hvap            &         !< lat heat h2o cond   (j/kg)
+       ,rvrdm1  => con_fvirt           &         !< con_rv/con_rd-1. (nd)
+       ,rd      => con_rd                        !< gas constant air (j/kg/k)
+
     use module_nst_water_prop , only : get_dtzm_point, density, rhocoef, sw_ps_9b, sw_ps_9b_aw, grv
-    use module_nst_parameters , only : eps, epsm1, t0k,cp_w,omg_m,omg_sh, sigma_r,solar_time_6am,ri_c, &
-         z_w_max,delz,wd_max, rad2deg,const_rot,tau_min,tw_max,sst_max,rvrdm1,rd,cp_a, hvap
-    use nst_module, only : cool_skin,dtm_1p,cal_w,cal_ttop, convdepth,dtm_1p_fca,dtm_1p_tla,           &
-         dtm_1p_mwa,dtm_1p_mda,dtm_1p_mta, dtl_reset
+    use module_nst_parameters , only : t0k,cp_w,omg_m,omg_sh,sigma_r,solar_time_6am,ri_c
+    use module_nst_parameters , only : z_w_max,delz,wd_max,rad2deg,const_rot,tau_min,tw_max,sst_max
+    use nst_module            , only : cool_skin,dtm_1p,cal_w,cal_ttop, convdepth,dtm_1p_fca,dtm_1p_tla
+    use nst_module            , only : dtm_1p_mwa,dtm_1p_mda,dtm_1p_mta, dtl_reset
 
     integer, intent(in) :: iam ! local pet
     integer, intent(in) :: im
