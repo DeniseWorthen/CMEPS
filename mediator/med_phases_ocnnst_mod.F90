@@ -766,7 +766,7 @@ contains
            !
            !> - Calculate sensible heat flux (\a qrain) due to rainfall.
            !
-           le       = (2.501_kp-0.00237_kp*tsea)*1e6_kp
+           le       = (2.501_kp-0.00237_kp*tsea)*1.0e6_kp
            dwat     = 2.11e-5_kp*(t1(i)/t0k)**1.94_kp               ! water vapor diffusivity
            dtmp     = (one+3.309e-3_kp*(t1(i)-t0k)-1.44e-6_kp*(t1(i)-t0k) &
                 * (t1(i)-t0k))*0.02411_kp/(rho_a(i)*cp)             ! heat diffusivity
@@ -985,6 +985,26 @@ contains
            endif                 ! if flag_guess(i) then
         endif                   ! if mask==1
      enddo
+!!$
+!!$     if ( nstf_name1 > 1 ) then
+!!$        !> - Calculate latent and sensible heat flux over open water with updated tskin
+!!$        !!      for the grids of open water and the iteration is on.
+!!$        do i = 1, im
+!!$           if ( flag(i) ) then
+!!$              qss(i)   = fpvs( tskin(i) )
+!!$              qss(i)   = eps*qss(i) / (ps(i) + epsm1*qss(i))
+!!$              qsurf(i) = qss(i)
+!!$              evap(i)  = elocp*rch(i) * (qss(i) - q0(i))
+!!$
+!!$              if(thsfc_loc) then ! Use local potential temperature
+!!$                 hflx(i)  = rch(i) * (tskin(i) - theta1(i))
+!!$              else ! Use potential temperature referenced to 1000 hPa
+!!$                 hflx(i)  = rch(i) * (tskin(i)/prsik1(i) - theta1(i))
+!!$              endif
+!!$
+!!$           endif
+!!$        enddo
+!!$     endif
 
   end subroutine sfc_nst_run
 end module med_phases_ocnnst_mod
