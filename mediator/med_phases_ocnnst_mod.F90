@@ -11,7 +11,9 @@ module med_phases_ocnnst_mod
   use med_internalstate_mod , only : mapconsf, mapnames, compatm, compocn, compice, maintask
   use perf_mod              , only : t_startf, t_stopf
   use med_constants_mod     , only : shr_const_pi
+
   implicit none
+
   private
 
   !--------------------------------------------------------------------------
@@ -96,11 +98,10 @@ module med_phases_ocnnst_mod
                                                     ! when iter = 2, flag_iter = .true. when wind < 2
                                                     ! for both land and ocean (when nstf_name1 > 0)
   real(R8), parameter    :: tgice = 271.20_R8       ! TODO: actually f(sss)
-  integer, parameter     :: kp = R8
-  real(R8), parameter    :: zero = 0.0_R8, one = 1.0_R8
   real(R8), parameter    :: const_deg2rad = shr_const_pi/180.0_R8  ! deg to rads
   character(*),parameter :: u_FILE_u =  __FILE__
-
+  ! debug
+  integer, save :: kdt
 !===============================================================================
 contains
 !===============================================================================
@@ -144,6 +145,8 @@ contains
     character(CL)            :: msg
     type(ESMF_Field), pointer :: fieldlist(:)
     character(*), parameter  :: subname = '(med_phases_ocnnst_init) '
+    ! debug
+    real(r8) :: alon, alat
     !-----------------------------------------------------------------------
 
     call t_startf('MED:'//subname)
@@ -201,7 +204,13 @@ contains
     do n = 1,lsize
        ocnnst%lons(n) = const_deg2rad * ownedElemCoords(2*n-1)
        ocnnst%lats(n) = const_deg2rad * ownedElemCoords(2*n)
-       if(iam.eq.82 .and. n .eq. 4)print *,'YYY0',ownedElemCoords(2*n-1),ocnnst%lons(n),ownedElemCoords(2*n),ocnnst%lats(n)
+       !if(iam.eq.82 .and. n .eq. 4)print *,'YYY0',ownedElemCoords(2*n-1),ocnnst%lons(n),ownedElemCoords(2*n),ocnnst%lats(n)
+       alon = ownedElemCoords(2*n-1)
+       alat = ownedElemCoords(2*n)
+       if (alat .ge. 1.40 .and. alat .le. 1.50 .and. alon .ge. 89.2 .and. alon .le. 89.8) then
+          print *,'YYY0 ',n,ownedElemCoords(2*n-1),ocnnst%lons(n),ownedElemCoords(2*n),ocnnst%lats(n)
+       end if
+       !print *, 'YYY0 ',n,alat,alon
     end do
 
     ! ocean mask
@@ -241,10 +250,10 @@ contains
     use NUOPC_Mediator, only : NUOPC_MediatorGet
     use ESMF          , only : ESMF_GridComp, ESMF_GridCompGet, ESMF_TimeInterval
     use ESMF          , only : ESMF_Clock, ESMF_ClockGet, ESMF_Time, ESMF_TimeGet
-    use ESMF          , only : ESMF_ClockIsCreated, ESMF_ClockGetNextTime
+    use ESMF          , only : ESMF_ClockIsCreated, ESMF_ClockGetNextTime, ESMF_TimeIntervalGet
     use ESMF          , only : ESMF_VM, ESMF_VMGet
     use ESMF          , only : ESMF_LogWrite, ESMF_LogFoundError
-    use ESMF          , only : ESMF_Field, ESMF_FieldGet
+    use ESMF          , only : ESMF_Field, ESMF_FieldGet, ESMF_FieldBundleWrite
     use ESMF          , only : ESMF_FieldBundleGet, ESMF_FieldBundleIsCreated
     use ESMF          , only : operator(+)
     use NUOPC         , only : NUOPC_CompAttributeGet
@@ -258,13 +267,15 @@ contains
     type(ocnnst_type), save :: ocnnst
     type(ESMF_VM)           :: vm
     integer                 :: iam
-    integer                 :: iter, day, jday
+    integer                 :: iter, day
+    real(R8)                :: jday
     type(InternalState)     :: is_local
     type(ESMF_Clock)        :: clock
     type(ESMF_Clock)        :: dclock
     type(ESMF_Time)         :: currTime
     type(ESMF_Time)         :: nextTime
-    type(ESMF_TimeInterval) :: timeStep
+    type(ESMF_TimeInterval) :: timeInterval
+    real(R8)                :: timestep
     character(CL)           :: cvalue
     character(CS)           :: starttype        ! config start type
     character(CL)           :: runtype          ! initial, continue, hybrid, branch
@@ -279,6 +290,9 @@ contains
     logical         , save  :: ocnnst_created
     logical         , save  :: first_call = .true.
     character(len=*)  , parameter :: subname='(med_phases_ocnnst_run)'
+    ! FBwrite
+    integer           :: yr, mon, sec
+    character(len=CL) :: currtime_str, fname
     !---------------------------------------
 
     rc = ESMF_SUCCESS
@@ -319,17 +333,21 @@ contains
 
     if (ocnnst_created) then
        ! get clock, current time and timestep
-       call ESMF_GridCompGet(gcomp, clock=clock)
+       call ESMF_GridCompGet(gcomp, clock=clock,name=msg)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
-       call ESMF_ClockGet( clock, currTime=currTime, timeStep=timeStep, rc=rc)
+       call ESMF_LogWrite(" component name = "//trim(msg), ESMF_LOGMSG_INFO)
+
+       call ESMF_ClockGet( clock, currTime=currTime, timeStep=timeInterval, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
        ! Clock is not advanced until the end of ModelAdvance
        call ESMF_TimeGet( currTime, dd=day, h_r8=solhr, rc=rc )
        if (chkerr(rc,__LINE__,u_FILE_u)) return
-       call ESMF_TimeGet( currTime, dayOfYear=jday, rc=rc )
+       call ESMF_TimeGet( currTime, dayOfYear_r8=jday, rc=rc )
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_TimeIntervalGet(timeInterval,s_r8=timestep,rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
 
-       write(msg,*)trim(subname)//' jday = ',jday,' solhr = ',solhr
+       write(msg,*)trim(subname)//' jday = ',jday,' solhr = ',solhr,' timestep = ',timestep
        call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
        !
        ! Calculate ocean NST on the ocean grid
@@ -342,7 +360,8 @@ contains
        call FB_GetFldPtr(is_local%wrap%FBImp(compocn,compocn),  'So_t', ocnnst%tsfco, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        ! set pointers
-       call set_ocnnst_pointers(is_local%wrap%FBImp(compatm,compocn), is_local%wrap%FBImp(compice,compocn), &
+       call set_ocnnst_pointers(is_local%wrap%FBImp(compatm,compocn), is_local%wrap%FBexp(compice), &
+            is_local%wrap%FBImp(compice,compocn), &
             is_local%wrap%FBMed_ocnalb_o, is_local%wrap%FBMed_ocnnst_o, lsize, ocnnst, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
 
@@ -351,9 +370,18 @@ contains
           if (chkerr(rc,__LINE__,u_FILE_u)) return
        end if
 
+       !debug
+       !call ESMF_TimeGet(currTime, yy=yr, mm=mon, dd=day, s=sec, rc=rc)
+       !if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       !write(currtime_str,'(i4.4,a,i2.2,a,i2.2,a,i5.5)') yr,'-',mon,'-',day,'-',sec
+       !fname = 'FBMed_ocnnst_o.'//trim(currtime_str)//'.nc'
+       !call ESMF_FieldBundleWrite(is_local%wrap%FBMed_ocnnst_o, trim(fname), overwrite=.true., rc=rc)
+       !if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
        ! NST
+       ! ESMF reports dayOfYear as fraction starting at 1 (eg 1.x->365.x)
        do iter = 1,2
-          write(msg,*)trim(subname)//' julian day ',jday,' solhr = ',solhr,' iter = ',iter
+          write(msg,*)trim(subname)//' julian day ',jday-1.0_R8,' solhr = ',solhr,' iter = ',iter
           call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
 
           ! loop_control_part1
@@ -366,15 +394,15 @@ contains
           end do
 
           ! nst_pre
-          z_c_0 = zero
+          z_c_0 = 0.0_R8
           do i = 1,lsize
              if (ocnnst%mask(i) == 1) then
-                call get_dtzm_point(ocnnst%xt(i), ocnnst%xz(i), ocnnst%dtcool(i), z_c_0, zero, omz1, ocnnst%dtzm(i))
+                call get_dtzm_point(ocnnst%xt(i), ocnnst%xz(i), ocnnst%dtcool(i), z_c_0, 0.0_R8, omz1, ocnnst%dtzm(i))
                 ocnnst%tref(i) = max(tgice, ocnnst%tsfco(i) - ocnnst%dtzm(i))
-                if (abs(ocnnst%xz(i)) > zero) then
-                   tem2 = one / ocnnst%xz(i)
+                if (abs(ocnnst%xz(i)) > 0.0_R8) then
+                   tem2 = 1.0_R8 / ocnnst%xz(i)
                 else
-                   tem2 = zero
+                   tem2 = 0.0_R8
                 endif
                 ocnnst%tseal(i)     = ocnnst%tref(i) + (ocnnst%xt(i)+ocnnst%xt(i)) * tem2 - ocnnst%dtcool(i)
                 ocnnst%tsurf_wat(i) = ocnnst%tseal(i)
@@ -385,15 +413,16 @@ contains
           !zsea1 = 0.001_kp*real(nstf_name4)
           !zsea2 = 0.001_kp*real(nstf_name5)
           ! nstf_name4,5 are both 0 right now
-          zsea1 = 0.0_r8
-          zsea2 = 0.0_r8
-          call sfc_nst_run(iam,lsize, mask=ocnnst%mask, flag_iter=flag_iter, flag_guess=flag_guess, ifd=ifd,         &
-               zsea1=zsea1, zsea2=zsea2, xlon=ocnnst%lons, xlat=ocnnst%lats, solhr=solhr, z1=ocnnst%z1, t1=ocnnst%t1,&
-               ps=ocnnst%prsl, u1=ocnnst%u1, v1=ocnnst%v1, q1=ocnnst%q1, hflx=ocnnst%sen, evap=ocnnst%evap,          &
-               rain=ocnnst%rain, dlwflx=ocnnst%dlwflx, sfcnsw=ocnnst%sfcnsw, stress=ocnnst%stress, wind=ocnnst%wind, &
-               tref=ocnnst%tref, tskin=ocnnst%tseal, tsurf=ocnnst%tsurf_wat, xt=ocnnst%xt, xs=ocnnst%xs,             &
-               xu=ocnnst%xu, xv=ocnnst%xv, xz=ocnnst%xz, xtts=ocnnst%xtts, xzts=ocnnst%xzts, dt_cool=ocnnst%dtcool,  &
-               z_c=ocnnst%zc, c_0=ocnnst%c0, c_d=ocnnst%cd, w_0=ocnnst%w0, w_d=ocnnst%wd, d_conv=ocnnst%dconv)
+          zsea1 = 0.0_R8
+          zsea2 = 0.0_R8
+          call sfc_nst_run(iam,lsize,dtf=timestep,mask=ocnnst%mask, flag_iter=flag_iter, flag_guess=flag_guess,      &
+               ifd=ifd, zsea1=zsea1, zsea2=zsea2, xlon=ocnnst%lons, xlat=ocnnst%lats, solhr=solhr, z1=ocnnst%z1,     &
+               t1=ocnnst%t1, ps=ocnnst%prsl, u1=ocnnst%u1, v1=ocnnst%v1, q1=ocnnst%q1, hflx=ocnnst%sen,              &
+               evap=ocnnst%evap, rain=ocnnst%rain, dlwflx=ocnnst%dlwflx, sfcnsw=ocnnst%sfcnsw, stress=ocnnst%stress, &
+               wind=ocnnst%wind, tref=ocnnst%tref, tskin=ocnnst%tseal, tsurf=ocnnst%tsurf_wat, xt=ocnnst%xt,         &
+               xs=ocnnst%xs, xu=ocnnst%xu, xv=ocnnst%xv, xz=ocnnst%xz, xtts=ocnnst%xtts, xzts=ocnnst%xzts,           &
+               dt_cool=ocnnst%dtcool, z_c=ocnnst%zc, c_0=ocnnst%c0, c_d=ocnnst%cd, w_0=ocnnst%w0, w_d=ocnnst%wd,     &
+               d_conv=ocnnst%dconv)
           ! nst_post
           do i = 1,lsize
              if (ocnnst%mask(i) == 1) then
@@ -438,7 +467,7 @@ contains
 
 !===============================================================================
 
-  subroutine set_ocnnst_pointers(fldbun_a, fldbun_o, fldbun_alb, fldbun_m, lsize, ocnnst, rc)
+  subroutine set_ocnnst_pointers(fldbun_a, fldbun_i, fldbun_o, fldbun_alb, fldbun_m, lsize, ocnnst, rc)
 
     use ESMF  , only : ESMF_FieldBundle
 
@@ -448,6 +477,7 @@ contains
 
     ! input/output variables
     type(ESMF_FieldBundle)     , intent(inout) :: fldbun_a
+    type(ESMF_FieldBundle)     , intent(inout) :: fldbun_i
     type(ESMF_FieldBundle)     , intent(inout) :: fldbun_o
     type(ESMF_FieldBundle)     , intent(inout) :: fldbun_alb
     type(ESMF_FieldBundle)     , intent(inout) :: fldbun_m
@@ -503,7 +533,9 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(fldbun_a, 'Faxa_rain' , ocnnst%rain,   rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Faxa_lwdn' , ocnnst%dlwflx, rc=rc)
+
+    ! Export to ice
+    call FB_GetFldPtr(fldbun_i, 'Faxa_lwdn' , ocnnst%dlwflx, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !---------------------------------------
@@ -616,23 +648,34 @@ contains
 
   end subroutine set_ocnnst_pointers
 
+!  call sfc_nst_run(iam,lsize,dtf=timestep,mask=ocnnst%mask, flag_iter=flag_iter, flag_guess=flag_guess,      &
+!       ifd=ifd, zsea1=zsea1, zsea2=zsea2, xlon=ocnnst%lons, xlat=ocnnst%lats, solhr=solhr, z1=ocnnst%z1,     &
+!       t1=ocnnst%t1, ps=ocnnst%prsl, u1=ocnnst%u1, v1=ocnnst%v1, q1=ocnnst%q1, hflx=ocnnst%sen,              &
+!       evap=ocnnst%evap, rain=ocnnst%rain, dlwflx=ocnnst%dlwflx, sfcnsw=ocnnst%sfcnsw, stress=ocnnst%stress, &
+!       wind=ocnnst%wind, tref=ocnnst%tref, tskin=ocnnst%tseal, tsurf=ocnnst%tsurf_wat, xt=ocnnst%xt,         &
+!       xs=ocnnst%xs, xu=ocnnst%xu, xv=ocnnst%xv, xz=ocnnst%xz, xtts=ocnnst%xtts, xzts=ocnnst%xzts,           &
+!       dt_cool=ocnnst%dtcool, z_c=ocnnst%zc, c_0=ocnnst%c0, c_d=ocnnst%cd, w_0=ocnnst%w0, w_d=ocnnst%wd,     &
+!       d_conv=ocnnst%dconv)
+
   !TODO: add SSS
-  subroutine sfc_nst_run(iam, im, mask, flag_iter, flag_guess, ifd, zsea1, zsea2, xlon, xlat, solhr, z1, &
-       t1, ps, u1, v1, q1, evap, rain, hflx, dlwflx, sfcnsw, stress, wind, tref, tskin, tsurf, xt, xs,   &
+  subroutine sfc_nst_run(iam, im, dtf, mask, flag_iter, flag_guess, ifd, zsea1, zsea2, xlon, xlat, solhr, &
+       z1, t1, ps, u1, v1, q1, evap, rain, hflx, dlwflx, sfcnsw, stress, wind, tref, tskin, tsurf, xt, xs,&
        xu, xv, xz, xtts, xzts, dt_cool, z_c, c_0, c_d, w_0, w_d, d_conv)
 
+    use machine  ,              only : kp => kind_phys
     use funcphys ,              only : fpvs
-    use physcons,               only : &
-        eps     =>  con_eps            &         !< con_rd/con_rv (nd)
-       ,cp_a    => con_cp              &         !< spec heat air @p    (j/kg/k)
-       ,epsm1   => con_epsm1           &         !< eps - 1 (nd)
-       ,hvap    => con_hvap            &         !< lat heat h2o cond   (j/kg)
-       ,rvrdm1  => con_fvirt           &         !< con_rv/con_rd-1. (nd)
-       ,rd      => con_rd                        !< gas constant air (j/kg/k)
+    use physcons ,              only :   &
+          eps     =>  con_eps            &         !< con_rd/con_rv (nd)
+         ,cp_a    => con_cp              &         !< spec heat air @p    (j/kg/k)
+         ,epsm1   => con_epsm1           &         !< eps - 1 (nd)
+         ,hvap    => con_hvap            &         !< lat heat h2o cond   (j/kg)
+         ,rvrdm1  => con_fvirt           &         !< con_rv/con_rd-1. (nd)
+         ,rd      => con_rd                        !< gas constant air (j/kg/k)
 
     use module_nst_water_prop , only : get_dtzm_point, density, rhocoef, sw_ps_9b, sw_ps_9b_aw, grv
     use module_nst_parameters , only : t0k,cp_w,omg_m,omg_sh,sigma_r,solar_time_6am,ri_c
     use module_nst_parameters , only : z_w_max,delz,wd_max,rad2deg,const_rot,tau_min,tw_max,sst_max
+    use module_nst_parameters , only : zero, one
     use nst_module            , only : cool_skin,dtm_1p,cal_w,cal_ttop, convdepth,dtm_1p_fca,dtm_1p_tla
     use nst_module            , only : dtm_1p_mwa,dtm_1p_mda,dtm_1p_mta, dtl_reset
 
@@ -642,6 +685,7 @@ contains
     logical, intent(in) :: flag_iter(:)
     logical, intent(in) :: flag_guess(:)
 
+    real (R8), intent(in) :: dtf       ! fast loop timestep
     real (R8), intent(in) :: zsea1, zsea2, solhr
     real (R8), intent(in) :: xlon(:)   ! longitude in radians
     real (R8), intent(in) :: xlat(:)   ! latitude in radians
@@ -669,9 +713,8 @@ contains
     real (R8), intent(inout) :: w_0(:) , w_d(:)
 
     ! local variables
-    integer :: i, kdt
+    integer :: i
     ! TODO
-    real (R8) :: timestep
     logical   :: flag(im)
     real (R8) :: tsea, t12, alon, soltim, sss, le, dwat, dtmp, wetc, alfac, tem
     real (R8) :: f_nsol, sep, ustar_a, rnl_ts, hs_ts, sbc, rho_w, cp, grav, alpha, beta
@@ -682,12 +725,13 @@ contains
     real (R8), dimension(im) :: wndmag, ulwflx, nswsfc, q0, tv1, rho_a, sfcemis, sinlat
     real (R8), dimension(im) :: qss, rch
 
+    ! debug
+    real (r8) :: alat
     !TODO: do what with this?
     real (R8), dimension(im) :: qrain
     character(len=CL) :: msg
 
-    kdt = 1 ! only used for prints
-    timestep = 1.0_R8 ! only used for prints
+    kdt = kdt+1 ! only used for prints
     cp = cp_a
     sss = 34.0_R8
     sbc = sigma_r
@@ -743,8 +787,8 @@ contains
            rch(i)    = evap(i)/(elocp * (qss(i) - q0(i)))      ! iffy
            tem       = 0.00001_kp/z1(i)                        ! from sfc_diff
            rch(i)    = max(rch(i), tem)
-           if(iam.eq.82 .and. i .eq. 4)print *,'XXX0',i,nswsfc(i),wndmag(i),q0(i),tv1(i),rho_a(i),qss(i),rch(i),tem,&
-                rch(i),tsurf(i),xlon(i),xlat(i),sinlat(i),grv(sinlat(i)),solhr
+!           if(iam.eq.82 .and. i .eq. 4)print *,'XXX0',i,nswsfc(i),wndmag(i),q0(i),tv1(i),rho_a(i),qss(i),rch(i),tem,&
+!                rch(i),tsurf(i),xlon(i),xlat(i),sinlat(i),grv(sinlat(i)),solhr
         end if
      end do
      !
@@ -769,15 +813,20 @@ contains
            le       = (2.501_kp-0.00237_kp*tsea)*1.0e6_kp
            dwat     = 2.11e-5_kp*(t1(i)/t0k)**1.94_kp               ! water vapor diffusivity
            dtmp     = (one+3.309e-3_kp*(t1(i)-t0k)-1.44e-6_kp*(t1(i)-t0k) &
-                * (t1(i)-t0k))*0.02411_kp/(rho_a(i)*cp)             ! heat diffusivity
+                    * (t1(i)-t0k))*0.02411_kp/(rho_a(i)*cp)         ! heat diffusivity
            wetc     = 622.0_kp*le*qss(i)/(rd*t1(i)*t1(i))
            alfac    = one / (one + (wetc*le*dwat)/(cp*dtmp))        ! wet bulb factor
            tem      = (1.0e3_kp * rain(i) / rho_w) * alfac * cp_w
            qrain(i) =  tem * (tsea-t1(i)+1.0e3_kp*(qss(i)-q0(i))*le/cp)
            !> - Calculate input non solar heat flux as upward = positive to models here
 
-           f_nsol   = hflx(i) + evap(i) + ulwflx(i) - dlwflx(i) + omg_sh*qrain(i)
-           if(iam.eq.82 .and. i .eq. 4)print *,'XXX2',i,hflx(i),evap(i),ulwflx(i),dlwflx(i),qrain(i)
+           f_nsol   = -hflx(i) - evap(i) + ulwflx(i) - dlwflx(i) + omg_sh*qrain(i)
+
+           alat = rad2deg*asin(sinlat(i))
+           if(iam .eq. 42 .and. i .eq. 414) then
+              print '(a,2i6,8e14.5)','YYY ',i,kdt,alon,alat,nswsfc(i),-hflx(i),-evap(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i)
+           end if
+
            sep      = sss*(evap(i)/le-rain(i))/rho_w
            ustar_a  = sqrt(stress(i)/rho_a(i))          ! air friction velocity
            !write(msg,'(A,i6,13f14.7)') 'XX0 ',i,real(ustar_a,4),real(f_nsol,4),real(nswsfc(i),4), &
@@ -807,9 +856,8 @@ contains
            !     real(dt_cool(i),4),real(z_c(i),4),real(c_0(i),4),real(c_d(i),4)
            !call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
 
-           call cool_skin(ustar_a,f_nsol,nswsfc(i),evap(i),sss,alpha,beta, &
-                rho_w,rho_a(i),tsea,q_ts,hl_ts,grav,le,                    &
-                dt_cool(i),z_c(i),c_0(i),c_d(i))
+           call cool_skin(ustar_a,f_nsol,nswsfc(i),evap(i),sss,alpha,beta, rho_w,rho_a(i),tsea, &
+                q_ts,hl_ts,grav,le,dt_cool(i),z_c(i),c_0(i),c_d(i))
 
            tem  = one / wndmag(i)
            cosa = u1(i)*tem
@@ -829,8 +877,7 @@ contains
 
               !> - Call convdepth() to calculate depth for convective adjustments.
               if ( f_nsol > zero .and. xt(i) > zero ) then
-                 call convdepth(kdt,timestep,nswsfc(i),f_nsol,sss,sep,rho_w, &
-                      alpha,beta,xt(i),xs(i),xz(i),d_conv(i))
+                 call convdepth(kdt,dtf,nswsfc(i),f_nsol,sss,sep,rho_w,alpha,beta,xt(i),xs(i),xz(i),d_conv(i))
               else
                  d_conv(i) = zero
               endif
@@ -850,11 +897,8 @@ contains
               rich = ri_c
 
               !> - Call the diurnal thermocline layer model dtm_1p().
-              call dtm_1p(kdt,timestep,rich,taux,tauy,nswsfc(i),    &
-                   f_nsol,sss,sep,q_ts,hl_ts,rho_w,alpha,beta,alon, &
-                   sinlat(i),soltim,grav,le,d_conv(i),              &
-                   xt(i),xs(i),xu(i),xv(i),xz(i),xzts(i),xtts(i))
-
+              call dtm_1p(kdt,dtf,rich,taux,tauy,nswsfc(i),f_nsol,sss,sep,q_ts,hl_ts,rho_w,alpha,beta, &
+                   alon, sinlat(i),soltim,grav,le,d_conv(i),xt(i),xs(i),xu(i),xv(i),xz(i),xzts(i),xtts(i))
 
               !  apply mda
               if ( xt(i) > zero ) then
@@ -891,7 +935,7 @@ contains
                  !>  - Call cal_ttop() to calculate the diurnal warming amount at the top layer with
                  !! thickness of \a dz.
                  if ( q_warm > zero ) then
-                    call cal_ttop(kdt,timestep,q_warm,rho_w,dz, xt(i),xz(i),ttop0)
+                    call cal_ttop(kdt,dtf,q_warm,rho_w,dz, xt(i),xz(i),ttop0)
                     ttop = ((xt(i)+xt(i))/xz(i))*(one-dz/((xz(i)+xz(i))))
 
                     !>  - Call dtm_1p_tla() to apply top layer adjustment.
@@ -925,13 +969,13 @@ contains
                     endif
                  endif
                  !
-              endif             ! if ( xt(i) > 0.0 ) then
-              !           reset dtl at midnight and when solar zenith angle > 89.994 degree
-              if ( abs(soltim) < 2.0_kp*timestep ) then
+              endif ! if ( xt(i) > 0.0 ) then
+              ! reset dtl at midnight and when solar zenith angle > 89.994 degree
+              if ( abs(soltim) < 2.0_kp*dtf ) then
                  call dtl_reset (xt(i),xs(i),xu(i),xv(i),xz(i),xzts(i),xtts(i))
               endif
 
-           endif             ! if (solar_time > solar_time_6am .and. ifd(i) == 0.0 ) then: too late to start the first day
+           endif ! if (solar_time > solar_time_6am .and. ifd(i) == 0.0 ) then: too late to start the first day
 
 
            !     update tsurf  (when flag(i) .eqv. .true. )
