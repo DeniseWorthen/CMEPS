@@ -160,7 +160,7 @@ contains
     if (med_ocnnst) then
        ! from med: ocean nst
        if (phase == 'advertise') then
-          call addfld_from(compatm, 'Sa_tskn')   ! to check
+          call addfld_from(compatm, 'Sa_tskn')   ! to check atm's calculation
           !sent back to ATM, will need have mapping added; So_nst should be done
           !below instead of So_t
           allocate(flds(16))
@@ -456,6 +456,7 @@ contains
           call addfld_from(compatm , 'Faxa_lwnet')
           call addfld_from(compatm , 'Faxa_lwdn')
           call addfld_to(compocn   , 'Foxx_lwnet')
+          call addfld_to(compocn   , 'Faxa_lwdn')
        end if
     else
        if (med_aoflux_to_ocn) then
@@ -474,6 +475,13 @@ contains
              call addmap_from(compatm, 'Faxa_lwnet', compocn, mapconsf_aofrac, 'aofrac', 'unset')
              call addmrg_to(compocn, 'Foxx_lwnet', &
                   mrg_from=compatm, mrg_fld='Faxa_lwnet', mrg_type='copy_with_weights', mrg_fracname='ofrac')
+          end if
+
+          if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Faxa_lwdn', rc=rc) .and. &
+               fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_lwdn', rc=rc)) then
+             call addmap_from(compatm, 'Faxa_lwdn', compocn, mapconsf_aofrac, 'aofrac', 'unset')
+             call addmrg_to(compocn, 'Faxa_lwdn', &
+                  mrg_from=compatm, mrg_fld='Faxa_lwdn', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
        end if
     end if

@@ -412,9 +412,13 @@ contains
                scalar_value=nextsw_cday, rc=rc)
           if (chkerr(rc,__LINE__,u_FILE_u)) return
        else
-          call ESMF_ClockGetNextTime(clock, nextTime, rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          call ESMF_TimeGet(nextTime, dayOfYear_r8=nextsw_cday, rc=rc)
+          !call ESMF_ClockGetNextTime(clock, nextTime, rc=rc)
+          !if (ChkErr(rc,__LINE__,u_FILE_u)) return
+          !call ESMF_TimeGet(nextTime, dayOfYear_r8=nextsw_cday, rc=rc)
+          !if (ChkErr(rc,__LINE__,u_FILE_u)) return
+          call ESMF_ClockGet( clock, currTime=currTime, rc=rc)
+          if (chkerr(rc,__LINE__,u_FILE_u)) return
+          call ESMF_TimeGet( currTime, dayOfYear_r8=nextsw_cday, rc=rc )
           if (ChkErr(rc,__LINE__,u_FILE_u)) return
        end if
     end if
@@ -459,6 +463,7 @@ contains
                 ocnalb%avsdr(n) = ocnalb%anidr(n)
                 ocnalb%anidf(n) = albdif
                 ocnalb%avsdf(n) = albdif
+                !ocnalb%avsdf(n) = max( 0.0_R8, min( 1.0_R8, cosz ))
              else !--- dark side of earth ---
                 ocnalb%anidr(n) = 1.0_r8
                 ocnalb%avsdr(n) = 1.0_r8

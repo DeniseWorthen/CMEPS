@@ -207,7 +207,7 @@ contains
        !if(iam.eq.82 .and. n .eq. 4)print *,'YYY0',ownedElemCoords(2*n-1),ocnnst%lons(n),ownedElemCoords(2*n),ocnnst%lats(n)
        alon = ownedElemCoords(2*n-1)
        alat = ownedElemCoords(2*n)
-       if (alat .ge. 1.40 .and. alat .le. 1.50 .and. alon .ge. 89.2 .and. alon .le. 89.8) then
+       if (alat .ge. 7.50 .and. alat .le. 7.80 .and. alon .ge. 89.2 .and. alon .le. 89.8) then
           print *,'YYY0 ',n,ownedElemCoords(2*n-1),ocnnst%lons(n),ownedElemCoords(2*n),ocnnst%lats(n)
        end if
        !print *, 'YYY0 ',n,alat,alon
@@ -534,9 +534,12 @@ contains
     call FB_GetFldPtr(fldbun_a, 'Faxa_rain' , ocnnst%rain,   rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    ! Export to ice
-    call FB_GetFldPtr(fldbun_i, 'Faxa_lwdn' , ocnnst%dlwflx, rc=rc)
+    call FB_GetFldPtr(fldbun_a, 'Faxa_lwdn' , ocnnst%dlwflx, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! Export to ice
+    !call FB_GetFldPtr(fldbun_i, 'Faxa_lwdn' , ocnnst%dlwflx, rc=rc)
+    !if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !---------------------------------------
     ! Compute |stress| and |wind| for ocean
@@ -823,7 +826,7 @@ contains
            f_nsol   = -hflx(i) - evap(i) + ulwflx(i) - dlwflx(i) + omg_sh*qrain(i)
 
            alat = rad2deg*asin(sinlat(i))
-           if(iam .eq. 42 .and. i .eq. 414) then
+           if(iam .eq. 72 .and. i .eq. 678) then
               print '(a,2i6,8e14.5)','YYY ',i,kdt,alon,alat,nswsfc(i),-hflx(i),-evap(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i)
            end if
 
