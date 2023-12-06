@@ -465,192 +465,6 @@ contains
 
 !===============================================================================
 
-!===============================================================================
-
-  subroutine set_ocnnst_pointers(fldbun_a, fldbun_i, fldbun_o, fldbun_alb, fldbun_m, lsize, ocnnst, rc)
-
-    use ESMF  , only : ESMF_FieldBundle
-
-    ! Set pointers for ocnnst
-
-    use med_methods_mod , only : FB_fldchk    => med_methods_FB_FldChk
-
-    ! input/output variables
-    type(ESMF_FieldBundle)     , intent(inout) :: fldbun_a
-    type(ESMF_FieldBundle)     , intent(inout) :: fldbun_i
-    type(ESMF_FieldBundle)     , intent(inout) :: fldbun_o
-    type(ESMF_FieldBundle)     , intent(inout) :: fldbun_alb
-    type(ESMF_FieldBundle)     , intent(inout) :: fldbun_m
-    integer                    , intent(in)    :: lsize
-    type(ocnnst_type)          , intent(inout) :: ocnnst
-    integer                    , intent(out)   :: rc
-
-    ! local variables
-    real(R8), pointer   :: Faxa_taux(:)
-    real(R8), pointer   :: Faxa_tauy(:)
-    real(R8), pointer   :: avsdr(:)
-    real(R8), pointer   :: avsdf(:)
-    real(R8), pointer   :: anidr(:)
-    real(R8), pointer   :: anidf(:)
-    real(R8), pointer   :: Faxa_swvdf(:)
-    real(R8), pointer   :: Faxa_swndf(:)
-    real(R8), pointer   :: Faxa_swvdr(:)
-    real(R8), pointer   :: Faxa_swndr(:)
-    real(R8), pointer   :: Fioi_swpen_vdr(:)
-    real(R8), pointer   :: Fioi_swpen_vdf(:)
-    real(R8), pointer   :: Fioi_swpen_idr(:)
-    real(R8), pointer   :: Fioi_swpen_idf(:)
-
-    real(R8) :: fswabsv, fswabsi, fswpen
-    integer  :: n
-
-    !-----------------------------------------------------------------------
-
-    rc = ESMF_SUCCESS
-
-    !----------------------------------
-    ! Set pointers to fields needed for NST calculations
-    !----------------------------------
-
-    ! Import from atm
-    call FB_GetFldPtr(fldbun_a, 'Sa_pbot' ,   ocnnst%prsl,   rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Sa_z' ,      ocnnst%z1,     rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Sa_shum' ,   ocnnst%q1,     rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Sa_tbot' ,   ocnnst%t1,     rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Sa_u' ,      ocnnst%u1,     rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Sa_v' ,      ocnnst%v1,     rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Faxa_evap' , ocnnst%evap,   rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Faxa_rain' , ocnnst%rain,   rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Faxa_sen' ,  ocnnst%sen,    rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Faxa_rain' , ocnnst%rain,   rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    call FB_GetFldPtr(fldbun_a, 'Faxa_lwdn' , ocnnst%dlwflx, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    ! Export to ice
-    !call FB_GetFldPtr(fldbun_i, 'Faxa_lwdn' , ocnnst%dlwflx, rc=rc)
-    !if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    !---------------------------------------
-    ! Compute |stress| and |wind| for ocean
-    !---------------------------------------
-
-    call FB_GetFldPtr(fldbun_m, 'Snst_wind' , ocnnst%wind, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    ocnnst%wind = 0.0_R8
-    ocnnst%wind = sqrt(ocnnst%u1*ocnnst%u1 + ocnnst%v1*ocnnst%v1)
-
-    call FB_GetFldPtr(fldbun_a, 'Faxa_taux' , Faxa_taux, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Faxa_tauy' , Faxa_tauy, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    call FB_GetFldPtr(fldbun_m, 'Snst_stress' , ocnnst%stress, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    ocnnst%stress = 0.0_R8
-    ocnnst%stress = sqrt(Faxa_taux*Faxa_taux + Faxa_tauy*Faxa_tauy)
-
-    !---------------------------------------
-    ! Compute netsw for ocean
-    !---------------------------------------
-    ! netsw_for_ocn = downsw_from_atm * (1-ocn_albedo) * (1-ice_fraction) + pensw_from_ice * (ice_fraction)
-
-    ! Input from atm
-    call FB_GetFldPtr(fldbun_a, 'Faxa_swvdr', Faxa_swvdr, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Faxa_swndr', Faxa_swndr, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Faxa_swvdf', Faxa_swvdf, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_a, 'Faxa_swndf', Faxa_swndf, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    ! Input from mediator, ocean albedos
-    call FB_GetFldPtr(fldbun_alb, 'So_avsdr' , avsdr, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_alb, 'So_anidr' , anidr, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_alb, 'So_avsdf' , avsdf, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_alb, 'So_anidf' , anidf, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    ! Input from ice, sw pen through ice
-    call FB_GetFldPtr(fldbun_o, 'Fioi_swpen_vdr', Fioi_swpen_vdr, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_o, 'Fioi_swpen_vdf', Fioi_swpen_vdf, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_o, 'Fioi_swpen_idr', Fioi_swpen_idr, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_o, 'Fioi_swpen_idf', Fioi_swpen_idf, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    call FB_GetFldPtr(fldbun_m, 'Snst_sfcnsw' , ocnnst%sfcnsw, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    ocnnst%sfcnsw = 0.0_R8
-    do n = 1,lsize
-       ! Compute total swnet to ocean
-       fswpen   = Fioi_swpen_vdr(n) + Fioi_swpen_vdf(n) + Fioi_swpen_idr(n) + Fioi_swpen_idf(n)
-       fswabsv  = Faxa_swvdr(n) * (1.0_R8 - avsdr(n)) + Faxa_swvdf(n) * (1.0_R8 - avsdf(n))
-       fswabsi  = Faxa_swndr(n) * (1.0_R8 - anidr(n)) + Faxa_swndf(n) * (1.0_R8 - anidf(n))
-       ocnnst%sfcnsw(n) = (fswabsv + fswabsi)*(1.0_R8 - ocnnst%ifrac(n)) + fswpen*ocnnst%ifrac(n)
-    end do
-
-    ! Ocean NST fields (mapped back to ATM)
-    call FB_GetFldPtr(fldbun_m, 'Snst_tref' ,        ocnnst%tref,   rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_dconv' ,       ocnnst%dconv,  rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_dtcool' ,      ocnnst%dtcool, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_qrain' ,       ocnnst%qrain,  rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_xtts' ,        ocnnst%xtts,   rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_xzts' ,        ocnnst%xzts,   rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_c0' ,          ocnnst%c0,     rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_cd' ,          ocnnst%cd,     rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_w0' ,          ocnnst%w0,     rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_wd' ,          ocnnst%wd,     rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_xs' ,          ocnnst%xs,     rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_xt' ,          ocnnst%xt,     rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_xu' ,          ocnnst%xu,     rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_xv' ,          ocnnst%xv,     rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_xz' ,          ocnnst%xz,     rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_zc' ,          ocnnst%zc,     rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-    call FB_GetFldPtr(fldbun_m, 'Snst_tseal' ,       ocnnst%tseal,     rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_tsfc_water' ,  ocnnst%tsfc_wat,  rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_tsurf_water' , ocnnst%tsurf_wat, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_dtzm' ,        ocnnst%dtzm,      rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(fldbun_m, 'Snst_dtm' ,         ocnnst%dtm,       rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-  end subroutine set_ocnnst_pointers
-
 !  call sfc_nst_run(iam,lsize,dtf=timestep,mask=ocnnst%mask, flag_iter=flag_iter, flag_guess=flag_guess,      &
 !       ifd=ifd, zsea1=zsea1, zsea2=zsea2, xlon=ocnnst%lons, xlat=ocnnst%lats, solhr=solhr, z1=ocnnst%z1,     &
 !       t1=ocnnst%t1, ps=ocnnst%prsl, u1=ocnnst%u1, v1=ocnnst%v1, q1=ocnnst%q1, hflx=ocnnst%sen,              &
@@ -1054,4 +868,196 @@ contains
 !!$     endif
 
   end subroutine sfc_nst_run
+
+!===============================================================================
+
+  !call set_ocnnst_pointers(is_local%wrap%FBImp(compatm,compocn), is_local%wrap%FBexp(compice), &
+  !     is_local%wrap%FBImp(compice,compocn), &
+  !     is_local%wrap%FBMed_ocnalb_o, is_local%wrap%FBMed_ocnnst_o, lsize, ocnnst, rc=rc)
+
+  subroutine set_ocnnst_pointers(fldbun_a, fldbun_i, fldbun_o, fldbun_alb, fldbun_m, lsize, ocnnst, rc)
+
+    use ESMF  , only : ESMF_FieldBundle
+
+    ! Set pointers for ocnnst
+
+    use med_methods_mod , only : FB_fldchk    => med_methods_FB_FldChk
+
+    ! input/output variables
+    type(ESMF_FieldBundle)     , intent(inout) :: fldbun_a
+    type(ESMF_FieldBundle)     , intent(inout) :: fldbun_i
+    type(ESMF_FieldBundle)     , intent(inout) :: fldbun_o
+    type(ESMF_FieldBundle)     , intent(inout) :: fldbun_alb
+    type(ESMF_FieldBundle)     , intent(inout) :: fldbun_m
+    integer                    , intent(in)    :: lsize
+    type(ocnnst_type)          , intent(inout) :: ocnnst
+    integer                    , intent(out)   :: rc
+
+    ! local variables
+    real(R8), pointer   :: Faxa_taux(:)
+    real(R8), pointer   :: Faxa_tauy(:)
+    real(R8), pointer   :: avsdr(:)
+    real(R8), pointer   :: avsdf(:)
+    real(R8), pointer   :: anidr(:)
+    real(R8), pointer   :: anidf(:)
+    real(R8), pointer   :: Faxa_swvdf(:)
+    real(R8), pointer   :: Faxa_swndf(:)
+    real(R8), pointer   :: Faxa_swvdr(:)
+    real(R8), pointer   :: Faxa_swndr(:)
+    real(R8), pointer   :: Fioi_swpen_vdr(:)
+    real(R8), pointer   :: Fioi_swpen_vdf(:)
+    real(R8), pointer   :: Fioi_swpen_idr(:)
+    real(R8), pointer   :: Fioi_swpen_idf(:)
+
+    real(R8) :: fswabsv, fswabsi, fswpen
+    integer  :: n
+
+    !-----------------------------------------------------------------------
+
+    rc = ESMF_SUCCESS
+
+    !----------------------------------
+    ! Set pointers to fields needed for NST calculations
+    !----------------------------------
+
+    ! Import from atm
+    call FB_GetFldPtr(fldbun_a, 'Sa_pbot' ,   ocnnst%prsl,   rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Sa_z' ,      ocnnst%z1,     rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Sa_shum' ,   ocnnst%q1,     rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Sa_tbot' ,   ocnnst%t1,     rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Sa_u' ,      ocnnst%u1,     rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Sa_v' ,      ocnnst%v1,     rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Faxa_evap' , ocnnst%evap,   rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Faxa_rain' , ocnnst%rain,   rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Faxa_sen' ,  ocnnst%sen,    rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Faxa_rain' , ocnnst%rain,   rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call FB_GetFldPtr(fldbun_a, 'Faxa_lwdn' , ocnnst%dlwflx, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! Export to ice
+    !call FB_GetFldPtr(fldbun_i, 'Faxa_lwdn' , ocnnst%dlwflx, rc=rc)
+    !if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    !---------------------------------------
+    ! Compute |stress| and |wind| for ocean
+    !---------------------------------------
+
+    call FB_GetFldPtr(fldbun_m, 'Snst_wind' , ocnnst%wind, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    ocnnst%wind = 0.0_R8
+    ocnnst%wind = sqrt(ocnnst%u1*ocnnst%u1 + ocnnst%v1*ocnnst%v1)
+
+    call FB_GetFldPtr(fldbun_a, 'Faxa_taux' , Faxa_taux, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Faxa_tauy' , Faxa_tauy, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call FB_GetFldPtr(fldbun_m, 'Snst_stress' , ocnnst%stress, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    ocnnst%stress = 0.0_R8
+    ocnnst%stress = sqrt(Faxa_taux*Faxa_taux + Faxa_tauy*Faxa_tauy)
+
+    !---------------------------------------
+    ! Compute netsw for ocean
+    !---------------------------------------
+    ! netsw_for_ocn = downsw_from_atm * (1-ocn_albedo) * (1-ice_fraction) + pensw_from_ice * (ice_fraction)
+
+    ! Input from atm
+    call FB_GetFldPtr(fldbun_a, 'Faxa_swvdr', Faxa_swvdr, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Faxa_swndr', Faxa_swndr, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Faxa_swvdf', Faxa_swvdf, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_a, 'Faxa_swndf', Faxa_swndf, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    ! Input from mediator, ocean albedos
+    call FB_GetFldPtr(fldbun_alb, 'So_avsdr' , avsdr, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_alb, 'So_anidr' , anidr, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_alb, 'So_avsdf' , avsdf, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_alb, 'So_anidf' , anidf, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    ! Input from ice, sw pen through ice
+    call FB_GetFldPtr(fldbun_o, 'Fioi_swpen_vdr', Fioi_swpen_vdr, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_o, 'Fioi_swpen_vdf', Fioi_swpen_vdf, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_o, 'Fioi_swpen_idr', Fioi_swpen_idr, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_o, 'Fioi_swpen_idf', Fioi_swpen_idf, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call FB_GetFldPtr(fldbun_m, 'Snst_sfcnsw' , ocnnst%sfcnsw, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    ocnnst%sfcnsw = 0.0_R8
+    do n = 1,lsize
+       ! Compute total swnet to ocean
+       fswpen   = Fioi_swpen_vdr(n) + Fioi_swpen_vdf(n) + Fioi_swpen_idr(n) + Fioi_swpen_idf(n)
+       fswabsv  = Faxa_swvdr(n) * (1.0_R8 - avsdr(n)) + Faxa_swvdf(n) * (1.0_R8 - avsdf(n))
+       !fswabsi  = Faxa_swndr(n) * (1.0_R8 - anidr(n)) + Faxa_swndf(n) * (1.0_R8 - anidf(n))
+       !ocnnst%sfcnsw(n) = (fswabsv + fswabsi)*(1.0_R8 - ocnnst%ifrac(n)) + fswpen*ocnnst%ifrac(n)
+       ocnnst%sfcnsw(n) = (fswabsv + fswabsi)
+    end do
+
+    ! Ocean NST fields (mapped back to ATM)
+    call FB_GetFldPtr(fldbun_m, 'Snst_tref' ,        ocnnst%tref,   rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_dconv' ,       ocnnst%dconv,  rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_dtcool' ,      ocnnst%dtcool, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_qrain' ,       ocnnst%qrain,  rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_xtts' ,        ocnnst%xtts,   rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_xzts' ,        ocnnst%xzts,   rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_c0' ,          ocnnst%c0,     rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_cd' ,          ocnnst%cd,     rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_w0' ,          ocnnst%w0,     rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_wd' ,          ocnnst%wd,     rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_xs' ,          ocnnst%xs,     rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_xt' ,          ocnnst%xt,     rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_xu' ,          ocnnst%xu,     rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_xv' ,          ocnnst%xv,     rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_xz' ,          ocnnst%xz,     rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_zc' ,          ocnnst%zc,     rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    call FB_GetFldPtr(fldbun_m, 'Snst_tseal' ,       ocnnst%tseal,     rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_tsfc_water' ,  ocnnst%tsfc_wat,  rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_tsurf_water' , ocnnst%tsurf_wat, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_dtzm' ,        ocnnst%dtzm,      rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(fldbun_m, 'Snst_dtm' ,         ocnnst%dtm,       rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+  end subroutine set_ocnnst_pointers
+
 end module med_phases_ocnnst_mod
