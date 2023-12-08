@@ -41,6 +41,7 @@ contains
     use esmFlds               , only : addfld_ocnalb => med_fldList_addfld_ocnalb
     use esmFlds               , only : addmap_ocnalb => med_fldList_addmap_ocnalb
     use esmFlds               , only : addfld_ocnnst => med_fldList_addfld_ocnnst
+    use esmFlds               , only : addmap_ocnnst => med_fldList_addmap_ocnnst
 
     ! input/output parameters:
     type(ESMF_GridComp)              :: gcomp
@@ -163,10 +164,11 @@ contains
           call addfld_from(compatm, 'Sa_tskn')   ! to check atm's calculation
           !sent back to ATM, will need have mapping added; So_nst should be done
           !below instead of So_t
-          allocate(flds(16))
+          !tsfc_water in post is the NST
+          allocate(flds(17))
           flds = (/'tref  ', 'dconv ', 'dtcool', 'qrain ', 'xtts  ', 'xzts  ', &
                    'c0    ', 'cd    ', 'w0    ', 'wd    ', 'xs    ', 'xt    ', &
-                   'xu    ', 'xv    ', 'xz    ', 'zc    '/)
+                   'xu    ', 'xv    ', 'xz    ', 'zc    ', 'tsfc  '/)
           do n = 1,size(flds)
              fldname = 'Snst_'//trim(flds(n))
              call addfld_ocnnst(fldname)
@@ -456,6 +458,7 @@ contains
           call addfld_from(compatm , 'Faxa_lwnet')
           call addfld_from(compatm , 'Faxa_lwdn')
           call addfld_to(compocn   , 'Foxx_lwnet')
+          ! ocnnst
           call addfld_to(compocn   , 'Faxa_lwdn')
        end if
     else
@@ -477,6 +480,7 @@ contains
                   mrg_from=compatm, mrg_fld='Faxa_lwnet', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
 
+          ! ocnnst
           if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Faxa_lwdn', rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_lwdn', rc=rc)) then
              call addmap_from(compatm, 'Faxa_lwdn', compocn, mapconsf_aofrac, 'aofrac', 'unset')
@@ -557,6 +561,20 @@ contains
        end if
     end do
     deallocate(flds)
+
+    ! to ocn: ice fraction for ocnnst
+    if (phase == 'advertise') then
+       if (is_local%wrap%comp_present(compice) .and. is_local%wrap%comp_present(compocn)) then
+          call addfld_from(compice , 'Si_ifrac')
+          call addfld_to(compocn   , 'Si_ifrac')
+       end if
+    else
+       if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Si_ifrac', rc=rc) .and. &
+            fldchk(is_local%wrap%FBImp(compice,compice), 'Si_ifrac', rc=rc)) then
+          call addmap_from(compice, 'Si_ifrac', compocn,  mapfcopy, 'unset', 'unset')
+          call addmrg_to(compocn, 'Si_ifrac', mrg_from=compice, mrg_fld='Si_ifrac', mrg_type='copy')
+       end if
+    end if
 
     ! to ocn: partitioned stokes drift from wav
     allocate(flds(2))
