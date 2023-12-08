@@ -69,25 +69,23 @@ module med_phases_ocnnst_mod
      real(r8) , pointer :: dtzm        (:) => null() ! mean of dT(z)  (z1 to z2) (?)
 
      ! in sfcf file, mapped from ocnnst back to atm
-     real(r8) , pointer :: c0          (:) => null() ! coefficient1 to calculate d(tz)/d(ts) (nd)
-     real(r8) , pointer :: cd          (:) => null() ! coefficient2 to calculate d(tz)/d(ts) (nd)
+     real(r8) , pointer :: tref        (:) => null() ! sea surface reference temperature (K)
      real(r8) , pointer :: dconv       (:) => null() ! thickness of free convection layer (m)
      real(r8) , pointer :: dtcool      (:) => null() ! sub-layer cooling amount (K)
      real(r8) , pointer :: qrain       (:) => null() ! sensible heat flux due to rainfall (W)
-     real(r8) , pointer :: tref        (:) => null() ! sea surface reference temperature (K)
+     real(r8) , pointer :: xtts        (:) => null() ! d(xt)/d(ts) (m)
+     real(r8) , pointer :: xzts        (:) => null() ! d(xz)/d(ts) (m K-1)
+
+     real(r8) , pointer :: c0          (:) => null() ! coefficient1 to calculate d(tz)/d(ts) (nd)
+     real(r8) , pointer :: cd          (:) => null() ! coefficient2 to calculate d(tz)/d(ts) (nd)
      real(r8) , pointer :: w0          (:) => null() ! coefficient3 to calculate d(tz)/d(ts) (nd)
      real(r8) , pointer :: wd          (:) => null() ! coefficient4 to calculate d(tz)/d(ts) (nd)
-
      real(r8) , pointer :: xs          (:) => null() ! salinity  content in diurnal thermocline layer (ppt m)
      real(r8) , pointer :: xt          (:) => null() ! heat content in diurnal thermocline layer (K m)
-     real(r8) , pointer :: xtts        (:) => null() ! d(xt)/d(ts) (m)
-
      real(r8) , pointer :: xu          (:) => null() ! u-current content in diurnal thermocline layer (m2 s-1)
      real(r8) , pointer :: xv          (:) => null() ! v-current  content in diurnal thermocline layer (m2 s-1)
      real(r8) , pointer :: xz          (:) => null() ! diurnal thermocline layer thickness (m)
-     real(r8) , pointer :: xzts        (:) => null() ! d(xz)/d(ts) (m K-1)
      real(r8) , pointer :: zc          (:) => null() ! sub-layer cooling thickness (m)
-
      real(r8) , pointer :: nst         (:) => null() ! the calculated NST (= tsfc_wat from post)
   end type ocnnst_type
 
@@ -532,6 +530,7 @@ contains
              endif
           end do
        end do
+       ocnnst%nst(:) = ocnnst%tsfc_wat(:)
 
        if (ESMF_FieldBundleIsCreated(is_local%wrap%FBMed_ocnnst_o, rc=rc)) then
           call NUOPC_MediatorGet(gcomp, driverClock=dClock, rc=rc)
@@ -629,7 +628,7 @@ contains
     real (R8), dimension(im) :: xzts_old, ifd_old, tskin_old, dt_cool_old, z_c_old
     real (R8), dimension(im) :: wndmag, ulwflx, nswsfc, q0, tv1, rho_a, sfcemis, sinlat
     real (R8), dimension(im) :: qss, rch
-
+    real (R8), dimension(im) :: hflxneg, lath
     ! debug
     real (r8) :: alat
     !TODO: do what with this?
@@ -642,14 +641,18 @@ contains
     sbc = sigma_r
     sfcemis = 0.97_R8
     sinlat = sin(xlat)
-    cpinv = one/cp
-    hvapi = one/hvap
-    elocp = hvap/cp
+    cpinv = one/cp     ! K/(J kg)
+    hvapi = one/hvap   ! kg/J
+    elocp = hvap/cp    ! K
     q0 = zero
     tv1 = zero
     rho_a = zero
     rch = zero
     qss = zero
+
+    ! correct for sign and units on imported quantities
+    hflxneg = -one*hflx
+    lath    = -one*evap*hvap  ! in W/m2, conversion of evap rate from atmos_model export (kg m-2 s-1)
 !
 ! flag for open water and where the iteration is on
 !
@@ -689,9 +692,9 @@ contains
            rho_a(i)  = ps(i) / (rd*tv1(i))
            qss(i)    = fpvs(tsurf(i))                          ! pa
            qss(i)    = eps*qss(i) / (ps(i) + epsm1*qss(i))     ! pa
-           rch(i)    = evap(i)/(elocp * (qss(i) - q0(i)))      ! iffy
-           tem       = 0.00001_kp/z1(i)                        ! from sfc_diff
-           rch(i)    = max(rch(i), tem)
+           ! sfc_nst.f90: evap(i) = elocp * rch(i)   * (qss(i) - q0(i))
+           !                 W/m2 =   (K) * (W/m2)/K * (kg/kg)
+           rch(i)    = lath(i)/(elocp*max(qss(i) - q0(i), 1.0e-8_kp))
 !           if(iam.eq.82 .and. i .eq. 4)print *,'XXX0',i,nswsfc(i),wndmag(i),q0(i),tv1(i),rho_a(i),qss(i),rch(i),tem,&
 !                rch(i),tsurf(i),xlon(i),xlat(i),sinlat(i),grv(sinlat(i)),solhr
         end if
@@ -723,16 +726,16 @@ contains
            alfac    = one / (one + (wetc*le*dwat)/(cp*dtmp))        ! wet bulb factor
            tem      = (1.0e3_kp * rain(i) / rho_w) * alfac * cp_w
            qrain(i) =  tem * (tsea-t1(i)+1.0e3_kp*(qss(i)-q0(i))*le/cp)
-           !> - Calculate input non solar heat flux as upward = positive to models here
 
-           f_nsol   = -hflx(i) - evap(i) + ulwflx(i) - dlwflx(i) + omg_sh*qrain(i)
+           !> - Calculate input non solar heat flux as upward = positive to models here
+           f_nsol   = hflxneg(i) + lath(i) + ulwflx(i) - dlwflx(i) + omg_sh*qrain(i)
 
            alat = rad2deg*asin(sinlat(i))
-           if(iam .eq. 72 .and. i .eq. 678) then
-              print '(a,2i6,8e14.5)','YYY ',i,kdt,alon,alat,nswsfc(i),-hflx(i),-evap(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i)
+           if(iam .eq. 72 .and. i .eq. 678 .and. mod(kdt,2) .eq. 0) then
+              print '(a,2i6,9e14.5)','YYY ',i,kdt,alon,alat,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),rch(i)
            end if
 
-           sep      = sss*(evap(i)/le-rain(i))/rho_w
+           sep      = sss*(lath(i)/le-rain(i))/rho_w
            ustar_a  = sqrt(stress(i)/rho_a(i))          ! air friction velocity
            !write(msg,'(A,i6,13f14.7)') 'XX0 ',i,real(ustar_a,4),real(f_nsol,4),real(nswsfc(i),4), &
            !write(msg,*) 'XX0 ',i,real(ustar_a,4),real(f_nsol,4),real(nswsfc(i),4), &
@@ -761,7 +764,7 @@ contains
            !     real(dt_cool(i),4),real(z_c(i),4),real(c_0(i),4),real(c_d(i),4)
            !call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
 
-           call cool_skin(ustar_a,f_nsol,nswsfc(i),evap(i),sss,alpha,beta, rho_w,rho_a(i),tsea, &
+           call cool_skin(ustar_a,f_nsol,nswsfc(i),lath(i),sss,alpha,beta, rho_w,rho_a(i),tsea, &
                 q_ts,hl_ts,grav,le,dt_cool(i),z_c(i),c_0(i),c_d(i))
 
            tem  = one / wndmag(i)
@@ -943,6 +946,7 @@ contains
 !!$              qss(i)   = fpvs( tskin(i) )
 !!$              qss(i)   = eps*qss(i) / (ps(i) + epsm1*qss(i))
 !!$              qsurf(i) = qss(i)
+                 !CAREFUL abou definition evap
 !!$              evap(i)  = elocp*rch(i) * (qss(i) - q0(i))
 !!$
 !!$              if(thsfc_loc) then ! Use local potential temperature
