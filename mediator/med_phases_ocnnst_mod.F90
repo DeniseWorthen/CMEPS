@@ -8,7 +8,7 @@ module med_phases_ocnnst_mod
   use med_methods_mod       , only : FB_diagnose     => med_methods_FB_diagnose
   use med_methods_mod       , only : FB_getFldPtr    => med_methods_FB_getFldPtr
   use med_methods_mod       , only : State_GetScalar => med_methods_State_GetScalar
-  use med_internalstate_mod , only : mapconsf, mapnames, compatm, compocn, compice, maintask
+  use med_internalstate_mod , only : compatm, compocn, compice, maintask
   use perf_mod              , only : t_startf, t_stopf
   use med_constants_mod     , only : shr_const_pi
 
@@ -182,10 +182,12 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call ESMF_FieldGet(fieldlist(1), mesh=lmesh, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    deallocate(fieldlist)
+    call ESMF_FieldGet(fieldlist(1), farrayPtr=dataptr1d, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
     call ESMF_MeshGet(lmesh, spatialDim=spatialDim, numOwnedElements=numOwnedElements, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    lsize = size(ocnnst%tsfco)
+    deallocate(fieldlist)
+    lsize = size(dataptr1d)
     if (numOwnedElements /= lsize) then
        write(tempc1,'(i10)') numOwnedElements
        write(tempc2,'(i10)') lsize
@@ -222,6 +224,7 @@ contains
           ocnnst%mask(n) = 1
        end if
     enddo
+
     ! initialize flags
     allocate(ifd(1:size(dataptr1d)))
     allocate(flag_iter(1:size(dataptr1d)))
@@ -311,8 +314,8 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! Derived fields
-    call set_ocnnst_pointers(is_local%wrap%FBImp(compatm,compocn), is_local%wrap%FBMed_ocnalb_o, &
- .        is_local%wrap%FBExp(compocn), ocnnst, lsize, rc)
+    call set_ocnnst_pointers(gcomp, is_local%wrap%FBImp(compatm,compocn), is_local%wrap%FBMed_ocnalb_o, &
+         is_local%wrap%FBImp(compice,compocn), is_local%wrap%FBExp(compocn), ocnnst, lsize, rc)
 
     if (dbug_flag > 5) then
       call ESMF_LogWrite(trim(subname)//": done", ESMF_LOGMSG_INFO)
@@ -436,8 +439,8 @@ contains
        !
        lsize = size(ocnnst%mask)
        ! Set pointers to derived fields
-       call set_ocnnst_pointers(is_local%wrap%FBImp(compatm,compocn), is_local%wrap%FBMed_ocnalb_o, &
-            .        is_local%wrap%FBExp(compocn), ocnnst, lsize, rc)
+       call set_ocnnst_pointers(gcomp, is_local%wrap%FBImp(compatm,compocn), is_local%wrap%FBMed_ocnalb_o, &
+            is_local%wrap%FBImp(compice,compocn), is_local%wrap%FBExp(compocn), ocnnst, lsize, rc)
 
        if (dbug_flag > 1) then
           call FB_diagnose(is_local%wrap%FBMed_ocnnst_o, string=trim(subname)//' b4 FBMed_ocnnst_o', rc=rc)
@@ -945,23 +948,23 @@ contains
 
 !===============================================================================
 
-  subroutine set_ocnnst_pointers(FBatm, FBalb, FBocn, lsize, ocnnst, rc)
+  subroutine set_ocnnst_pointers(gcomp, FBatm, FBalb, FBice, FBocn, ocnnst, lsize, rc)
 
-    use ESMF  , only : ESMF_FieldBundle
-
-    ! Set pointers for ocnnst
-
+    use ESMF            , only : ESMF_FieldBundle, ESMF_GRIDCOMP
     use med_methods_mod , only : FB_fldchk    => med_methods_FB_FldChk
 
     ! input/output variables
-    type(ESMF_FieldBundle)     , intent(inout) :: FBatm
-    type(ESMF_FieldBundle)     , intent(inout) :: FBalb
-    type(ESMF_FieldBundle)     , intent(inout) :: FBocn
-    integer                    , intent(in)    :: lsize
-    type(ocnnst_type)          , intent(inout) :: ocnnst
-    integer                    , intent(out)   :: rc
+    type(ESMF_GridComp)                    :: gcomp
+    type(ESMF_FieldBundle) , intent(inout) :: FBatm
+    type(ESMF_FieldBundle) , intent(inout) :: FBalb
+    type(ESMF_FieldBundle) , intent(inout) :: FBice
+    type(ESMF_FieldBundle) , intent(inout) :: FBocn
+    integer                , intent(in)    :: lsize
+    type(ocnnst_type)      , intent(inout) :: ocnnst
+    integer                , intent(out)   :: rc
 
     ! local variables
+    type(InternalState) :: is_local
     real(R8), pointer   :: taux(:)
     real(R8), pointer   :: tauy(:)
     real(R8), pointer   :: avsdr(:)
@@ -985,6 +988,9 @@ contains
 
     rc = ESMF_SUCCESS
 
+    call ESMF_GridCompGetInternalState(gcomp, is_local, rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+
     !---------------------------------------
     ! Compute |stress| and |wind| for ocean
     !---------------------------------------
@@ -997,7 +1003,7 @@ contains
     call FB_GetFldPtr(FBatm, 'Faxa_tauy' , tauy, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     ocnnst%stress = 0.0_R8
-    ocnnst%stress = sqrt(Faxa_taux*Faxa_taux + Faxa_tauy*Faxa_tauy)
+    ocnnst%stress = sqrt(taux*taux + tauy*tauy)
 
     !---------------------------------------
     ! Compute netsw for ocean
@@ -1024,16 +1030,16 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     if (is_local%wrap%comp_present(compice)) then
-       call FB_GetFldPtr(FBocn, 'Si_ifrac', ifrac, rc=rc)
+       call FB_GetFldPtr(FBice, 'Si_ifrac', ifrac, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        ! Input from ice, sw pen through ice
-       call FB_GetFldPtr(FBocn, 'Fioi_swpen_vdr', swpen_vdr, rc=rc)
+       call FB_GetFldPtr(FBice, 'Fioi_swpen_vdr', swpen_vdr, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       call FB_GetFldPtr(FBocn, 'Fioi_swpen_vdf', swpen_vdf, rc=rc)
+       call FB_GetFldPtr(FBice, 'Fioi_swpen_vdf', swpen_vdf, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       call FB_GetFldPtr(FBocn, 'Fioi_swpen_idr', swpen_idr, rc=rc)
+       call FB_GetFldPtr(FBice, 'Fioi_swpen_idr', swpen_idr, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       call FB_GetFldPtr(FBocn, 'Fioi_swpen_idf', swpen_idf, rc=rc)
+       call FB_GetFldPtr(FBice, 'Fioi_swpen_idf', swpen_idf, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     else
        ifrac = 0.0_R8

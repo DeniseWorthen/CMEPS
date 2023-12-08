@@ -168,7 +168,7 @@ contains
           allocate(flds(17))
           flds = (/'tref  ', 'dconv ', 'dtcool', 'qrain ', 'xtts  ', 'xzts  ', &
                    'c0    ', 'cd    ', 'w0    ', 'wd    ', 'xs    ', 'xt    ', &
-                   'xu    ', 'xv    ', 'xz    ', 'zc    ', 'tsfc  '/)
+                   'xu    ', 'xv    ', 'xz    ', 'zc    ', 't     '/)
           do n = 1,size(flds)
              fldname = 'Snst_'//trim(flds(n))
              call addfld_ocnnst(fldname)
