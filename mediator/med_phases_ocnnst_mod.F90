@@ -272,11 +272,17 @@ contains
     end if
 
     ! Ocean NST fields
-    call FB_GetFldPtr(is_local%wrap%FBMed_ocnnst_o, 'Snst_wind' ,        ocnnst%wind,   rc=rc)
+    call FB_GetFldPtr(is_local%wrap%FBMed_ocnnst_o, 'Snst_tref' ,        ocnnst%tref,   rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(is_local%wrap%FBMed_ocnnst_o, 'Snst_stress' ,      ocnnst%stress, rc=rc)
+    call FB_GetFldPtr(is_local%wrap%FBMed_ocnnst_o, 'Snst_dconv' ,       ocnnst%dconv,  rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(is_local%wrap%FBMed_ocnnst_o, 'Snst_sfcnsw' ,      ocnnst%sfcnsw, rc=rc)
+    call FB_GetFldPtr(is_local%wrap%FBMed_ocnnst_o, 'Snst_dtcool' ,      ocnnst%dtcool, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(is_local%wrap%FBMed_ocnnst_o, 'Snst_qrain' ,       ocnnst%qrain,  rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(is_local%wrap%FBMed_ocnnst_o, 'Snst_xtts' ,        ocnnst%xtts,   rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(is_local%wrap%FBMed_ocnnst_o, 'Snst_xzts' ,        ocnnst%xzts,   rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(is_local%wrap%FBMed_ocnnst_o, 'Snst_c0' ,          ocnnst%c0,     rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -298,8 +304,6 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(is_local%wrap%FBMed_ocnnst_o, 'Snst_zc' ,          ocnnst%zc,     rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call FB_GetFldPtr(is_local%wrap%FBMed_ocnnst_o, 'Snst_zc' ,          ocnnst%zc,     rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(is_local%wrap%FBMed_ocnnst_o, 'Snst_t' ,           ocnnst%nst,    rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
@@ -314,6 +318,13 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! Derived fields
+    call FB_GetFldPtr(is_local%wrap%FBMed_ocnnst_o, 'Snst_wind' ,        ocnnst%wind,   rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(is_local%wrap%FBMed_ocnnst_o, 'Snst_stress' ,      ocnnst%stress, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(is_local%wrap%FBMed_ocnnst_o, 'Snst_sfcnsw' ,      ocnnst%sfcnsw, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
     call set_ocnnst_pointers(gcomp, is_local%wrap%FBImp(compatm,compocn), is_local%wrap%FBMed_ocnalb_o, &
          is_local%wrap%FBImp(compice,compocn), is_local%wrap%FBExp(compocn), ocnnst, lsize, rc)
 

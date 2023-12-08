@@ -176,9 +176,9 @@ contains
           deallocate(flds)
 
           ! wind,stress and sfcnsw should be local FB only---maybe some of these others too
-          allocate(flds(8))
-          flds = (/'tseal      ', 'tsfc_water ', 'tsurf_water', 'dtzm       ', 'dtm        ', &
-                   'wind       ', 'stress     ', 'sfcnsw     '/)
+          allocate(flds(7))
+          flds = (/'tseal      ', 'tsfc_water ', 'tsurf_water', 'dtzm       ', 'wind       ', &
+                   'stress     ', 'sfcnsw     '/)
           do n = 1,size(flds)
              fldname = 'Snst_'//trim(flds(n))
              call addfld_ocnnst(fldname)
