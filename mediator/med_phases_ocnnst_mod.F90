@@ -224,6 +224,7 @@ contains
     enddo
 
     ! initialize flags
+    ! TODO: document location for these init values
     allocate(ifd(1:size(dataptr1d)))
     allocate(flag_iter(1:size(dataptr1d)))
     allocate(flag_guess(1:size(dataptr1d)))
@@ -509,6 +510,7 @@ contains
                xs=ocnnst%xs, xu=ocnnst%xu, xv=ocnnst%xv, xz=ocnnst%xz, xtts=ocnnst%xtts, xzts=ocnnst%xzts,           &
                dt_cool=ocnnst%dtcool, z_c=ocnnst%zc, c_0=ocnnst%c0, c_d=ocnnst%cd, w_0=ocnnst%w0, w_d=ocnnst%wd,     &
                d_conv=ocnnst%dconv)
+
           ! nst_post
           do i = 1,lsize
              if (ocnnst%mask(i) == 1) then
@@ -520,13 +522,10 @@ contains
 
           ! loop_control_part2
           do i = 1, lsize
-             if (ocnnst%mask(i) == 0) then
-                flag_iter(i)  = .false.
-                flag_guess(i) = .false.
-             else
-                if (iter == 1 .and. ocnnst%wind(i) < 2.0d0) then
-                   flag_iter(i) = .true.
-                endif
+             flag_iter(i)  = .false.
+             flag_guess(i) = .false.
+             if (iter == 1 .and. ocnnst%wind(i) < 2.0d0 .and. ocnnst%mask == 1) then
+                flag_iter(i) = .true.
              endif
           end do
        end do
@@ -1067,9 +1066,9 @@ contains
     ocnnst%sfcnsw = 0.0_R8
     do n = 1,lsize
        ! Compute total swnet to ocean
-       fswpen   = swpen_vdr(n) + swpen_vdf(n) + swpen_idr(n) + swpen_idf(n)
-       fswabsv  = swvdr(n) * (1.0_R8 - avsdr(n)) + swvdf(n) * (1.0_R8 - avsdf(n))
-       fswabsi  = swndr(n) * (1.0_R8 - anidr(n)) + swndf(n) * (1.0_R8 - anidf(n))
+       fswpen  = swpen_vdr(n) + swpen_vdf(n) + swpen_idr(n) + swpen_idf(n)
+       fswabsv = swvdr(n) * (1.0_R8 - avsdr(n)) + swvdf(n) * (1.0_R8 - avsdf(n))
+       fswabsi = swndr(n) * (1.0_R8 - anidr(n)) + swndf(n) * (1.0_R8 - anidf(n))
        ocnnst%sfcnsw(n) = (fswabsv + fswabsi)*(1.0_R8 - ocnnst%ifrac(n)) + fswpen*ocnnst%ifrac(n)
        ocnnst%sfcnsw(n) = (fswabsv + fswabsi)
     end do
