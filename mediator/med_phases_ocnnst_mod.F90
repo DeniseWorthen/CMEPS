@@ -90,14 +90,14 @@ module med_phases_ocnnst_mod
   end type ocnnst_type
 
   ! used, reused in module
-  real(r8) , allocatable, save :: ifd         (:)   ! index to start DTM run or not
-  logical  , allocatable, save :: flag_guess  (:)   ! .true.=  guess step to get CD et al
-                                                    ! when iter = 1, flag_guess = .true. when wind < 2
-                                                    ! when iter = 2, flag_guess = .false. for all grids
-  logical  , allocatable, save :: flag_iter   (:)   ! execution or not
-                                                    ! when iter = 1, flag_iter = .true. for all grids
-                                                    ! when iter = 2, flag_iter = .true. when wind < 2
-                                                    ! for both land and ocean (when nstf_name1 > 0)
+  real(r8) , allocatable :: ifd         (:)   ! index to start DTM run or not
+  logical  , allocatable :: flag_guess  (:)   ! .true.=  guess step to get CD et al
+                                              ! when iter = 1, flag_guess = .true. when wind < 2
+                                              ! when iter = 2, flag_guess = .false. for all grids
+  logical  , allocatable :: flag_iter   (:)   ! execution or not
+                                              ! when iter = 1, flag_iter = .true. for all grids
+                                              ! when iter = 2, flag_iter = .true. when wind < 2
+                                              ! for both land and ocean (when nstf_name1 > 0)
   real(R8), parameter    :: tgice = 271.20_R8       ! TODO: actually f(sss)
   real(R8), parameter    :: const_deg2rad = shr_const_pi/180.0_R8  ! deg to rads
   character(*),parameter :: u_FILE_u =  __FILE__
@@ -223,14 +223,13 @@ contains
        end if
     enddo
 
-    ! initialize flags
-    ! TODO: document location for these init values
+    ! initialize flags (CCPP_typedefs)
     allocate(ifd(1:size(dataptr1d)))
     allocate(flag_iter(1:size(dataptr1d)))
     allocate(flag_guess(1:size(dataptr1d)))
     ifd = 0.0_r8
-    flag_iter(:) = .true.
     flag_guess(:) = .false.
+    flag_iter(:)  = .true.
 
     !----------------------------------
     ! Set pointers to fields needed for NST calculations
@@ -467,6 +466,10 @@ contains
 
        ! NST
        ! ESMF reports dayOfYear as fraction starting at 1 (eg 1.x->365.x)
+       ifd(:) = 0.0_r8
+       flag_guess(:) = .false.
+       flag_iter(:)  = .true.
+
        do iter = 1,2
           write(msg,*)trim(subname)//' julian day ',jday-1.0_R8,' solhr = ',solhr,' iter = ',iter
           call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
@@ -528,7 +531,7 @@ contains
                 flag_iter(i) = .true.
              endif
           end do
-       end do
+       end do ! do iter = 1,2
        ocnnst%nst(:) = ocnnst%tsfc_wat(:)
 
        if (ESMF_FieldBundleIsCreated(is_local%wrap%FBMed_ocnnst_o, rc=rc)) then
