@@ -208,7 +208,9 @@ contains
        if (alat .ge. 7.50 .and. alat .le. 7.80 .and. alon .ge. 89.2 .and. alon .le. 89.8) then
           print *,'YYY0 ',n,ownedElemCoords(2*n-1),ocnnst%lons(n),ownedElemCoords(2*n),ocnnst%lats(n)
        end if
-       !print *, 'YYY0 ',n,alat,alon
+       if (alat .ge. 6.50 .and. alat .le. 7.00 .and. alon .ge. 80.2 .and. alon .le. 80.8) then
+          print *,'YYY1 ',n,ownedElemCoords(2*n-1),ocnnst%lons(n),ownedElemCoords(2*n),ocnnst%lats(n)
+       end if
     end do
 
     ! ocean mask
@@ -733,8 +735,17 @@ contains
            f_nsol   = hflxneg(i) + lath(i) + ulwflx(i) - dlwflx(i) + omg_sh*qrain(i)
 
            alat = rad2deg*asin(sinlat(i))
+           ! lon 89.5,lat 7.64
            if(iam .eq. 72 .and. i .eq. 678 .and. mod(kdt,2) .eq. 0) then
-              print '(a,2i6,9e14.5)','YYY ',i,kdt,alon,alat,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),rch(i)
+              print '(a,2i6,9e14.5)','YYY1 ',i,kdt,alon,alat,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),rch(i)
+              write(111,'(11e14.5)')nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),rch(i),wind(i),&
+                   tref(i),tskin(i),tsurf(i)
+           end if
+           ! lon 80.5,lat 6.90
+           if(iam .eq. 72 .and. i .eq. 525 .and. mod(kdt,2) .eq. 0) then
+              print '(a,2i6,9e14.5)','YYY2 ',i,kdt,alon,alat,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),rch(i)
+              write(112,'(11e14.5)')nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),rch(i),wind(i),&
+                   tref(i),tskin(i),tsurf(i)
            end if
 
            sep      = sss*(lath(i)/le-rain(i))/rho_w
@@ -1012,13 +1023,15 @@ contains
     ! Compute |stress| and |wind| for ocean
     !---------------------------------------
 
+    ! TODO: no convwind
     ocnnst%wind = 0.0_R8
-    ocnnst%wind = sqrt(ocnnst%u1*ocnnst%u1 + ocnnst%v1*ocnnst%v1)
+    ocnnst%wind = max(sqrt(ocnnst%u1*ocnnst%u1 + ocnnst%v1*ocnnst%v1), 1.0_R8)
 
     call FB_GetFldPtr(FBatm, 'Faxa_taux' , taux, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(FBatm, 'Faxa_tauy' , tauy, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    ! what to do about stress if wind has min=1.0?
     ocnnst%stress = 0.0_R8
     ocnnst%stress = sqrt(taux*taux + tauy*tauy)
 
