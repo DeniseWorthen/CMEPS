@@ -90,7 +90,7 @@ module med_phases_ocnnst_mod
   end type ocnnst_type
 
   ! used, reused in module
-  real(r8) , allocatable :: ifd         (:)   ! index to start DTM run or not
+  real(r8) , allocatable, save :: ifd         (:)   ! index to start DTM run or not
   logical  , allocatable :: flag_guess  (:)   ! .true.=  guess step to get CD et al
                                               ! when iter = 1, flag_guess = .true. when wind < 2
                                               ! when iter = 2, flag_guess = .false. for all grids
@@ -167,9 +167,23 @@ contains
     nullify(is_local%wrap)
     call ESMF_GridCompGetInternalState(gcomp, is_local, rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
+
     !----------------------------------
-    ! Get lat, lon, which are time-invariant
+    ! Get mask, lat, lon, which are time-invariant
     !----------------------------------
+
+    ! ocean mask
+    call FB_GetFldPtr(is_local%wrap%FBImp(compocn,compocn), 'So_omask', dataptr1d, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    lsize = size(dataptr1d)
+    allocate(ocnnst%mask(lsize))
+    do n = 1,size(dataptr1d)
+       if (dataptr1d(n) == 0._r8) then
+          ocnnst%mask(n) = 0
+       else
+          ocnnst%mask(n) = 1
+       end if
+    enddo
 
     ! The following assumes that all fields in FBMed_ocnnst_o have the same grid - so
     ! only need to query field 1
@@ -180,12 +194,9 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call ESMF_FieldGet(fieldlist(1), mesh=lmesh, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldGet(fieldlist(1), farrayPtr=dataptr1d, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    deallocate(fieldlist)
     call ESMF_MeshGet(lmesh, spatialDim=spatialDim, numOwnedElements=numOwnedElements, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    deallocate(fieldlist)
-    lsize = size(dataptr1d)
     if (numOwnedElements /= lsize) then
        write(tempc1,'(i10)') numOwnedElements
        write(tempc2,'(i10)') lsize
@@ -194,44 +205,25 @@ contains
        rc = ESMF_FAILURE
        return
     end if
+
+    ! ocn lat,lon
     allocate(ownedElemCoords(spatialDim*numOwnedElements))
     allocate(ocnnst%lons(numOwnedElements))
     allocate(ocnnst%lats(numOwnedElements))
     call ESMF_MeshGet(lmesh, ownedElemCoords=ownedElemCoords)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     do n = 1,lsize
-       ocnnst%lons(n) = const_deg2rad * ownedElemCoords(2*n-1)
+       ocnnst%lons(n) = const_deg2rad * ownedElemCoords(2*n-1)  ! radians
        ocnnst%lats(n) = const_deg2rad * ownedElemCoords(2*n)
-       !if(iam.eq.82 .and. n .eq. 4)print *,'YYY0',ownedElemCoords(2*n-1),ocnnst%lons(n),ownedElemCoords(2*n),ocnnst%lats(n)
        alon = ownedElemCoords(2*n-1)
        alat = ownedElemCoords(2*n)
        if (alat .ge. 7.50 .and. alat .le. 7.80 .and. alon .ge. 89.2 .and. alon .le. 89.8) then
-          print *,'YYY0 ',n,ownedElemCoords(2*n-1),ocnnst%lons(n),ownedElemCoords(2*n),ocnnst%lats(n)
+          print *,'YYY1 ',n,alon,alat,ocnnst%mask(n)
        end if
-       if (alat .ge. 6.50 .and. alat .le. 7.00 .and. alon .ge. 80.2 .and. alon .le. 80.8) then
-          print *,'YYY1 ',n,ownedElemCoords(2*n-1),ocnnst%lons(n),ownedElemCoords(2*n),ocnnst%lats(n)
+       if (alat .ge. 5.80 .and. alat .le. 6.00 .and. alon .ge. 78.2 .and. alon .le. 78.8) then
+          print *,'YYY2 ',n,alon,alat,ocnnst%mask(n)
        end if
     end do
-
-    ! ocean mask
-    call FB_GetFldPtr(is_local%wrap%FBImp(compocn,compocn), 'So_omask', dataptr1d, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    allocate(ocnnst%mask(numOwnedElements))
-    do n = 1,size(dataptr1d)
-       if (dataptr1d(n) == 0._r8) then
-          ocnnst%mask(n) = 0
-       else
-          ocnnst%mask(n) = 1
-       end if
-    enddo
-
-    ! initialize flags (CCPP_typedefs)
-    allocate(ifd(1:size(dataptr1d)))
-    allocate(flag_iter(1:size(dataptr1d)))
-    allocate(flag_guess(1:size(dataptr1d)))
-    ifd = 0.0_r8
-    flag_guess(:) = .false.
-    flag_iter(:)  = .true.
 
     !----------------------------------
     ! Set pointers to fields needed for NST calculations
@@ -328,6 +320,15 @@ contains
     call set_ocnnst_pointers(gcomp, is_local%wrap%FBImp(compatm,compocn), is_local%wrap%FBMed_ocnalb_o, &
          is_local%wrap%FBImp(compice,compocn), is_local%wrap%FBExp(compocn), ocnnst, lsize, rc)
 
+    ! initialize flags (CCPP_typedefs)
+    allocate(ifd(lsize))
+    allocate(flag_iter(lsize))
+    allocate(flag_guess(lsize))
+    ifd = 0.0_r8
+    flag_guess(:) = .false.
+    flag_iter(:)  = .true.
+    kdt = 0
+
     if (dbug_flag > 5) then
       call ESMF_LogWrite(trim(subname)//": done", ESMF_LOGMSG_INFO)
     endif
@@ -388,6 +389,8 @@ contains
     character(len=*)  , parameter :: subname='(med_phases_ocnnst_run)'
     ! FBwrite
     integer           :: yr, mon, sec
+    ! debug
+    real(R8) :: soltim, alon, alat
     character(len=CL) :: currtime_str, fname
     !---------------------------------------
 
@@ -468,9 +471,10 @@ contains
 
        ! NST
        ! ESMF reports dayOfYear as fraction starting at 1 (eg 1.x->365.x)
-       ifd(:) = 0.0_r8
+       !ifd(:) = 0.0_r8
        flag_guess(:) = .false.
        flag_iter(:)  = .true.
+       kdt = kdt+1
 
        do iter = 1,2
           write(msg,*)trim(subname)//' julian day ',jday-1.0_R8,' solhr = ',solhr,' iter = ',iter
@@ -483,6 +487,18 @@ contains
                    flag_guess(i) = .true.
                 end if
              end if
+
+             alon = ocnnst%lons(i)/const_deg2rad
+             alat = ocnnst%lats(i)/const_deg2rad
+             soltim = mod(alon/15.0_R8 + solhr, 24.0_R8)*3600.0_R8
+             ! if(iam .eq. 72 .and. i .eq. 678 ) then
+             !    print '(a,2i6,5f12.5,2l,e12.5)','YYY1 ',iter,kdt,alon,alat,solhr,soltim,ifd(i),flag_iter(i),&
+             !         flag_guess(i),ocnnst%wind(i)
+             ! end if
+             ! if(iam .eq. 72 .and. i .eq. 307 ) then
+             !    print '(a,2i6,5f12.5,2l,e12.5)','YYY2 ',iter,kdt,alon,alat,solhr,soltim,ifd(i),flag_iter(i),&
+             !         flag_guess(i),ocnnst%wind(i)
+             ! end if
           end do
 
           ! nst_pre
@@ -529,7 +545,7 @@ contains
           do i = 1, lsize
              flag_iter(i)  = .false.
              flag_guess(i) = .false.
-             if (iter == 1 .and. ocnnst%wind(i) < 2.0d0 .and. ocnnst%mask == 1) then
+             if (iter == 1 .and. ocnnst%wind(i) < 2.0d0 .and. ocnnst%mask(i) == 1) then
                 flag_iter(i) = .true.
              endif
           end do
@@ -639,7 +655,6 @@ contains
     real (R8), dimension(im) :: qrain
     character(len=CL) :: msg
 
-    kdt = kdt+1 ! only used for prints
     cp = cp_a
     sss = 34.0_R8
     sbc = sigma_r
@@ -737,14 +752,14 @@ contains
            alat = rad2deg*asin(sinlat(i))
            ! lon 89.5,lat 7.64
            if(iam .eq. 72 .and. i .eq. 678 .and. mod(kdt,2) .eq. 0) then
-              print '(a,2i6,9e14.5)','YYY1 ',i,kdt,alon,alat,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),rch(i)
-              write(111,'(11e14.5)')nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),rch(i),wind(i),&
+              !print '(a,2i6,9e14.5)','YYY1 ',i,kdt,alon,alat,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),rch(i)
+              write(111,'(12e14.5)')solhr,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),rch(i),wind(i),&
                    tref(i),tskin(i),tsurf(i)
            end if
            ! lon 80.5,lat 6.90
-           if(iam .eq. 72 .and. i .eq. 525 .and. mod(kdt,2) .eq. 0) then
-              print '(a,2i6,9e14.5)','YYY2 ',i,kdt,alon,alat,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),rch(i)
-              write(112,'(11e14.5)')nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),rch(i),wind(i),&
+           if(iam .eq. 72 .and. i .eq. 307 .and. mod(kdt,2) .eq. 0) then
+              !print '(a,2i6,9e14.5)','YYY2 ',i,kdt,alon,alat,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),rch(i)
+              write(112,'(12e14.5)')solhr,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),rch(i),wind(i),&
                    tref(i),tskin(i),tsurf(i)
            end if
 
