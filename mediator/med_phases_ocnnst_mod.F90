@@ -90,7 +90,7 @@ module med_phases_ocnnst_mod
   end type ocnnst_type
 
   ! used, reused in module
-  real(r8) , allocatable, save :: ifd         (:)   ! index to start DTM run or not
+  real(r8) , allocatable, save :: ifd (:)     ! index to start DTM run or not
   logical  , allocatable :: flag_guess  (:)   ! .true.=  guess step to get CD et al
                                               ! when iter = 1, flag_guess = .true. when wind < 2
                                               ! when iter = 2, flag_guess = .false. for all grids
@@ -320,6 +320,12 @@ contains
     call set_ocnnst_pointers(gcomp, is_local%wrap%FBImp(compatm,compocn), is_local%wrap%FBMed_ocnalb_o, &
          is_local%wrap%FBImp(compice,compocn), is_local%wrap%FBExp(compocn), ocnnst, lsize, rc)
 
+    ! initialize nst temperature fields with ocean import
+    ocnnst%tseal(:)     = ocnnst%tsfco(:)
+    ocnnst%tsfc_wat(:)  = ocnnst%tsfco(:)
+    ocnnst%tsurf_wat(:) = ocnnst%tsfco(:)
+    ocnnst%tref(:)      = ocnnst%tsfco(:)
+
     ! initialize flags (CCPP_typedefs)
     allocate(ifd(lsize))
     allocate(flag_iter(lsize))
@@ -532,6 +538,19 @@ contains
                dt_cool=ocnnst%dtcool, z_c=ocnnst%zc, c_0=ocnnst%c0, c_d=ocnnst%cd, w_0=ocnnst%w0, w_d=ocnnst%wd,     &
                d_conv=ocnnst%dconv)
 
+          do i = 1,lsize
+             alon = ocnnst%lons(i)/const_deg2rad
+             alat = ocnnst%lats(i)/const_deg2rad
+             if(iam .eq. 72 .and. i .eq. 678 ) then
+                print '(a,2i6,5f12.5,2l,3e12.5)','YYY1 ',iter,kdt,alon,alat,solhr,soltim,ifd(i),flag_iter(i),&
+                     flag_guess(i),ocnnst%wind(i),ocnnst%tseal(i),ocnnst%tsurf_wat(i)
+             end if
+             if(iam .eq. 72 .and. i .eq. 307 ) then
+                print '(a,2i6,5f12.5,2l,3e12.5)','YYY2 ',iter,kdt,alon,alat,solhr,soltim,ifd(i),flag_iter(i),&
+                     flag_guess(i),ocnnst%wind(i),ocnnst%tseal(i),ocnnst%tsurf_wat(i)
+             end if
+          end do
+
           ! nst_post
           do i = 1,lsize
              if (ocnnst%mask(i) == 1) then
@@ -549,6 +568,7 @@ contains
                 flag_iter(i) = .true.
              endif
           end do
+
        end do ! do iter = 1,2
        ocnnst%nst(:) = ocnnst%tsfc_wat(:)
 
@@ -711,6 +731,8 @@ contains
            rho_a(i)  = ps(i) / (rd*tv1(i))
            qss(i)    = fpvs(tsurf(i))                          ! pa
            qss(i)    = eps*qss(i) / (ps(i) + epsm1*qss(i))     ! pa
+           ! back-out estimate of rch(i) = rhoa*cp*ch*wind since not getting
+           ! ch from atm
            ! sfc_nst.f90: evap(i) = elocp * rch(i)   * (qss(i) - q0(i))
            !                 W/m2 =   (K) * (W/m2)/K * (kg/kg)
            rch(i)    = lath(i)/(elocp*max(qss(i) - q0(i), 1.0e-8_kp))
@@ -751,16 +773,16 @@ contains
 
            alat = rad2deg*asin(sinlat(i))
            ! lon 89.5,lat 7.64
-           if(iam .eq. 72 .and. i .eq. 678 .and. mod(kdt,2) .eq. 0) then
+           if(iam .eq. 72 .and. i .eq. 678) then
               !print '(a,2i6,9e14.5)','YYY1 ',i,kdt,alon,alat,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),rch(i)
-              write(111,'(12e14.5)')solhr,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),rch(i),wind(i),&
-                   tref(i),tskin(i),tsurf(i)
+              write(111,'(12e14.5)')solhr,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),wind(i),&
+                   tref(i),tskin(i),tsurf(i),rch(i)
            end if
            ! lon 80.5,lat 6.90
-           if(iam .eq. 72 .and. i .eq. 307 .and. mod(kdt,2) .eq. 0) then
+           if(iam .eq. 72 .and. i .eq. 307) then
               !print '(a,2i6,9e14.5)','YYY2 ',i,kdt,alon,alat,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),rch(i)
-              write(112,'(12e14.5)')solhr,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),rch(i),wind(i),&
-                   tref(i),tskin(i),tsurf(i)
+              write(112,'(12e14.5)')solhr,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),wind(i),&
+                   tref(i),tskin(i),tsurf(i),rch(i)
            end if
 
            sep      = sss*(lath(i)/le-rain(i))/rho_w

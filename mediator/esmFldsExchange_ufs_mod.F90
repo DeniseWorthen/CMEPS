@@ -169,9 +169,11 @@ contains
           flds = (/'tref  ', 'dconv ', 'dtcool', 'qrain ', 'xtts  ', 'xzts  ', &
                    'c0    ', 'cd    ', 'w0    ', 'wd    ', 'xs    ', 'xt    ', &
                    'xu    ', 'xv    ', 'xz    ', 'zc    ', 't     '/)
+                   !'xu    ', 'xv    ', 'xz    ', 'zc    '/)
           do n = 1,size(flds)
              fldname = 'Snst_'//trim(flds(n))
              call addfld_ocnnst(fldname)
+             call addfld_to(compatm, fldname)
           end do
           deallocate(flds)
 
@@ -182,6 +184,23 @@ contains
           do n = 1,size(flds)
              fldname = 'Snst_'//trim(flds(n))
              call addfld_ocnnst(fldname)
+          end do
+          deallocate(flds)
+       else
+          ! map NST fields back to ATM
+          ! try single field
+          !fldname = 'Snst_t'
+          !call addmap_ocnnst( fldname, compatm, maptype, 'ofrac', 'unset')
+          !call addmrg_to(compatm, fldname, mrg_from=compmed, mrg_fld=fldname, mrg_type='copy')
+          allocate(flds(17))
+          flds = (/'tref  ', 'dconv ', 'dtcool', 'qrain ', 'xtts  ', 'xzts  ', &
+                   'c0    ', 'cd    ', 'w0    ', 'wd    ', 'xs    ', 'xt    ', &
+                   'xu    ', 'xv    ', 'xz    ', 'zc    ', 't     '/)
+                   !'xu    ', 'xv    ', 'xz    ', 'zc    '/)
+          do n = 1,size(flds)
+             fldname = 'Snst_'//trim(flds(n))
+             call addmap_ocnnst( fldname, compatm, maptype, 'ofrac', 'unset')
+             call addmrg_to(compatm, fldname, mrg_from=compmed, mrg_fld=fldname, mrg_type='copy')
           end do
           deallocate(flds)
        end if

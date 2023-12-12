@@ -498,14 +498,14 @@ contains
        ofrad(:) = ofrac(:)
     endif
 
-    if (ESMF_FieldBundleIsCreated(is_local%wrap%FBMed_ocnalb_o, rc=rc)) then
-       call NUOPC_MediatorGet(gcomp, driverClock=dClock, rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       if (ESMF_ClockIsCreated(dclock)) then
-          call med_phases_history_write_med(gcomp, rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       end if
-    end if
+    ! if (ESMF_FieldBundleIsCreated(is_local%wrap%FBMed_ocnalb_o, rc=rc)) then
+    !    call NUOPC_MediatorGet(gcomp, driverClock=dClock, rc=rc)
+    !    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    !    if (ESMF_ClockIsCreated(dclock)) then
+    !       call med_phases_history_write_med(gcomp, rc=rc)
+    !       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    !    end if
+    ! end if
 
     if (dbug_flag > 1) then
        call FB_diagnose(is_local%wrap%FBMed_ocnalb_o, string=trim(subname)//' FBMed_ocnalb_o', rc=rc)

@@ -111,18 +111,18 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     end if
 
-    ! !---------------------------------------
-    ! !--- map ocean NST from ocn to atm grid if appropriate
-    ! !---------------------------------------
+    !---------------------------------------
+    !--- map ocean NST from ocn to atm grid if appropriate
+    !---------------------------------------
 
-    ! call med_map_field_packed( &
-    !      FBSrc=is_local%wrap%FBMed_ocnnst_o, &
-    !      FBDst=is_local%wrap%FBMed_ocnnst_a, &
-    !      FBFracSrc=is_local%wrap%FBFrac(compocn), &
-    !      field_normOne=is_local%wrap%field_normOne(compocn,compatm,:), &
-    !      packed_data=is_local%wrap%packed_data_ocnnst_o2a(:), &
-    !      routehandles=is_local%wrap%RH(compocn,compatm,:), rc=rc)
-    ! if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call med_map_field_packed( &
+         FBSrc=is_local%wrap%FBMed_ocnnst_o, &
+         FBDst=is_local%wrap%FBMed_ocnnst_a, &
+         FBFracSrc=is_local%wrap%FBFrac(compocn), &
+         field_normOne=is_local%wrap%field_normOne(compocn,compatm,:), &
+         packed_data=is_local%wrap%packed_data_ocnnst_o2a(:), &
+         routehandles=is_local%wrap%RH(compocn,compatm,:), rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !---------------------------------------
     !--- map atm/ocn fluxes from ocn to atm grid if appropriate
@@ -150,7 +150,9 @@ contains
          is_local%wrap%FBFrac(compatm), &
          is_local%wrap%FBImp(:,compatm), &
          fldList, &
-         FBMed1=is_local%wrap%FBMed_ocnalb_a, &
+         ! TODO: temp since we're not mapping ocnalb back to atm
+         !FBMed1=is_local%wrap%FBMed_ocnalb_a, &
+         FBMed1=is_local%wrap%FBMed_ocnnst_a, &
          FBMed2=is_local%wrap%FBMed_aoflux_a, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
