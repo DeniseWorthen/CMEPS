@@ -61,6 +61,7 @@ module med_phases_ocnnst_mod
 
      ! input from ocean
      real(r8) , pointer :: tsfco       (:) => null() ! sea surface temperature (K)
+     real(r8) , pointer :: ssfco       (:) => null() ! sea surface salinity (psu)
 
      ! local nst variables
      real(r8) , pointer :: tseal       (:) => null() ! ocean surface skin temperature (K)
@@ -255,6 +256,8 @@ contains
 
     ! Import from ocn
     call FB_GetFldPtr(is_local%wrap%FBImp(compocn,compocn),  'So_t',      ocnnst%tsfco,  rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call FB_GetFldPtr(is_local%wrap%FBImp(compocn,compocn),  'So_s',      ocnnst%ssfco,  rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! Import from ice
@@ -668,7 +671,7 @@ contains
     real (R8), dimension(im) :: xzts_old, ifd_old, tskin_old, dt_cool_old, z_c_old
     real (R8), dimension(im) :: wndmag, ulwflx, nswsfc, q0, tv1, rho_a, sfcemis, sinlat
     real (R8), dimension(im) :: qss, rch
-    real (R8), dimension(im) :: hflxneg, lath
+    real (R8), dimension(im) :: hflxneg, lath, lwdn
     ! debug
     real (r8) :: alat
     !TODO: do what with this?
@@ -692,6 +695,10 @@ contains
     ! correct for sign and units on imported quantities
     hflxneg = -one*hflx
     lath    = -one*evap*hvap  ! in W/m2, conversion of evap rate from atmos_model export (kg m-2 s-1)
+    lwdn    = sfcemis*dlwflx  ! sfc_nst uses gabsbdlw_wat = semis_wat * adjsfcdlw but export lwdn = adjsfcdlw
+
+    ! exported stresses are taux=-dusfci=(rhoa*stress_wat/windspd)*u1; stress_wat is what sfc_nst gets
+    ! tx = taux*wind/rhoa
 !
 ! flag for open water and where the iteration is on
 !
@@ -769,29 +776,24 @@ contains
            qrain(i) =  tem * (tsea-t1(i)+1.0e3_kp*(qss(i)-q0(i))*le/cp)
 
            !> - Calculate input non solar heat flux as upward = positive to models here
-           f_nsol   = hflxneg(i) + lath(i) + ulwflx(i) - dlwflx(i) + omg_sh*qrain(i)
+           f_nsol   = hflxneg(i) + lath(i) + ulwflx(i) - lwdn(i) + omg_sh*qrain(i)
 
            alat = rad2deg*asin(sinlat(i))
            ! lon 89.5,lat 7.64
            if(iam .eq. 72 .and. i .eq. 678) then
-              !print '(a,2i6,9e14.5)','YYY1 ',i,kdt,alon,alat,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),rch(i)
-              write(111,'(12e14.5)')solhr,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),wind(i),&
-                   tref(i),tskin(i),tsurf(i),rch(i)
+              !print '(a,2i6,9e14.5)','YYY1 ',i,kdt,alon,alat,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),lwdn(i),omg_sh*qrain(i),rch(i)
+              write(111,'(13e14.5)')solhr,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),lwdn(i),omg_sh*qrain(i),wind(i),&
+                   tref(i),tskin(i),tsurf(i),rch(i),stress(i)
            end if
            ! lon 80.5,lat 6.90
            if(iam .eq. 72 .and. i .eq. 307) then
-              !print '(a,2i6,9e14.5)','YYY2 ',i,kdt,alon,alat,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),rch(i)
-              write(112,'(12e14.5)')solhr,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),dlwflx(i),omg_sh*qrain(i),wind(i),&
-                   tref(i),tskin(i),tsurf(i),rch(i)
+              !print '(a,2i6,9e14.5)','YYY2 ',i,kdt,alon,alat,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),lwdn(i),omg_sh*qrain(i),rch(i)
+              write(112,'(13e14.5)')solhr,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),lwdn(i),omg_sh*qrain(i),wind(i),&
+                   tref(i),tskin(i),tsurf(i),rch(i),stress(i)
            end if
 
            sep      = sss*(lath(i)/le-rain(i))/rho_w
            ustar_a  = sqrt(stress(i)/rho_a(i))          ! air friction velocity
-           !write(msg,'(A,i6,13f14.7)') 'XX0 ',i,real(ustar_a,4),real(f_nsol,4),real(nswsfc(i),4), &
-           !write(msg,*) 'XX0 ',i,real(ustar_a,4),real(f_nsol,4),real(nswsfc(i),4), &
-           !     real(evap(i),4),real(rho_a,4),real(tsea,4),real(q_ts,4),real(hl_ts,4),real(le,4), &
-           !     real(dt_cool(i),4),real(z_c(i),4),real(c_0(i),4),real(c_d(i),4)
-           !call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
            !
            !  sensitivities of heat flux components to ts
            !
@@ -800,20 +802,10 @@ contains
            hl_ts  = rch(i)*elocp*eps*hvap*qss(i)/(rd*t12)
            rf_ts  = tem * (one+rch(i)*hl_ts)
            q_ts   = rnl_ts + hs_ts + hl_ts + omg_sh*rf_ts
-           !write(msg,'(A,i6,13f14.7)') 'XX1 ',i,real(ustar_a,4),real(f_nsol,4),real(nswsfc(i),4), &
-           !     real(evap(i),4),real(rho_a,4),real(tsea,4),real(q_ts,4),real(hl_ts,4),real(le,4), &
-           !     real(dt_cool(i),4),real(z_c(i),4),real(c_0(i),4),real(c_d(i),4)
-           !call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
-           !
+
            !> - Call cool_skin(), which is the sub-layer cooling parameterization
            !! (Fairfall et al. (1996) \cite fairall_et_al_1996).
            ! & calculate c_0, c_d
-           !
-           !write(msg,'(A,i6,13f14.7)') 'XX2 ',i,real(ustar_a,4),real(f_nsol,4),real(nswsfc(i),4), &
-           !     real(evap(i),4),real(rho_a,4),real(tsea,4),real(q_ts,4),real(hl_ts,4),real(le,4), &
-           !     real(dt_cool(i),4),real(z_c(i),4),real(c_0(i),4),real(c_d(i),4)
-           !call ESMF_LogWrite(trim(msg), ESMF_LOGMSG_INFO)
-
            call cool_skin(ustar_a,f_nsol,nswsfc(i),lath(i),sss,alpha,beta, rho_w,rho_a(i),tsea, &
                 q_ts,hl_ts,grav,le,dt_cool(i),z_c(i),c_0(i),c_d(i))
 
