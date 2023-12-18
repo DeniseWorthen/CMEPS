@@ -40,12 +40,14 @@ module med_phases_ocnnst_mod
      integer  , pointer :: mask        (:) => null() ! ocn domain mask: 0 <=> inactive cell
 
      !inputs from atm
-     real(r8) , pointer :: prsl        (:) => null() ! surface pressure (Pa)
+     !real(r8) , pointer :: prsl        (:) => null() ! surface pressure (Pa)
+     real(r8) , pointer :: ps          (:) => null() ! surface pressure (Pa)
      real(r8) , pointer :: u1          (:) => null() ! zonal component of surface layer wind (m/s)
      real(r8) , pointer :: v1          (:) => null() ! merid component of surface layer wind (m/s)
      real(r8) , pointer :: t1          (:) => null() ! surface layer mean temperature (K)
      real(r8) , pointer :: q1          (:) => null() ! surface layer mean spec humidity (kg/kg)
      real(r8) , pointer :: z1          (:) => null() ! layer 1 height above ground (not MSL) (m)
+     !real(r8) , pointer :: p1          (:) => null() ! layer 1 pressure (m)
      real(r8) , pointer :: dlwflx      (:) => null() ! total sky sfc downward lw flux (W/m2)
      real(r8) , pointer :: rain        (:) => null() ! rainfall rate (kg/m2/s)
      real(r8) , pointer :: evap        (:) => null() ! evap rate (!TODO)
@@ -55,6 +57,7 @@ module med_phases_ocnnst_mod
      real(r8) , pointer :: sfcnsw      (:) => null() ! net SW down (calculated from bands)
      real(r8) , pointer :: wind        (:) => null() ! wind magnitude, from Sa_u,Sa_v
      real(r8) , pointer :: stress      (:) => null() ! stress magnitude, from Faxa_taux,Faxa_tauy
+     real(r8) , pointer :: rbot        (:) => null() ! air density height lowest
 
      ! input from ice, if present
      real(r8) , pointer :: ifrac       (:) => null() ! sea ice fraction (nd); ofrac=1.0-ifrac
@@ -231,7 +234,7 @@ contains
     !----------------------------------
 
     ! Import from atm
-    call FB_GetFldPtr(is_local%wrap%FBImp(compatm,compocn), 'Sa_pbot' ,   ocnnst%prsl,   rc=rc)
+    call FB_GetFldPtr(is_local%wrap%FBImp(compatm,compocn), 'Sa_pslv' ,   ocnnst%ps,     rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(is_local%wrap%FBImp(compatm,compocn), 'Sa_z' ,      ocnnst%z1,     rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -243,6 +246,8 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(is_local%wrap%FBImp(compatm,compocn), 'Sa_v' ,      ocnnst%v1,     rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    !call FB_GetFldPtr(is_local%wrap%FBImp(compatm,compocn), 'Sa_pslv' ,   ocnnst%ps,     rc=rc)
+    !if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(is_local%wrap%FBImp(compatm,compocn), 'Faxa_evap' , ocnnst%evap,   rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call FB_GetFldPtr(is_local%wrap%FBImp(compatm,compocn), 'Faxa_rain' , ocnnst%rain,   rc=rc)
@@ -534,7 +539,7 @@ contains
           zsea2 = 0.0_R8
           call sfc_nst_run(iam,lsize,dtf=timestep,mask=ocnnst%mask, flag_iter=flag_iter, flag_guess=flag_guess,      &
                ifd=ifd, zsea1=zsea1, zsea2=zsea2, xlon=ocnnst%lons, xlat=ocnnst%lats, solhr=solhr, z1=ocnnst%z1,     &
-               t1=ocnnst%t1, ps=ocnnst%prsl, u1=ocnnst%u1, v1=ocnnst%v1, q1=ocnnst%q1, hflx=ocnnst%sen,              &
+               t1=ocnnst%t1, ps=ocnnst%ps, u1=ocnnst%u1, v1=ocnnst%v1, q1=ocnnst%q1, hflx=ocnnst%sen,                &
                evap=ocnnst%evap, rain=ocnnst%rain, dlwflx=ocnnst%dlwflx, sfcnsw=ocnnst%sfcnsw, stress=ocnnst%stress, &
                wind=ocnnst%wind, tref=ocnnst%tref, tskin=ocnnst%tseal, tsurf=ocnnst%tsurf_wat, xt=ocnnst%xt,         &
                xs=ocnnst%xs, xu=ocnnst%xu, xv=ocnnst%xv, xz=ocnnst%xz, xtts=ocnnst%xtts, xzts=ocnnst%xzts,           &
@@ -597,7 +602,7 @@ contains
 
 !  call sfc_nst_run(iam,lsize,dtf=timestep,mask=ocnnst%mask, flag_iter=flag_iter, flag_guess=flag_guess,      &
 !       ifd=ifd, zsea1=zsea1, zsea2=zsea2, xlon=ocnnst%lons, xlat=ocnnst%lats, solhr=solhr, z1=ocnnst%z1,     &
-!       t1=ocnnst%t1, ps=ocnnst%prsl, u1=ocnnst%u1, v1=ocnnst%v1, q1=ocnnst%q1, hflx=ocnnst%sen,              &
+!       t1=ocnnst%t1, ps=ocnnst%ps, u1=ocnnst%u1, v1=ocnnst%v1, q1=ocnnst%q1, hflx=ocnnst%sen,                &
 !       evap=ocnnst%evap, rain=ocnnst%rain, dlwflx=ocnnst%dlwflx, sfcnsw=ocnnst%sfcnsw, stress=ocnnst%stress, &
 !       wind=ocnnst%wind, tref=ocnnst%tref, tskin=ocnnst%tseal, tsurf=ocnnst%tsurf_wat, xt=ocnnst%xt,         &
 !       xs=ocnnst%xs, xu=ocnnst%xu, xv=ocnnst%xv, xz=ocnnst%xz, xtts=ocnnst%xtts, xzts=ocnnst%xzts,           &
@@ -671,7 +676,7 @@ contains
     real (R8), dimension(im) :: xzts_old, ifd_old, tskin_old, dt_cool_old, z_c_old
     real (R8), dimension(im) :: wndmag, ulwflx, nswsfc, q0, tv1, rho_a, sfcemis, sinlat
     real (R8), dimension(im) :: qss, rch
-    real (R8), dimension(im) :: hflxneg, lath, lwdn
+    real (R8), dimension(im) :: hflxneg, lath, lwdn, lstress
     ! debug
     real (r8) :: alat
     !TODO: do what with this?
@@ -696,7 +701,7 @@ contains
     hflxneg = -one*hflx
     lath    = -one*evap*hvap  ! in W/m2, conversion of evap rate from atmos_model export (kg m-2 s-1)
     lwdn    = sfcemis*dlwflx  ! sfc_nst uses gabsbdlw_wat = semis_wat * adjsfcdlw but export lwdn = adjsfcdlw
-
+    lstress = stress
     ! exported stresses are taux=-dusfci=(rhoa*stress_wat/windspd)*u1; stress_wat is what sfc_nst gets
     ! tx = taux*wind/rhoa
 !
@@ -729,6 +734,13 @@ contains
      !           ps is in pascals, wind is wind speed, theta1 is surface air
      !           estimated from level 1 temperature, rho_a is air density and
      !           qss is saturation specific humidity at the water surface
+
+     ! do n = 1,aoflux_in%lsize
+     !    if (aoflux_in%mask(n) /= 0.0_r8) then
+     !       aoflux_in%dens(n) = aoflux_in%pbot(n)/(rdair*(1.0_r8 + 0.608_r8*aoflux_in%shum(n))*aoflux_in%tbot(n))
+     !    end if
+     !end do
+
      do i = 1, im
         if ( flag(i) ) then
            nswsfc(i) = sfcnsw(i) ! net solar radiation at the air-sea surface (positive downward)
@@ -744,7 +756,8 @@ contains
            !                 W/m2 =   (K) * (W/m2)/K * (kg/kg)
            rch(i)    = lath(i)/(elocp*max(qss(i) - q0(i), 1.0e-8_kp))
 !           if(iam.eq.82 .and. i .eq. 4)print *,'XXX0',i,nswsfc(i),wndmag(i),q0(i),tv1(i),rho_a(i),qss(i),rch(i),tem,&
-!                rch(i),tsurf(i),xlon(i),xlat(i),sinlat(i),grv(sinlat(i)),solhr
+           !                rch(i),tsurf(i),xlon(i),xlat(i),sinlat(i),grv(sinlat(i)),solhr
+           lstress(i) = stress(i)/rho_a(i)
         end if
      end do
      !
@@ -778,22 +791,22 @@ contains
            !> - Calculate input non solar heat flux as upward = positive to models here
            f_nsol   = hflxneg(i) + lath(i) + ulwflx(i) - lwdn(i) + omg_sh*qrain(i)
 
+           sep      = sss*(lath(i)/le-rain(i))/rho_w
+           ustar_a  = sqrt(lstress(i)/rho_a(i))          ! air friction velocity
+
            alat = rad2deg*asin(sinlat(i))
            ! lon 89.5,lat 7.64
            if(iam .eq. 72 .and. i .eq. 678) then
               !print '(a,2i6,9e14.5)','YYY1 ',i,kdt,alon,alat,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),lwdn(i),omg_sh*qrain(i),rch(i)
-              write(111,'(13e14.5)')solhr,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),lwdn(i),omg_sh*qrain(i),wind(i),&
-                   tref(i),tskin(i),tsurf(i),rch(i),stress(i)
+              write(111,'(i6,16e12.4)')kdt,solhr,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),lwdn(i),omg_sh*qrain(i),wind(i),&
+                   tref(i),tskin(i),tsurf(i),rch(i),stress(i)/rho_a(i),ps(i),ustar_a,sep
            end if
            ! lon 80.5,lat 6.90
            if(iam .eq. 72 .and. i .eq. 307) then
               !print '(a,2i6,9e14.5)','YYY2 ',i,kdt,alon,alat,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),lwdn(i),omg_sh*qrain(i),rch(i)
-              write(112,'(13e14.5)')solhr,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),lwdn(i),omg_sh*qrain(i),wind(i),&
-                   tref(i),tskin(i),tsurf(i),rch(i),stress(i)
+              write(112,'(i6,16e12.4)')kdt,solhr,nswsfc(i),hflxneg(i),lath(i),ulwflx(i),lwdn(i),omg_sh*qrain(i),wind(i),&
+                   tref(i),tskin(i),tsurf(i),rch(i),stress(i)/rho_a(i),ps(i),ustar_a,sep
            end if
-
-           sep      = sss*(lath(i)/le-rain(i))/rho_w
-           ustar_a  = sqrt(stress(i)/rho_a(i))          ! air friction velocity
            !
            !  sensitivities of heat flux components to ts
            !
@@ -812,8 +825,8 @@ contains
            tem  = one / wndmag(i)
            cosa = u1(i)*tem
            sina = v1(i)*tem
-           taux = max(stress(i),tau_min)*cosa
-           tauy = max(stress(i),tau_min)*sina
+           taux = max(lstress(i),tau_min)*cosa
+           tauy = max(lstress(i),tau_min)*sina
            fc   = const_rot*sinlat(i)
            !
            !  Run DTM-1p system.

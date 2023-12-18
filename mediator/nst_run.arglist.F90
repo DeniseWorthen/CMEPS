@@ -45,6 +45,12 @@
        u1             =GFS_Data(cdata%blk_no)%Statein%ugrs(:,1),                  &
        v1             =GFS_Data(cdata%blk_no)%Statein%vgrs(:,1),                  &
        t1             =GFS_Data(cdata%blk_no)%Statein%tgrs(:,1),                  &
+! bottom layer specific humidity (q)
+!    !    ! CHECK if tracer 1 is for specific humidity     !    !    !
+!case('inst_spec_humid_height_lowest')
+!call block_data_copy_or_fill(datar82d, DYCORE_data(nb)%coupling%tr_bot, 1, zeror8, Atm_block, nb, rc=localrc)
+!case('inst_spec_humid_height_lowest_from_phys')
+!call block_data_copy_or_fill(datar82d, GFS_data(nb)%Statein%qgrs, 1, GFS_Control%ntqv, zeror8, Atm_block, nb, rc=localrc)
        q1             =GFS_Data(cdata%blk_no)%Statein%qgrs(:,1,GFS_Control%ntqv), &
        !************************
        tref           =GFS_Data(cdata%blk_no)%Sfcprop%tref,                       &
@@ -54,7 +60,7 @@
 !       lseaspray      =GFS_Control%lseaspray,                                     &
        fm             =GFS_Interstitial(cdata%thrd_no)%ffmm_water,                &
        fm10           =GFS_Interstitial(cdata%thrd_no)%fm10_water,                &
-
+! gfs meta data prsl(:,1) = long_name = mean pressure at lowest model layer
        prsl1          =GFS_Data(cdata%blk_no)%Statein%prsl(:,1),                  &
        prslki         =GFS_Interstitial(cdata%thrd_no)%work3,                     &
        prsik1         =GFS_Data(cdata%blk_no)%Statein%prsik(:,1),                 &

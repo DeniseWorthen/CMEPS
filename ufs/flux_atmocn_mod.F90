@@ -63,11 +63,12 @@ contains
   end subroutine flux_adjust_constants
 
   !===============================================================================
-  subroutine flux_atmOcn(logunit, nMax,zbot   ,ubot  ,vbot  ,thbot ,   &
-       &               qbot  , rbot  ,tbot  ,us    ,vs    ,   &
-       &               ts    , mask  ,sen   ,lat   ,lwup  ,   &
-       &               evap  , taux  ,tauy  ,tref  ,qref  ,   &
-       &               ocn_surface_flux_scheme, duu10n,  missval    )
+  subroutine flux_atmOcn(logunit, nMax,       &
+       zbot   ,ubot  ,vbot  ,thbot ,          &
+       qbot  , rbot  ,tbot  ,us    ,vs    ,   &
+       ts    , mask  ,sen   ,lat   ,lwup  ,   &
+       evap  , taux  ,tauy  ,tref  ,qref  ,   &
+       ocn_surface_flux_scheme, duu10n,  missval    )
 
     implicit none
 
