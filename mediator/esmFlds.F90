@@ -204,10 +204,10 @@ contains
   subroutine med_fldList_findName(fields, stdname, found, lastfld)
     ! on return if found == .true. lastfield is the field matching stdname
     ! if found == .false. lastfield is the last field in the list
-    type(med_fldList_entry_type) , intent(in), target           :: fields
-    character(len=*)             , intent(in)             :: stdname
-    logical                      , intent(out)            :: found
-    type(med_fldList_entry_type) , intent(out), pointer                :: lastfld
+    type(med_fldList_entry_type) , intent(in), target   :: fields
+    character(len=*)             , intent(in)           :: stdname
+    logical                      , intent(out)          :: found
+    type(med_fldList_entry_type) , intent(out), pointer :: lastfld
 
     lastfld => fields
     found = .false.
@@ -235,7 +235,7 @@ contains
     ! 5) point flds => newflds
     ! ----------------------------------------------
 
-    type(med_fldList_entry_type) , target                :: fields
+    type(med_fldList_entry_type) , target                 :: fields
     character(len=*)             , intent(in)             :: stdname
     character(len=*)             , intent(in)  , optional :: shortname
 
@@ -291,12 +291,12 @@ contains
     ! ----------------------------------------------
 
     ! input/output variables
-    integer                      , intent(in)           :: index
-    character(len=*)             , intent(in)           :: fldname
-    integer                      , intent(in)           :: mrg_from
-    character(len=*)             , intent(in)           :: mrg_fld
-    character(len=*)             , intent(in)           :: mrg_type
-    character(len=*)             , intent(in), optional :: mrg_fracname
+    integer                      , intent(in)            :: index
+    character(len=*)             , intent(in)            :: fldname
+    integer                      , intent(in)            :: mrg_from
+    character(len=*)             , intent(in)            :: mrg_fld
+    character(len=*)             , intent(in)            :: mrg_type
+    character(len=*)             , intent(in), optional  :: mrg_fracname
     integer                      , intent(out), optional :: rc
 
     call med_FldList_addMrg(fldListTo(index)%fields, fldname, mrg_from, mrg_fld, mrg_type, mrg_fracname)
@@ -371,11 +371,11 @@ contains
 
   subroutine med_fldList_addmap_from(index, fldname, destcomp, maptype, mapnorm, mapfile)
     integer, intent(in) :: index
-    character(len=*)                  , intent(in)    :: fldname
-    integer                            , intent(in)    :: destcomp
-    integer                            , intent(in)    :: maptype
-    character(len=*)                   , intent(in)    :: mapnorm
-    character(len=*), optional         , intent(in)    :: mapfile
+    character(len=*)                   , intent(in) :: fldname
+    integer                            , intent(in) :: destcomp
+    integer                            , intent(in) :: maptype
+    character(len=*)                   , intent(in) :: mapnorm
+    character(len=*), optional         , intent(in) :: mapfile
 
     call med_fldList_AddMap(FldListFr(index)%fields, fldname, destcomp, maptype, mapnorm, mapfile)
 
@@ -384,11 +384,11 @@ contains
   !================================================================================
 
   subroutine med_fldList_addmap_aoflux(fldname, destcomp, maptype, mapnorm, mapfile)
-    character(len=*)                  , intent(in)    :: fldname
-    integer                            , intent(in)    :: destcomp
-    integer                            , intent(in)    :: maptype
-    character(len=*)                   , intent(in)    :: mapnorm
-    character(len=*), optional         , intent(in)    :: mapfile
+    character(len=*)                   , intent(in) :: fldname
+    integer                            , intent(in) :: destcomp
+    integer                            , intent(in) :: maptype
+    character(len=*)                   , intent(in) :: mapnorm
+    character(len=*), optional         , intent(in) :: mapfile
 
     call med_fldList_AddMap(fldlist_aoflux%fields, fldname, destcomp, maptype, mapnorm, mapfile)
 
@@ -397,11 +397,11 @@ contains
   !================================================================================
 
   subroutine med_fldList_addmap_ocnalb(fldname, destcomp, maptype, mapnorm, mapfile)
-    character(len=*)                  , intent(in)    :: fldname
-    integer                            , intent(in)    :: destcomp
-    integer                            , intent(in)    :: maptype
-    character(len=*)                   , intent(in)    :: mapnorm
-    character(len=*), optional         , intent(in)    :: mapfile
+    character(len=*)                   , intent(in) :: fldname
+    integer                            , intent(in) :: destcomp
+    integer                            , intent(in) :: maptype
+    character(len=*)                   , intent(in) :: mapnorm
+    character(len=*), optional         , intent(in) :: mapfile
 
     call med_fldList_AddMap(fldlist_ocnalb%fields, fldname, destcomp, maptype, mapnorm, mapfile)
 
@@ -410,11 +410,11 @@ contains
   !================================================================================
 
   subroutine med_fldList_addmap_ocnnst(fldname, destcomp, maptype, mapnorm, mapfile)
-    character(len=*)                  , intent(in)    :: fldname
-    integer                            , intent(in)    :: destcomp
-    integer                            , intent(in)    :: maptype
-    character(len=*)                   , intent(in)    :: mapnorm
-    character(len=*), optional         , intent(in)    :: mapfile
+    character(len=*)                   , intent(in) :: fldname
+    integer                            , intent(in) :: destcomp
+    integer                            , intent(in) :: maptype
+    character(len=*)                   , intent(in) :: mapnorm
+    character(len=*), optional         , intent(in) :: mapfile
 
     call med_fldList_AddMap(fldlist_ocnnst%fields, fldname, destcomp, maptype, mapnorm, mapfile)
 
@@ -428,11 +428,11 @@ contains
 
     ! intput/output variables
     type(med_fldList_entry_type) , intent(in), target :: fields
-    character(len=*)                  , intent(in)    :: fldname
-    integer                            , intent(in)    :: destcomp
-    integer                            , intent(in)    :: maptype
-    character(len=*)                   , intent(in)    :: mapnorm
-    character(len=*), optional         , intent(in)    :: mapfile
+    character(len=*)                   , intent(in)   :: fldname
+    integer                            , intent(in)   :: destcomp
+    integer                            , intent(in)   :: maptype
+    character(len=*)                   , intent(in)   :: mapnorm
+    character(len=*), optional         , intent(in)   :: mapfile
 
     ! local variables
     type(med_fldList_entry_type), pointer :: newfld
@@ -820,7 +820,7 @@ contains
 
     ! input/output variables
     type(med_fldList_entry_type) , intent(in), target     :: fields
-    character(len=*)             , intent(inout), pointer   :: fldnames(:)
+    character(len=*)             , intent(inout), pointer :: fldnames(:)
     integer, optional            , intent(out) :: rc
 
     !local variables
