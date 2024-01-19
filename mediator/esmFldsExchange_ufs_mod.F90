@@ -356,7 +356,25 @@ contains
        end if ! compice
        deallocate(oflds)
        deallocate(aflds)
+    ! to ocn: rain and snow via auto merge
+    allocate(flds(2))
+    flds = (/'Faxa_rain', 'Faxa_snow'/)
+    do n = 1,size(flds)
+       fldname = trim(flds(n))
+       if (phase == 'advertise') then
+          if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compocn)) then
+             call addfld_from(compatm , fldname)
+             call addfld_to(compocn   , fldname)
     end if
+       else
+          if ( fldchk(is_local%wrap%FBexp(compocn)        , fldname, rc=rc) .and. &
+               fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
+             call addmap_from(compatm, fldname, compocn, maptype, 'one', 'unset')
+             call addmrg_to(compocn, fldname, &
+                  mrg_from=compatm, mrg_fld=fldname, mrg_type='copy_with_weights', mrg_fracname='ofrac')
+          end if
+       end if
+    end do
 
     !to ocn: surface stress from mediator or atm and ice stress via auto merge
     flds = (/'taux', 'tauy'/)
@@ -501,10 +519,8 @@ contains
        do n = 1,size(flds)
           fldname = trim(flds(n))
           if (phase == 'advertise') then
-
              call addfld_from(compwav , fldname)
              call addfld_to(compocn   , fldname)
-
           else
              if ( fldchk(is_local%wrap%FBexp(compocn)        , fldname, rc=rc) .and. &
                   fldchk(is_local%wrap%FBImp(compwav,compwav), fldname, rc=rc)) then
