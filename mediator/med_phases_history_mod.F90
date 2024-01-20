@@ -665,25 +665,25 @@ contains
     type(instfile_type) , intent(inout) :: instfile
     integer             , intent(out)   :: rc
 
-    ! local variables
+                                            ! local variables
     type(InternalState) :: is_local
-    character(CL)       :: cvalue       ! attribute string
-    character(CL)       :: hist_option  ! freq_option setting (ndays, nsteps, etc)
-    integer             :: hist_n       ! freq_n setting relative to freq_option
+    character(CL)       :: cvalue           ! attribute string
+    character(CL)       :: hist_option      ! freq_option setting (ndays, nsteps, etc)
+    integer             :: hist_n           ! freq_n setting relative to freq_option
     character(CL)       :: hist_option_in
     character(CL)       :: hist_n_in
-    integer             :: hist_tilesize
+    integer             :: hist_tilesize(3) ! number of tiles, tile xdim, tile ydim
     logical             :: isPresent
     logical             :: isSet
     type(ESMF_VM)       :: vm
-    type(ESMF_Calendar) :: calendar     ! calendar type
-    integer             :: m            ! indices
-    integer             :: nx,ny        ! global grid size
-    character(CL)       :: time_units   ! units of time variable
-    character(CL)       :: hist_file    ! history file name
-    real(r8)            :: time_val     ! time coordinate output
-    real(r8)            :: time_bnds(2) ! time bounds output
-    logical             :: write_now    ! true => write to history type
+    type(ESMF_Calendar) :: calendar         ! calendar type
+    integer             :: m                ! indices
+    integer             :: nx,ny            ! global grid size
+    character(CL)       :: time_units       ! units of time variable
+    character(CL)       :: hist_file        ! history file name
+    real(r8)            :: time_val         ! time coordinate output
+    real(r8)            :: time_bnds(2)     ! time bounds output
+    logical             :: write_now        ! true => write to history type
     character(len=*), parameter :: subname='(med_phases_history_write_inst_comp)'
     !---------------------------------------
 
@@ -700,9 +700,9 @@ contains
     if (isPresent .and. isSet) then
        call NUOPC_CompAttributeGet(gcomp, name='history_tile_'//trim(compname(compid)), value=cvalue, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       read(cvalue,*) hist_tilesize
+       read(cvalue,*) hist_tilesize(1:3)
     else
-       hist_tilesize = 0
+       hist_tilesize(1:3) = 0
     end if
     ! alarm is not set determine hist_option and hist_n
     if (.not. instfile%is_clockset) then
@@ -824,25 +824,25 @@ contains
     integer             , intent(out)   :: rc
 
     ! local variables
-    type(InternalState)     :: is_local
-    character(CL)           :: cvalue        ! attribute string
-    character(CL)           :: hist_option   ! freq_option setting (ndays, nsteps, etc)
-    integer                 :: hist_n        ! freq_n setting relative to freq_option
-    character(CL)           :: hist_option_in
-    character(CL)           :: hist_n_in
-    integer                 :: hist_tilesize
-    logical                 :: isPresent
-    logical                 :: isSet
-    type(ESMF_VM)           :: vm
-    type(ESMF_Calendar)     :: calendar          ! calendar type
-    integer                 :: m                 ! indices
-    integer                 :: nx,ny             ! global grid size
-    character(CL)           :: time_units        ! units of time variable
-    character(CL)           :: hist_file         ! history file name
-    real(r8)                :: time_val          ! time coordinate output
-    real(r8)                :: time_bnds(2)      ! time bounds output
-    logical                 :: write_now         ! true => write to history type
-    character(CS)           :: scalar_name
+    type(InternalState) :: is_local
+    character(CL)       :: cvalue           ! attribute string
+    character(CL)       :: hist_option      ! freq_option setting (ndays, nsteps, etc)
+    integer             :: hist_n           ! freq_n setting relative to freq_option
+    character(CL)       :: hist_option_in
+    character(CL)       :: hist_n_in
+    integer             :: hist_tilesize(3) ! number of tiles, tile xdim, tile ydim
+    logical             :: isPresent
+    logical             :: isSet
+    type(ESMF_VM)       :: vm
+    type(ESMF_Calendar) :: calendar         ! calendar type
+    integer             :: m                ! indices
+    integer             :: nx,ny            ! global grid size
+    character(CL)       :: time_units       ! units of time variable
+    character(CL)       :: hist_file        ! history file name
+    real(r8)            :: time_val         ! time coordinate output
+    real(r8)            :: time_bnds(2)     ! time bounds output
+    logical             :: write_now        ! true => write to history type
+    character(CS)       :: scalar_name
     character(len=*), parameter :: subname='(med_phases_history_write_comp_avg)'
     !---------------------------------------
 
@@ -860,9 +860,9 @@ contains
     if (isPresent .and. isSet) then
        call NUOPC_CompAttributeGet(gcomp, name='history_tile_'//trim(compname(compid)), value=cvalue, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       read(cvalue,*) hist_tilesize
+       read(cvalue,*) hist_tilesize(1:3)
     else
-       hist_tilesize = 0
+       hist_tilesize(1:3) = 0
     end if
     ! alarm is not set determine hist_option and hist_n
     if (.not. avgfile%is_clockset) then

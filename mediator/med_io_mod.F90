@@ -717,18 +717,18 @@ contains
 
     ! input/output variables
     type(file_desc_t)                       :: io_file
-    type(ESMF_FieldBundle)     , intent(in) :: FB        ! data to be written
-    logical                    , intent(in) :: whead     ! write header
-    logical                    , intent(in) :: wdata     ! write data
-    integer                    , intent(in) :: nx        ! 2d grid size if available
-    integer                    , intent(in) :: ny        ! 2d grid size if available
-    integer ,         optional , intent(in) :: nt        ! time sample
-    real(r8),         optional , intent(in) :: fillval   ! fill value
-    character(len=*), optional , intent(in) :: pre       ! prefix to variable name
-    character(len=*), optional , intent(in) :: flds(:)   ! specific fields to write out
-    logical,          optional , intent(in) :: tavg      ! is this a tavg
-    logical,          optional , intent(in) :: use_float ! write output as float rather than double
-    integer,          optional , intent(in) :: tilesize  ! if non-zero, write atm component on tiles
+    type(ESMF_FieldBundle)     , intent(in) :: FB          ! data to be written
+    logical                    , intent(in) :: whead       ! write header
+    logical                    , intent(in) :: wdata       ! write data
+    integer                    , intent(in) :: nx          ! 2d grid size if available
+    integer                    , intent(in) :: ny          ! 2d grid size if available
+    integer ,         optional , intent(in) :: nt          ! time sample
+    real(r8),         optional , intent(in) :: fillval     ! fill value
+    character(len=*), optional , intent(in) :: pre         ! prefix to variable name
+    character(len=*), optional , intent(in) :: flds(:)     ! specific fields to write out
+    logical,          optional , intent(in) :: tavg        ! is this a tavg
+    logical,          optional , intent(in) :: use_float   ! write output as float rather than double
+    integer,          optional , intent(in) :: tilesize(3) ! if first element is non-zero, write atm component on tiles
     integer                    , intent(out):: rc
 
     ! local variables
@@ -787,7 +787,7 @@ contains
 
     atmtiles = .false.
     if (present(tilesize)) then
-      if (tilesize > 0) atmtiles = .true.
+      if (tilesize(1) > 0) atmtiles = .true.
     end if
 
     ! Error check
@@ -871,16 +871,16 @@ contains
 
     ng = maxval(maxIndexPTile)
     if (atmtiles) then
-      lnx = tilesize
-      lny = tilesize
-      ntiles = ng/(lnx*lny)
-      write(tmpstr,*) subname, 'ng,lnx,lny,ntiles = ',ng,lnx,lny,ntiles
-      call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO)
-      if (ntiles /= 6) then
-         call ESMF_LogWrite(trim(subname)//' ERROR: only cubed sphere atm tiles valid ', ESMF_LOGMSG_INFO)
-         call ESMF_Finalize(endflag=ESMF_END_ABORT)
+       ntiles = tilesize(1)
+       lnx = tilesize(2)
+       lny = tilesize(3)
+       write(tmpstr,*) subname, 'ng,lnx,lny,ntiles = ',ng,lnx,lny,ntiles
+       call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO)
+       if (ntiles*lnx*lny /= ng) then
+          call ESMF_LogWrite(trim(subname)//' ERROR: atm tile sizes are not consistent ', ESMF_LOGMSG_INFO)
+          call ESMF_Finalize(endflag=ESMF_END_ABORT)
       endif
-    else
+   else
       lnx = ng
       lny = 1
       if (nx > 0) lnx = nx
@@ -889,7 +889,7 @@ contains
          write(tmpstr,*) subname,' WARNING: grid2d size not consistent ',ng,lnx,lny
          call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO)
       endif
-    end if
+   end if
     deallocate(minIndexPTile, maxIndexPTile)
 
     if (present(nt)) then
