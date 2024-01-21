@@ -728,7 +728,7 @@ contains
     character(len=*), optional , intent(in) :: flds(:)     ! specific fields to write out
     logical,          optional , intent(in) :: tavg        ! is this a tavg
     logical,          optional , intent(in) :: use_float   ! write output as float rather than double
-    integer,          optional , intent(in) :: tilesize(3) ! if first element is non-zero, write atm component on tiles
+    integer,          optional , intent(in) :: tilesize(3) ! if first element is non-zero, write component history on tiles
     integer                    , intent(out):: rc
 
     ! local variables
@@ -770,7 +770,7 @@ contains
     integer                       :: rank
     integer                       :: ungriddedUBound(1) ! currently the size must equal 1 for rank 2 fields
     integer                       :: gridToFieldMap(1)  ! currently the size must equal 1 for rank 2 fields
-    logical                       :: atmtiles
+    logical                       :: comptiles
     integer                       :: ntiles = 1
     character(CL), allocatable    :: fieldNameList(:)
     character(*),parameter :: subName = '(med_io_write_FB) '
@@ -785,9 +785,9 @@ contains
     luse_float = .false.
     if (present(use_float)) luse_float = use_float
 
-    atmtiles = .false.
+    comptiles = .false.
     if (present(tilesize)) then
-      if (tilesize(1) > 0) atmtiles = .true.
+      if (tilesize(1) > 0) comptiles = .true.
     end if
 
     ! Error check
@@ -870,14 +870,14 @@ contains
     ! all the global grid values in the distgrid - e.g. CTSM
 
     ng = maxval(maxIndexPTile)
-    if (atmtiles) then
+    if (comptiles) then
        ntiles = tilesize(1)
        lnx = tilesize(2)
        lny = tilesize(3)
        write(tmpstr,*) subname, 'ng,lnx,lny,ntiles = ',ng,lnx,lny,ntiles
        call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO)
        if (ntiles*lnx*lny /= ng) then
-          call ESMF_LogWrite(trim(subname)//' ERROR: atm tile sizes are not consistent ', ESMF_LOGMSG_INFO)
+          call ESMF_LogWrite(trim(subname)//' ERROR: component tile sizes are not consistent ', ESMF_LOGMSG_INFO)
           call ESMF_Finalize(endflag=ESMF_END_ABORT)
       endif
    else
@@ -900,7 +900,7 @@ contains
 
     ! Write header
     if (whead) then
-      if (atmtiles) then
+      if (comptiles) then
        rcode = pio_def_dim(io_file, trim(lpre)//'_nx', lnx, dimid3(1))
        rcode = pio_def_dim(io_file, trim(lpre)//'_ny', lny, dimid3(2))
        rcode = pio_def_dim(io_file, trim(lpre)//'_ntiles', ntiles, dimid3(3))
@@ -1020,7 +1020,7 @@ contains
        call ESMF_DistGridGet(distgrid, localDE=0, seqIndexList=dof, rc=rc)
        write(tmpstr,*) subname,' dof = ',ns,size(dof),dof(1),dof(ns)  !,minval(dof),maxval(dof)
        call ESMF_LogWrite(trim(tmpstr), ESMF_LOGMSG_INFO)
-       if (atmtiles) then
+       if (comptiles) then
           call pio_initdecomp(io_subsystem, pio_double, (/lnx,lny,ntiles/), dof, iodesc)
        else
           call pio_initdecomp(io_subsystem, pio_double, (/lnx,lny/), dof, iodesc)
