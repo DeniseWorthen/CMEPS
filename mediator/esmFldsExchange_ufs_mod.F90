@@ -687,7 +687,7 @@ contains
            if (is_local%wrap%comp_present(compice) .and. is_local%wrap%comp_present(compwav)) then
               call addfld_from(compice , fldname)
               call addfld_to(compwav   , fldname)
-        end if
+           end if
         else
            if ( fldchk(is_local%wrap%FBexp(compwav)        , fldname, rc=rc) .and. &
                 fldchk(is_local%wrap%FBImp(compice,compice), fldname, rc=rc)) then
