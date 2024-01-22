@@ -414,7 +414,7 @@ contains
           dstMaskValue = ispval_mask
        end if
     end if
-    if (trim(coupling_mode(1:4)) == 'hafs') then
+    if (trim(coupling_mode(1:4)) == 'hafs' .or. trim(coupling_mode) == 'ufs.nfrac.regional') then
        if (n1 == compatm .and. n2 == compwav) then
           srcMaskValue = ispval_mask
        end if
@@ -943,7 +943,7 @@ contains
     type(ESMF_FieldBundle)          , intent(in)    :: FBFracSrc         ! fraction field bundle for source
     type(packed_data_type)          , intent(inout) :: packed_data(:)    ! array over mapping types
     type(ESMF_RouteHandle)          , intent(inout) :: routehandles(:)
-    type(ESMF_FieldBundle), optional, intent(in)    :: FBDat             ! data field bundle 
+    type(ESMF_FieldBundle), optional, intent(in)    :: FBDat             ! data field bundle
     logical, optional               , intent(in)    :: use_data          ! skip mapping and use data instead
     integer, optional               , intent(out)   :: rc
 
@@ -1000,7 +1000,7 @@ contains
           allocate(field_namelist_dat(fieldcount_dat))
           call ESMF_FieldBundleGet(FBDat, fieldlist=fieldlist_dat, fieldNameList=field_namelist_dat, rc=rc)
           if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          
+
           if (present(use_data)) skip_mapping = use_data
        end if
     end if
@@ -1064,7 +1064,7 @@ contains
              call t_stopf('MED:'//trim(subname)//' copy from src')
 
              ! -----------------------------------
-             ! Fill destination field with background data provided by CDEPS inline 
+             ! Fill destination field with background data provided by CDEPS inline
              ! -----------------------------------
 
              if (fieldcount_dat > 0) then
@@ -1091,7 +1091,7 @@ contains
                         if (trim(field_name) == trim(field_namelist_dat(nfd))) then
                            ! Debug output about match
                            if (maintask) write(logunit,'(a)') trim(subname)//" field "//trim(field_namelist_dat(nfd))//" is found!"
-                           
+
                            ! Get pointer from data field
                            call ESMF_FieldGet(fieldlist_dat(nfd), farrayptr=dataptr, rc=rc)
                            if (chkerr(rc,__LINE__,u_FILE_u)) return
@@ -1367,7 +1367,7 @@ contains
     use ESMF                  , only : ESMF_LogWrite, ESMF_LOGMSG_INFO, ESMF_SUCCESS
     use ESMF                  , only : ESMF_LOGMSG_ERROR, ESMF_FAILURE, ESMF_MAXSTR
     use ESMF                  , only : ESMF_Field, ESMF_FieldRegrid
-    use ESMF                  , only : ESMF_TERMORDER_SRCSEQ, ESMF_Region_Flag, ESMF_REGION_TOTAL
+    use ESMF                  , only : ESMF_TERMORDER_SRCSEQ, ESMF_Region_Flag
     use ESMF                  , only : ESMF_REGION_SELECT
     use ESMF                  , only : ESMF_RouteHandle
     use ESMF                  , only : ESMF_FieldWriteVTK
@@ -1400,7 +1400,7 @@ contains
 
     if (maptype == mapnstod_consd) then
        call ESMF_FieldRegrid(field_src, field_dst, routehandle=RouteHandles(mapnstod), &
-            termorderflag=ESMF_TERMORDER_SRCSEQ, checkflag=checkflag, zeroregion=ESMF_REGION_TOTAL, rc=rc)
+            termorderflag=ESMF_TERMORDER_SRCSEQ, checkflag=checkflag, zeroregion=ESMF_REGION_SELECT, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
        if (dbug_flag > 1) then
           call Field_diagnose(field_dst, lfldname, " --> after nstod: ", rc=rc)
@@ -1415,7 +1415,7 @@ contains
        end if
     else if (maptype == mapnstod_consf) then
        call ESMF_FieldRegrid(field_src, field_dst, routehandle=RouteHandles(mapnstod), &
-            termorderflag=ESMF_TERMORDER_SRCSEQ, checkflag=checkflag, zeroregion=ESMF_REGION_TOTAL, rc=rc)
+            termorderflag=ESMF_TERMORDER_SRCSEQ, checkflag=checkflag, zeroregion=ESMF_REGION_SELECT, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
        if (dbug_flag > 1) then
           call Field_diagnose(field_dst, lfldname, " --> after nstod: ", rc=rc)
@@ -1438,7 +1438,7 @@ contains
        end if
     else
        call ESMF_FieldRegrid(field_src, field_dst, routehandle=RouteHandles(maptype), &
-            termorderflag=ESMF_TERMORDER_SRCSEQ, checkflag=checkflag, zeroregion=ESMF_REGION_TOTAL, rc=rc)
+            termorderflag=ESMF_TERMORDER_SRCSEQ, checkflag=checkflag, zeroregion=ESMF_REGION_SELECT, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     end if
 

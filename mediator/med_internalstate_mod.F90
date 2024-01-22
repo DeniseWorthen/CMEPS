@@ -121,7 +121,7 @@ module med_internalstate_mod
     ! Present/allowed coupling/active coupling logical flags
     logical, pointer :: comp_present(:)               ! comp present flag
     logical, pointer :: med_coupling_active(:,:)      ! computes the active coupling
-    logical, pointer :: med_data_active(:,:)          ! uses stream data to provide background fill 
+    logical, pointer :: med_data_active(:,:)          ! uses stream data to provide background fill
     logical, pointer :: med_data_force_first(:)       ! force to use stream data for first coupling timestep
     integer          :: num_icesheets                 ! obtained from attribute
     logical          :: ocn2glc_coupling = .false.    ! obtained from attribute
@@ -601,7 +601,7 @@ contains
     if (is_local%wrap%comp_present(compocn)) defaultMasks(compocn,:) = 0
     if (is_local%wrap%comp_present(compice)) defaultMasks(compice,:) = 0
     if (is_local%wrap%comp_present(compwav)) defaultMasks(compwav,:) = 0
-    if ( trim(coupling_mode(1:3)) == 'ufs') then
+    if ( trim(coupling_mode(1:3)) == 'ufs' .and. trim(coupling_mode) /= 'ufs.nfrac.regional') then
        if (is_local%wrap%comp_present(compatm)) defaultMasks(compatm,:) = 1
     endif
     if ( trim(coupling_mode) == 'hafs') then

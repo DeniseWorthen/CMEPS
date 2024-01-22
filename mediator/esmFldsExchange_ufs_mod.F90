@@ -68,10 +68,10 @@ contains
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
     ! Set maptype according to coupling_mode
-    if (trim(coupling_mode) == 'ufs.cpld.regional') then
-       maptype = mapfillv_bilnr
-    elseif (trim(coupling_mode) == 'ufs.nfrac' .or. trim(coupling_mode) == 'ufs.nfrac.aoflux') then
+    if (trim(coupling_mode) == 'ufs.nfrac' .or. trim(coupling_mode) == 'ufs.nfrac.aoflux') then
        maptype = mapnstod_consf
+    elseif (trim(coupling_mode) == 'ufs.nfrac.regional') then
+       maptype = mapfillv_bilnr
     else
        maptype = mapconsf
     end if
@@ -114,39 +114,37 @@ contains
     end if
 
     ! fields required for atm/ocn flux calculation
-    if (is_local%wrap%comp_present(compocn) .and. is_local%wrap%comp_present(compatm)) then
-       ! from atm: states for fluxes
-       allocate(flds(13))
-       flds = (/'Sa_u   ', 'Sa_v   ', 'Sa_z   ', 'Sa_tbot', 'Sa_pbot', 'Sa_pslv', &
-                'Sa_shum', 'Sa_ptem', 'Sa_dens', 'Sa_u10m', 'Sa_v10m', 'Sa_t2m ', &
-                'Sa_q2m '/)
-       do n = 1,size(flds)
-          fldname = trim(flds(n))
-          if (phase == 'advertise') then
-             call addfld_from(compatm , fldname)
-          else
-             if ( fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
-                if (trim(coupling_mode) == 'ufs.cpld.regional') then
-                   call addmap_from(compatm, fldname, compocn, mapfillv_bilnr, 'none', 'unset')
-                else
+    if (trim(coupling_mode) /= 'ufs.nfrac.regional') then
+       if (is_local%wrap%comp_present(compocn) .and. is_local%wrap%comp_present(compatm)) then
+          ! from atm: states for fluxes
+          allocate(flds(13))
+          flds = (/'Sa_u   ', 'Sa_v   ', 'Sa_z   ', 'Sa_tbot', 'Sa_pbot', 'Sa_pslv', &
+               'Sa_shum', 'Sa_ptem', 'Sa_dens', 'Sa_u10m', 'Sa_v10m', 'Sa_t2m ', &
+               'Sa_q2m '/)
+          do n = 1,size(flds)
+             fldname = trim(flds(n))
+             if (phase == 'advertise') then
+                call addfld_from(compatm , fldname)
+             else
+                if ( fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
                    call addmap_from(compatm, fldname, compocn, maptype, 'one', 'unset')
                 end if
              end if
-          end if
-       end do
-       deallocate(flds)
+          end do
+          deallocate(flds)
 
-       ! from med: fields returned by the atm/ocn flux computation, otherwise unadvertised
-       allocate(flds(8))
-       flds = (/'So_tref  ', 'So_qref  ', 'So_ustar ', 'So_re    ','So_ssq   ', 'So_u10   ', &
-                'So_duu10n', 'Faox_lat '/)
-       do n = 1,size(flds)
-          fldname = trim(flds(n))
-          if (phase == 'advertise') then
-             call addfld_aoflux(fldname)
-          end if
-       end do
-       deallocate(flds)
+          ! from med: fields returned by the atm/ocn flux computation, otherwise unadvertised
+          allocate(flds(8))
+          flds = (/'So_tref  ', 'So_qref  ', 'So_ustar ', 'So_re    ','So_ssq   ', 'So_u10   ', &
+               'So_duu10n', 'Faox_lat '/)
+          do n = 1,size(flds)
+             fldname = trim(flds(n))
+             if (phase == 'advertise') then
+                call addfld_aoflux(fldname)
+             end if
+          end do
+          deallocate(flds)
+       end if
     end if
 
     ! from med: ocean albedos (not sent to the ATM in UFS).
@@ -170,6 +168,7 @@ contains
        ! ofrac used by atm
        if (is_local%wrap%comp_present(compocn) .and. is_local%wrap%comp_present(compatm)) then
           call addfld_from(compatm , 'Sa_ofrac')
+          call addfld_to(compatm   , 'So_ofrac')
        end if
        ! lfrac used by atm
        if (is_local%wrap%comp_present(complnd) .and. is_local%wrap%comp_present(compatm)) then
@@ -235,13 +234,36 @@ contains
     else
        if ( fldchk(is_local%wrap%FBexp(compatm)        , 'So_t', rc=rc) .and. &
             fldchk(is_local%wrap%FBImp(compocn,compocn), 'So_t', rc=rc)) then
-          if (trim(coupling_mode) == 'ufs.cpld.regional') then
+          if (trim(coupling_mode) == 'ufs.nfrac.regional') then
              call addmap_from(compocn, 'So_t', compatm, mapfillv_bilnr, 'none', 'unset')
           else
              call addmap_from(compocn, 'So_t', compatm, maptype, 'ofrac', 'unset')
           end if
           call addmrg_to(compatm, 'So_t', mrg_from=compocn, mrg_fld='So_t', mrg_type='copy')
        end if
+    end if
+
+    ! to atm: unmerged surface currents from ocn
+    ! placed under regional flag to avoid additional fields in mediator restart
+    if (trim(coupling_mode) == 'ufs.nfrac.regional') then
+       allocate(flds(2))
+       flds = (/'So_u', 'So_v'/)
+       do n = 1,size(flds)
+          fldname = trim(flds(n))
+          if (phase == 'advertise') then
+             if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compocn)) then
+                call addfld_from(compocn , fldname)
+                call addfld_to(compatm   , fldname)
+             end if
+          else
+             if ( fldchk(is_local%wrap%FBexp(compatm)        , fldname, rc=rc) .and. &
+                  fldchk(is_local%wrap%FBImp(compocn,compocn), fldname, rc=rc)) then
+                call addmap_from(compocn, fldname, compatm,  mapfillv_bilnr, 'none', 'unset')
+                call addmrg_to(compatm, fldname, mrg_from=compocn, mrg_fld=fldname, mrg_type='copy')
+             end if
+          end if
+       end do
+       deallocate(flds)
     end if
 
     ! to atm: unmerged surface temperatures from lnd
@@ -292,7 +314,7 @@ contains
     else
        if ( fldchk(is_local%wrap%FBexp(compatm)        , 'Sw_z0', rc=rc) .and. &
             fldchk(is_local%wrap%FBImp(compwav,compwav), 'Sw_z0', rc=rc)) then
-          if (trim(coupling_mode) == 'ufs.cpld.regional') then
+          if (trim(coupling_mode) == 'ufs.nfrac.regional') then
              call addmap_from(compwav, 'Sw_z0', compatm, mapfillv_bilnr, 'none', 'unset')
           else
              call addmap_from(compwav, 'Sw_z0', compatm, mapbilnr_nstod, 'one', 'unset')
@@ -314,7 +336,7 @@ contains
     else
        if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Sa_pslv', rc=rc) .and. &
             fldchk(is_local%wrap%FBImp(compatm,compatm), 'Sa_pslv', rc=rc)) then
-          if (trim(coupling_mode) == 'ufs.cpld.regional') then
+          if (trim(coupling_mode) == 'ufs.nfrac.regional') then
              call addmap_from(compatm, 'Sa_pslv', compocn, mapfillv_bilnr, 'none', 'unset')
           else
              call addmap_from(compatm, 'Sa_pslv', compocn, maptype, 'one', 'unset')
@@ -354,7 +376,7 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compocn)        , trim(oflds(n)), rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), trim(aflds(n)), rc=rc)) then
-             if (trim(coupling_mode) == 'ufs.cpld.regional') then
+             if (trim(coupling_mode) == 'ufs.nfrac.regional') then
                 call addmap_from(compatm, trim(aflds(n)), compocn,  mapfillv_bilnr, 'none', 'unset')
              else
                 call addmap_from(compatm, trim(aflds(n)), compocn, maptype, 'one', 'unset')
@@ -380,29 +402,42 @@ contains
     deallocate(aflds)
     deallocate(iflds)
 
-    ! to ocn: rain and snow via auto merge
-    allocate(flds(2))
-    flds = (/'Faxa_rain', 'Faxa_snow'/)
-    do n = 1,size(flds)
-       fldname = trim(flds(n))
-       if (phase == 'advertise') then
-          if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compocn)) then
-             call addfld_from(compatm , fldname)
-             call addfld_to(compocn   , fldname)
-          end if
-       else
-          if ( fldchk(is_local%wrap%FBexp(compocn)        , fldname, rc=rc) .and. &
-               fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
-             if (trim(coupling_mode) == 'ufs.cpld.regional') then
-                call addmap_from(compatm, fldname, compocn,  mapfillv_bilnr, 'none', 'unset')
-             else
-                call addmap_from(compatm, fldname, compocn, maptype, 'one', 'unset')
-             end if
-             call addmrg_to(compocn, fldname, &
-                  mrg_from=compatm, mrg_fld=fldname, mrg_type='copy_with_weights', mrg_fracname='ofrac')
+    ! to ocn: rain via auto merge
+    if (phase == 'advertise') then
+       if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compocn)) then
+          call addfld_from(compatm , 'Faxa_rain')
+          call addfld_to(compocn   , 'Faxa_rain')
+       end if
+    else
+       if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Faxa_rain', rc=rc) .and. &
+            fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_rain', rc=rc)) then
+          if (trim(coupling_mode) == 'ufs.nfrac.regional') then
+             call addmap_from(compatm, 'Faxa_rain', compocn,  mapfillv_bilnr, 'none', 'unset')
+             call addmrg_to(compocn, 'Faxa_rain', mrg_from=compatm, mrg_fld='Faxa_rain', mrg_type='copy')
+          else
+             call addmap_from(compatm, 'Faxa_rain', compocn, maptype, 'one', 'unset')
+             call addmrg_to(compocn, 'Faxa_rain', &
+                  mrg_from=compatm, mrg_fld='Faxa_rain', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
        end if
-    end do
+    end if
+
+    ! to ocn: snow via auto merge
+    if (trim(coupling_mode) /= 'ufs.nfrac.regional') then
+       if (phase == 'advertise') then
+          if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compocn)) then
+             call addfld_from(compatm , 'Faxa_snow')
+             call addfld_to(compocn   , 'Faxa_snow')
+          end if
+       else
+          if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Faxa_snow', rc=rc) .and. &
+               fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_snow', rc=rc)) then
+             call addmap_from(compatm, 'Faxa_snow', compocn, maptype, 'one', 'unset')
+             call addmrg_to(compocn, 'Faxa_snow', &
+                  mrg_from=compatm, mrg_fld='Faxa_snow', mrg_type='copy_with_weights', mrg_fracname='ofrac')
+          end if
+       end if
+    end if
 
     !to ocn: surface stress from mediator or atm and ice stress via auto merge
     flds = (/'taux', 'tauy'/)
@@ -441,12 +476,11 @@ contains
                 end if
              end if
           else
-             ! ice is not present, ufs.cpld.regional
+             ! ice is not present, ufs.nfrac.regional
              if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Foxx_'//fldname, rc=rc) .and. &
                   fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_'//fldname, rc=rc)) then
                 call addmap_from(compatm, 'Faxa_'//fldname, compocn, mapfillv_bilnr, 'none', 'unset')
-                call addmrg_to(compocn, 'Foxx_'//fldname, &
-                     mrg_from=compatm, mrg_fld='Faxa_'//fldname, mrg_type='merge', mrg_fracname='ofrac')
+                call addmrg_to(compocn, 'Foxx_'//fldname, mrg_from=compatm, mrg_fld='Faxa_'//fldname, mrg_type='copy')
              end if
           end if
        end if
@@ -475,14 +509,15 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Foxx_lwnet', rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_lwnet', rc=rc)) then
-             if (trim(coupling_mode) == 'ufs.cpld.regional') then
+             if (trim(coupling_mode) == 'ufs.nfrac.regional') then
                 call addmap_from(compatm, 'Faxa_lwnet', compocn, mapfillv_bilnr, 'none', 'unset')
+                call addmrg_to(compocn, 'Foxx_lwnet', mrg_from=compatm, mrg_fld='Faxa_lwnet', mrg_type='copy')
              else
                 call addmap_from(compatm, 'Faxa_lwnet', compocn, mapconsf_aofrac, 'aofrac', 'unset')
-             end if
-             call addmrg_to(compocn, 'Foxx_lwnet', &
-                  mrg_from=compatm, mrg_fld='Faxa_lwnet', mrg_type='copy_with_weights', mrg_fracname='ofrac')
+                call addmrg_to(compocn, 'Foxx_lwnet', &
+                     mrg_from=compatm, mrg_fld='Faxa_lwnet', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
+       end if
        end if
     end if
 
@@ -503,13 +538,14 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Foxx_sen', rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_sen', rc=rc)) then
-             if (trim(coupling_mode) == 'ufs.cpld.regional') then
+             if (trim(coupling_mode) == 'ufs.nfrac.regional') then
                 call addmap_from(compatm, 'Faxa_sen', compocn, mapfillv_bilnr, 'none', 'unset')
+                call addmrg_to(compocn, 'Foxx_sen', mrg_from=compatm, mrg_fld='Faxa_sen', mrg_type='copy')
              else
                 call addmap_from(compatm, 'Faxa_sen', compocn, mapconsf_aofrac, 'aofrac', 'unset')
+                call addmrg_to(compocn, 'Foxx_sen', &
+                     mrg_from=compatm, mrg_fld='Faxa_sen', mrg_type='copy_with_weights', mrg_fracname='ofrac')
              endif
-             call addmrg_to(compocn, 'Foxx_sen', &
-                  mrg_from=compatm, mrg_fld='Faxa_sen', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
        end if
     end if
@@ -531,13 +567,14 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Foxx_evap', rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_evap' , rc=rc)) then
-             if (trim(coupling_mode) == 'ufs.cpld.regional') then
+             if (trim(coupling_mode) == 'ufs.nfrac.regional') then
                 call addmap_from(compatm, 'Faxa_evap', compocn, mapfillv_bilnr, 'none', 'unset')
+                call addmrg_to(compocn, 'Foxx_evap', mrg_from=compatm, mrg_fld='Faxa_evap', mrg_type='copy')
              else
                 call addmap_from(compatm, 'Faxa_evap', compocn, mapconsf_aofrac, 'aofrac', 'unset')
+                call addmrg_to(compocn, 'Foxx_evap', &
+                     mrg_from=compatm, mrg_fld='Faxa_evap', mrg_type='copy_with_weights', mrg_fracname='ofrac')
              end if
-             call addmrg_to(compocn, 'Foxx_evap', &
-                  mrg_from=compatm, mrg_fld='Faxa_evap', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
        end if
     end if
@@ -579,7 +616,7 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compocn)        , fldname, rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compwav,compwav), fldname, rc=rc)) then
-             if (trim(coupling_mode) == 'ufs.cpld.regional') then
+             if (trim(coupling_mode) == 'ufs.nfrac.regional') then
                 call addmap_from(compwav, fldname, compocn, mapfillv_bilnr, 'none', 'unset')
              else
                 call addmap_from(compwav, fldname, compocn, mapbilnr_nstod, 'one', 'unset')
@@ -709,7 +746,7 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compwav)        , fldname, rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
-             if (trim(coupling_mode) == 'ufs.cpld.regional') then
+             if (trim(coupling_mode) == 'ufs.nfrac.regional') then
                 call addmap_from(compatm, fldname, compwav, mapfillv_bilnr, 'none', 'unset')
              else
                 call addmap_from(compatm, fldname, compwav, mapbilnr_nstod, 'one', 'unset')
@@ -759,8 +796,8 @@ contains
          else
             if ( fldchk(is_local%wrap%FBexp(compwav)        , fldname, rc=rc) .and. &
                  fldchk(is_local%wrap%FBImp(compocn,compocn), fldname, rc=rc)) then
-             if (trim(coupling_mode) == 'ufs.cpld.regional') then
-                call addmap_from(compatm, fldname, compwav, mapfillv_bilnr, 'none', 'unset')
+             if (trim(coupling_mode) == 'ufs.nfrac.regional') then
+                call addmap_from(compocn, fldname, compwav, mapfillv_bilnr, 'none', 'unset')
              else
                 call addmap_from(compocn, fldname, compwav, mapbilnr_nstod , 'one', 'unset')
              end if

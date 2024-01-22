@@ -510,7 +510,7 @@ contains
 
 #ifdef CDEPS_INLINE
     !------------------
-    ! phase routine for cdeps inline capabilty 
+    ! phase routine for cdeps inline capabilty
     !------------------
 
     call NUOPC_CompSetEntryPoint(gcomp, ESMF_METHOD_RUN, &
@@ -962,7 +962,7 @@ contains
           endif
           if (maintask) then
              write(logunit,*) trim(compname(ncomp))//'_use_data_first_import is ', is_local%wrap%med_data_force_first(ncomp)
-          endif    
+          endif
        end if
     end do
 
@@ -1841,6 +1841,11 @@ contains
          call esmFldsExchange_hafs(gcomp, phase='initialize', rc=rc)
          if (ChkErr(rc,__LINE__,u_FILE_u)) return
       end if
+
+      ! loop over comps, get the fieldnamelist, should only exist in imp(compid,compid) if it was requested?
+      !fieldCount = size(fieldnamelist)
+      !do n = 1,fieldcount
+         !if (.not. med_methods_FB_fldchk(is_local%wrap%FBImp(compid,compid), trim(fieldnamelist(n)), rc)) then
 
       if (maintask) then
          call med_fldList_Document_Mapping(logunit, is_local%wrap%med_coupling_active)
