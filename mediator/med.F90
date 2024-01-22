@@ -1842,11 +1842,6 @@ contains
          if (ChkErr(rc,__LINE__,u_FILE_u)) return
       end if
 
-      ! loop over comps, get the fieldnamelist, should only exist in imp(compid,compid) if it was requested?
-      !fieldCount = size(fieldnamelist)
-      !do n = 1,fieldcount
-         !if (.not. med_methods_FB_fldchk(is_local%wrap%FBImp(compid,compid), trim(fieldnamelist(n)), rc)) then
-
       if (maintask) then
          call med_fldList_Document_Mapping(logunit, is_local%wrap%med_coupling_active)
          call med_fldList_Document_Merging(logunit, is_local%wrap%med_coupling_active)
