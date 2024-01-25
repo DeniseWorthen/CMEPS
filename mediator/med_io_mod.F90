@@ -1579,8 +1579,8 @@ contains
           allocate(fldptr1_tmp(lsize))
 
           do n = 1,ungriddedUBound(1)
-             ! Creat a name for the 1d field on the mediator history or restart file based on the
-             ! ungridded dimension index of the field bundle 2d fiedl
+             ! Create a name for the 1d field on the mediator history or restart file based on the
+             ! ungridded dimension index of the field bundle 2d field
              write(cnumber,'(i0)') n
              name1 = trim(lpre)//'_'//trim(itemc)//trim(cnumber)
 
