@@ -62,7 +62,7 @@ contains
     if (chkErr(rc,__LINE__,u_FILE_u)) return
 
     if (maintask) then
-       write(logunit,'(a)') trim(subname)//' initializing ocean export accumulation FB for '
+       write(logunit,'(a)') trim(subname)//' initializing ocean export accumulation FB '
     end if
     call FB_init(is_local%wrap%FBExpAccumOcn, is_local%wrap%flds_scalar_name, &
          STgeom=is_local%wrap%NStateExp(compocn), STflds=is_local%wrap%NStateExp(compocn), &
