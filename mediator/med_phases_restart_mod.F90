@@ -47,7 +47,7 @@ contains
     use ESMF         , only : ESMF_SUCCESS, ESMF_FAILURE
     use NUOPC        , only : NUOPC_CompAttributeGet
     use NUOPC_Model  , only : NUOPC_ModelGet
-    use med_time_mod , only : med_time_AlarmInit
+    use nuopc_shr_methods, only : AlarmInit
 
     ! input/output variables
     type(ESMF_GridComp)  :: gcomp
@@ -83,8 +83,10 @@ contains
     ! Set alarm for instantaneous mediator restart output
     call ESMF_ClockGet(mclock, currTime=mCurrTime,  rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call med_time_alarmInit(mclock, alarm, option=restart_option, opt_n=restart_n, &
+
+    call alarmInit(mclock, alarm, option=restart_option, opt_n=restart_n, &
          reftime=mcurrTime, alarmname='alarm_restart', rc=rc)
+
     call ESMF_AlarmSet(alarm, clock=mclock, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 

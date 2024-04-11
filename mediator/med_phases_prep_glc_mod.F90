@@ -38,7 +38,7 @@ module med_phases_prep_glc_mod
   use med_methods_mod       , only : field_getdata2d  => med_methods_Field_getdata2d
   use med_methods_mod       , only : field_getdata1d  => med_methods_Field_getdata1d
   use med_utils_mod         , only : chkerr           => med_utils_ChkErr
-  use med_time_mod          , only : med_time_alarmInit
+  use nuopc_shr_methods     , only : alarmInit
   use glc_elevclass_mod     , only : glc_get_num_elevation_classes
   use glc_elevclass_mod     , only : glc_get_elevation_classes
   use glc_elevclass_mod     , only : glc_get_fractional_icecov
@@ -545,7 +545,7 @@ contains
        call NUOPC_CompAttributeGet(gcomp, name="glc_avg_period", value=glc_avg_period, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        if (trim(glc_avg_period) == 'yearly') then
-          call med_time_alarmInit(prepglc_clock, glc_avg_alarm, 'yearly', alarmname='alarm_glc_avg', rc=rc)
+          call alarmInit(prepglc_clock, glc_avg_alarm, 'yearly', alarmname='alarm_glc_avg', rc=rc)
           if (ChkErr(rc,__LINE__,u_FILE_u)) return
           if (maintask) then
              write(logunit,'(a,i10)') trim(subname)//&
@@ -555,7 +555,7 @@ contains
           call NUOPC_CompAttributeGet(gcomp, name="glc_cpl_dt", value=cvalue, rc=rc)
           if (ChkErr(rc,__LINE__,u_FILE_u)) return
           read(cvalue,*) glc_cpl_dt
-          call med_time_alarmInit(prepglc_clock, glc_avg_alarm, 'nseconds', opt_n=glc_cpl_dt, alarmname='alarm_glc_avg', rc=rc)
+          call alarmInit(prepglc_clock, glc_avg_alarm, 'nseconds', opt_n=glc_cpl_dt, alarmname='alarm_glc_avg', rc=rc)
           if (ChkErr(rc,__LINE__,u_FILE_u)) return
           if (maintask) then
              write(logunit,'(a,i10)') trim(subname)//&
@@ -632,22 +632,6 @@ contains
           end if
        end do
 
-       ! Write auxiliary history file if flag is set and accumulation is being done
-       if (lndAccum2glc_cnt > 0) then
-          call NUOPC_CompAttributeGet(gcomp, name="histaux_l2x1yrg", value=cvalue, &
-               isPresent=isPresent, isSet=isSet, rc=rc)
-          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          if (isPresent .and. isSet) then
-             read(cvalue,*) write_histaux_l2x1yrg
-          else
-             write_histaux_l2x1yrg = .false.
-          end if
-          if (write_histaux_l2x1yrg) then
-             call med_phases_history_write_lnd2glc(gcomp, FBlndAccum2glc_l, rc)
-             if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          end if
-       end if
-
        if (is_local%wrap%ocn2glc_coupling) then
           ! Average import from accumulated ocn import data
           do n = 1, size(fldnames_fr_ocn)
@@ -688,15 +672,39 @@ contains
           if (chkErr(rc,__LINE__,u_FILE_u)) return
        end if
 
+       ! Determine if auxiliary file will be written
+       write_histaux_l2x1yrg = .false.
+       if (lndAccum2glc_cnt > 0) then
+          call NUOPC_CompAttributeGet(gcomp, name="histaux_l2x1yrg", value=cvalue, &
+               isPresent=isPresent, isSet=isSet, rc=rc)
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+          if (isPresent .and. isSet) then
+             read(cvalue,*) write_histaux_l2x1yrg
+          end if
+       end if
+
+       ! Write auxiliary history file if flag is set and accumulation is being done
        if (is_local%wrap%lnd2glc_coupling) then
           ! Map accumulated field bundle from land grid (with elevation classes) to glc grid (without elevation classes)
           ! and set FBExp(compglc(ns)) data
           ! Zero land accumulator and accumulated field bundles on land grid
           call med_phases_prep_glc_map_lnd2glc(gcomp, rc)
           if (chkErr(rc,__LINE__,u_FILE_u)) return
+
+          if (write_histaux_l2x1yrg) then
+             call med_phases_history_write_lnd2glc(gcomp, FBlndAccum2glc_l, &
+                  fldbun_glc=is_local%wrap%FBExp(compglc(:)), rc=rc)
+             if (ChkErr(rc,__LINE__,u_FILE_u)) return
+          end if
+
           lndAccum2glc_cnt = 0
           call fldbun_reset(FBlndAccum2glc_l, value=czero, rc=rc)
           if (chkErr(rc,__LINE__,u_FILE_u)) return
+       else
+          if (write_histaux_l2x1yrg) then
+             call med_phases_history_write_lnd2glc(gcomp, FBlndAccum2glc_l, rc)
+             if (ChkErr(rc,__LINE__,u_FILE_u)) return
+          end if
        end if
 
        if (dbug_flag > 1) then

@@ -21,10 +21,10 @@ module med_phases_history_mod
   use med_utils_mod         , only : chkerr => med_utils_ChkErr
   use med_internalstate_mod , only : ncomps, compname
   use med_internalstate_mod , only : InternalState, maintask, logunit
-  use med_time_mod          , only : med_time_alarmInit
   use med_io_mod            , only : med_io_write, med_io_wopen, med_io_enddef, med_io_close
   use perf_mod              , only : t_startf, t_stopf
   use pio                   , only : file_desc_t
+  use nuopc_shr_methods, only : get_minimum_timestep
 
   implicit none
   private
@@ -128,6 +128,7 @@ module med_phases_history_mod
   character(CL) :: case_name = 'unset'  ! case name
   character(CS) :: inst_tag = 'unset'   ! instance tag
   logical       :: debug_alarms = .true.
+  character(len=*), parameter :: optNsteps = "nstep"
   character(*), parameter :: u_FILE_u  = &
        __FILE__
 
@@ -153,6 +154,7 @@ contains
     use ESMF      , only : ESMF_Alarm, ESMF_AlarmSet
     use ESMF      , only : ESMF_FieldBundleIsCreated
     use med_internalstate_mod, only : compocn, compatm
+    use nuopc_shr_methods    , only : alarmInit
 
     ! input/output variables
     type(ESMF_GridComp)  :: gcomp
@@ -184,6 +186,7 @@ contains
     type(ESMF_TimeInterval) :: ringInterval
     integer                 :: ringInterval_length
     logical                 :: first_time = .true.
+    integer                 :: min_timestep = 0    ! used for nsteps option
     character(len=*), parameter :: subname='(med_phases_history_write)'
     !---------------------------------------
 
@@ -221,7 +224,11 @@ contains
           if (ChkErr(rc,__LINE__,u_FILE_u)) return
           call ESMF_ClockGet(mclock, startTime=starttime,  rc=rc)
           if (ChkErr(rc,__LINE__,u_FILE_u)) return
-          call med_time_alarmInit(mclock, alarm, option=hist_option_all_inst, opt_n=hist_n_all_inst, &
+
+          if (hist_option_all_inst(1:len(optnsteps)) == optnsteps) then
+             min_timestep = get_minimum_timestep(gcomp, rc=rc)
+          endif
+          call alarmInit(mclock, alarm, option=hist_option_all_inst, opt_n=hist_n_all_inst, &
                reftime=starttime, alarmname=alarmname, rc=rc)
           call ESMF_AlarmSet(alarm, clock=mclock, rc=rc)
           if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -519,19 +526,20 @@ contains
   end subroutine med_phases_history_write_med
 
   !===============================================================================
-  subroutine med_phases_history_write_lnd2glc(gcomp, fldbun, rc)
+  subroutine med_phases_history_write_lnd2glc(gcomp, fldbun_lnd, rc, fldbun_glc)
 
-    ! Write yearly average of lnd -> glc fields
+    ! Write yearly average of lnd -> glc fields on both land and glc grids
 
-    use med_internalstate_mod, only : complnd
+    use med_internalstate_mod, only : complnd, compglc
     use med_constants_mod , only : SecPerDay => med_constants_SecPerDay
     use med_io_mod        , only : med_io_write_time, med_io_define_time
     use med_io_mod        , only : med_io_date2yyyymmdd, med_io_sec2hms, med_io_ymd2date
 
     ! input/output variables
     type(ESMF_GridComp)    , intent(in)  :: gcomp
-    type(ESMF_FieldBundle) , intent(in)  :: fldbun
+    type(ESMF_FieldBundle) , intent(in)  :: fldbun_lnd
     integer                , intent(out) :: rc
+    type(ESMF_FieldBundle) , intent(in), optional :: fldbun_glc(:)
 
     ! local variables
     type(file_desc_t)       :: io_file
@@ -550,7 +558,7 @@ contains
     real(r8)                :: time_val     ! time coordinate output
     real(r8)                :: time_bnds(2) ! time bounds output
     character(len=CL)       :: hist_file
-    integer                 :: m
+    integer                 :: m,n
     logical                 :: isPresent
     character(len=*), parameter :: subname='(med_phases_history_write_lnd2glc)'
     !---------------------------------------
@@ -623,9 +631,21 @@ contains
           call med_io_write_time(io_file, time_val, time_bnds, nt=1, rc=rc)
           if (ChkErr(rc,__LINE__,u_FILE_u)) return
        end if
-       call med_io_write(io_file, fldbun, whead(m), wdata(m), is_local%wrap%nx(complnd), is_local%wrap%ny(complnd), &
+
+       call med_io_write(io_file, fldbun_lnd, whead(m), wdata(m), &
+            is_local%wrap%nx(complnd), is_local%wrap%ny(complnd), &
             nt=1, pre=trim(compname(complnd))//'Imp', rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+       if (present(fldbun_glc)) then
+          do n = 1,size(fldbun_glc)
+             call med_io_write(io_file, fldbun_glc(n), whead(m), wdata(m), &
+                  is_local%wrap%nx(compglc(n)), is_local%wrap%ny(compglc(n)), &
+                  nt=1, pre=trim(compname(compglc(n)))//'Exp', rc=rc)
+             if (ChkErr(rc,__LINE__,u_FILE_u)) return
+          end do
+       end if
+
     end do ! end of loop over m
 
     ! Close history file
@@ -1529,7 +1549,7 @@ contains
 
     use NUOPC_Mediator, only : NUOPC_MediatorGet
     use ESMF          , only : ESMF_ClockCreate, ESMF_ClockGet, ESMF_ClockSet
-    use med_time_mod  , only : med_time_alarmInit
+    use nuopc_shr_methods, only: AlarmInit
 
     ! input/output variables
     type(ESMF_GridComp) , intent(in)    :: gcomp
@@ -1545,6 +1565,7 @@ contains
     type(ESMF_Time)         :: StartTime
     type(ESMF_TimeInterval) :: mtimestep, dtimestep
     integer                 :: msec, dsec
+    integer                 :: min_timestep
     character(len=*), parameter :: subname='(med_phases_history_init_histclock) '
     !---------------------------------------
 
@@ -1572,9 +1593,7 @@ contains
     hclock = ESMF_ClockCreate(mclock, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    ! Initialize history alarm and advance history clock to trigger
-    ! alarms then reset history clock back to mcurrtime
-    call med_time_alarmInit(hclock, alarm, option=hist_option, opt_n=hist_n, &
+    call alarmInit(hclock, alarm, option=hist_option, opt_n=hist_n, &
          reftime=StartTime, alarmname=trim(alarmname), advance_clock=.true., rc=rc)
 
     ! Write diagnostic info
