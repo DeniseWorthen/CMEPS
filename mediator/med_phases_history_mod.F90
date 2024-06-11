@@ -1313,13 +1313,15 @@ contains
           ! Write data variables for time nt
           if (auxcomp%files(nf)%doavg) then
              call med_io_write(auxcomp%files(nf)%io_file, auxcomp%files(nf)%FBaccum, whead(2), wdata(2), nx, ny, &
-                  nt=auxcomp%files(nf)%nt, pre=trim(compname(compid))//'Imp', flds=auxcomp%files(nf)%flds, rc=rc)
+                  nt=auxcomp%files(nf)%nt, pre=trim(compname(compid))//'Imp', flds=auxcomp%files(nf)%flds, &
+                  use_float=.true.,rc=rc)
              if (ChkErr(rc,__LINE__,u_FILE_u)) return
              call med_methods_FB_reset(auxcomp%files(nf)%FBaccum, value=czero, rc=rc)
              if (ChkErr(rc,__LINE__,u_FILE_u)) return
           else
              call med_io_write(auxcomp%files(nf)%io_file, is_local%wrap%FBimp(compid,compid), whead(2), wdata(2), nx, ny, &
-                  nt=auxcomp%files(nf)%nt, pre=trim(compname(compid))//'Imp', flds=auxcomp%files(nf)%flds, rc=rc)
+                  nt=auxcomp%files(nf)%nt, pre=trim(compname(compid))//'Imp', flds=auxcomp%files(nf)%flds, &
+                  use_float=.true.,rc=rc)
              if (ChkErr(rc,__LINE__,u_FILE_u)) return
           end if
 
