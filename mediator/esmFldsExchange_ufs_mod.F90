@@ -152,6 +152,23 @@ contains
        call addfld_ocnalb('So_anidf')
     end if
 
+    ! ---------------------------------------------------------------------
+    ! to med: swnet fluxes used for budget calculation
+    ! ---------------------------------------------------------------------
+    if (phase == 'advertise') then
+       call addfld_from(complnd, 'Fall_swnet')
+       call addfld_from(compice, 'Faii_swnet')
+       call addfld_from(compatm, 'Faxa_swnet')
+    else
+       if (fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_swnet', rc=rc)) then
+          call addmap_from(compatm, 'Faxa_swnet', compice, mapconsf, 'one'  , 'unset')
+          call addmap_from(compatm, 'Faxa_swnet', compocn, mapconsf, 'one'  , 'unset')
+       end if
+       if (fldchk(is_local%wrap%FBImp(compice,compice), 'Faii_swnet', rc=rc)) then
+          call addmap_from(compice, 'Faii_swnet', compocn, mapfcopy, 'unset', 'unset')
+       end if
+    end if
+
     !=====================================================================
     ! FIELDS TO ATMOSPHERE (compatm)
     !=====================================================================

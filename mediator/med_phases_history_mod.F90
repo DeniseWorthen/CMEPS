@@ -333,6 +333,7 @@ contains
                       if (ChkErr(rc,__LINE__,u_FILE_u)) return
                    endif
                 end if
+             end do
                 ! Write mediator fraction field bundles
                 if (ESMF_FieldBundleIsCreated(is_local%wrap%FBFrac(n),rc=rc)) then
                    call med_io_write(io_file, is_local%wrap%FBFrac(n), whead(m), wdata(m), &
@@ -344,7 +345,7 @@ contains
                 call med_io_write(io_file, is_local%wrap%FBArea(n), whead(m), wdata(m), &
                      is_local%wrap%nx(n), is_local%wrap%ny(n), nt=1, pre='MED_'//trim(compname(n)), &
                      ntile=is_local%wrap%ntile(n), rc=rc)
-             end do
+             !end do
 
              ! Write atm/ocn fluxes and ocean albedoes if field bundles are created
              if (ESMF_FieldBundleIsCreated(is_local%wrap%FBMed_ocnalb_o,rc=rc)) then
@@ -806,6 +807,12 @@ contains
                 if (ChkErr(rc,__LINE__,u_FILE_u)) return
              end if
 
+             ! Define/Write mediator areas
+	     if (ESMF_FieldBundleIsCreated(is_local%wrap%FBArea(compid),rc=rc)) then
+                call med_io_write(instfile%io_file, is_local%wrap%FBArea(compid), whead(m), wdata(m), nx, ny, &
+                     nt=1, pre='Med_area_'//trim(compname(compid)), ntile=ntile, rc=rc)
+                if (ChkErr(rc,__LINE__,u_FILE_u)) return
+             end if
           end do ! end of loop over m
 
           ! Close file
@@ -1002,8 +1009,15 @@ contains
                       call med_methods_FB_reset(avgfile%FBAccum_export, czero, rc=rc)
                       if (chkerr(rc,__LINE__,u_FILE_u)) return
                    end if
-                endif
-             end if
+                end if
+
+                ! Define/Write mediator areas
+                if (ESMF_FieldBundleIsCreated(is_local%wrap%FBArea(compid),rc=rc)) then
+                   call med_io_write(avgfile%io_file, is_local%wrap%FBArea(compid), whead(m), wdata(m), nx, ny, &
+                        nt=1, pre='Med_area_'//trim(compname(compid)), ntile=ntile, rc=rc)
+                   if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                end if
+             endif
           end do ! end of loop over m
 
           ! Close file

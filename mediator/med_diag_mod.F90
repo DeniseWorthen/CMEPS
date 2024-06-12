@@ -798,6 +798,7 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        ip = period_inst
        do n = 1,size(data)
+          if(maintask .and. trim(fldname).eq.'Faxa_swnet')print *,'XX ',n,areas(n),data(n),afrac(n),lfrac(n),ofrac(n)
           budget(nf,c_atm_recv,ip)  = budget(nf,c_atm_recv,ip)  - areas(n)*data(n)*afrac(n)
           budget(nf,c_lnd_arecv,ip) = budget(nf,c_lnd_arecv,ip) + areas(n)*data(n)*lfrac(n)
           budget(nf,c_ocn_arecv,ip) = budget(nf,c_ocn_arecv,ip) + areas(n)*data(n)*ofrac(n)

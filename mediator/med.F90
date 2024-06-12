@@ -1730,10 +1730,10 @@ contains
                 if (ChkErr(rc,__LINE__,u_FILE_u)) return
                 write(logunit,*) trim(subname)//' '//trim(compname(n1))//' export FB field count is = ', fieldCount
               end if
-              call med_meshinfo_create(is_local%wrap%FBExp(n1), &
+              call med_meshinfo_create(trim(compname(n1)),is_local%wrap%FBExp(n1), &
                    is_local%wrap%mesh_info(n1), is_local%wrap%FBArea(n1), rc=rc)
             else
-              call med_meshinfo_create(is_local%wrap%FBImp(n1,n1), &
+              call med_meshinfo_create(trim(compname(n1)),is_local%wrap%FBImp(n1,n1), &
                    is_local%wrap%mesh_info(n1), is_local%wrap%FBArea(n1), rc=rc)
             end if
             if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -2335,7 +2335,7 @@ contains
 
   !-----------------------------------------------------------------------------
 
-  subroutine med_meshinfo_create(FB, mesh_info, FBArea, rc)
+  subroutine med_meshinfo_create(string, FB, mesh_info, FBArea, rc)
 
     use ESMF , only : ESMF_Array, ESMF_ArrayCreate, ESMF_ArrayDestroy, ESMF_Field, ESMF_FieldGet
     use ESMF , only : ESMF_DistGrid, ESMF_FieldBundle, ESMF_FieldRegridGetArea, ESMF_FieldBundleGet
@@ -2344,7 +2344,9 @@ contains
     use ESMF , only : ESMF_FieldCreate, ESMF_FieldBundleCreate, ESMF_FieldBundleAdd
     use med_internalstate_mod , only : mesh_info_type
 
+    use ESMF , only: ESMF_FieldWrite
     ! input/output variables
+    character(len=*), intent(in) :: string
     type(ESMF_FieldBundle) , intent(in)    :: FB
     type(mesh_info_type)   , intent(inout) :: mesh_info
     type(ESMF_FieldBundle) , intent(inout) :: FBArea
@@ -2409,6 +2411,8 @@ contains
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     dataptr(:) = mesh_info%areas(:)
 
+    call ESMF_FieldWrite(lfield, fileName='area.'//trim(string)//'.nc', variableName='area', &
+         overwrite=.true., rc=rc)
   end subroutine med_meshinfo_create
 
   !-----------------------------------------------------------------------------
