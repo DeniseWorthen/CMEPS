@@ -718,9 +718,12 @@ contains
     !if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call fldbun_getdata1d(is_local%wrap%FBfrac(compatm), 'ifrac', ifrac, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call fldbun_getdata1d(is_local%wrap%FBfrac(compatm), 'ofrac', ofrac, rc=rc)
+    call fldbun_getdata1d(is_local%wrap%FBfrac(compatm), 'aofrac', ofrac, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
+    !call fldbun_getdata1d(is_local%wrap%FBimp(compatm,compatm), 'Sa_area', areas, rc=rc)
+    !if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    !areas = areas/(shr_const_rearth*shr_const_rearth)
     areas => is_local%wrap%mesh_info(compatm)%areas
     lats  => is_local%wrap%mesh_info(compatm)%lats
     allocate(afrac(size(areas)))
@@ -1513,9 +1516,9 @@ contains
     allocate(sfrac(size(ofrac)))
     sfrac(:) = 1._r8
 
-    !areas => is_local%wrap%mesh_info(compocn)%areas
-    call fldbun_getdata1d(is_local%wrap%FBarea(compocn), 'area', areas, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    areas => is_local%wrap%mesh_info(compocn)%areas
+    !call fldbun_getdata1d(is_local%wrap%FBarea(compocn), 'area', areas, rc=rc)
+    !if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !-------------------------------
     ! from ocn to mediator

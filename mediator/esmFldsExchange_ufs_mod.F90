@@ -162,8 +162,10 @@ contains
        call addfld_from(compatm, 'Faxa_swnet')
     else
        if (fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_swnet', rc=rc)) then
-          call addmap_from(compatm, 'Faxa_swnet', compice, mapconsf, 'one'  , 'unset')
-          call addmap_from(compatm, 'Faxa_swnet', compocn, mapconsf, 'one'  , 'unset')
+          call addmap_from(compatm, 'Faxa_swnet', compice, maptype, 'one'  , 'unset')
+          call addmap_from(compatm, 'Faxa_swnet', compocn, maptype, 'one'  , 'unset')
+          !call addmap_from(compatm, 'Faxa_swnet', compocn, mapconsf_aofrac, 'aofrac', 'unset')
+          !call addmap_from(compatm, 'Faxa_swnet', compice, mapconsf_aofrac, 'aofrac', 'unset')
        end if
        if (fldchk(is_local%wrap%FBImp(compice,compice), 'Faii_swnet', rc=rc)) then
           call addmap_from(compice, 'Faii_swnet', compocn, mapfcopy, 'unset', 'unset')
@@ -173,6 +175,8 @@ contains
     if (phase == 'advertise') then
        call addfld_from(compatm, 'Sa_lfrac')
        call addfld_to(compmed, 'Sa_lfrac')
+       call addfld_from(compatm, 'Sa_area')
+       call addfld_to(compmed, 'Sa_area')
     end if
 
     !=====================================================================
