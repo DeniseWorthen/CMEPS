@@ -153,8 +153,9 @@ contains
     end if
 
     ! ---------------------------------------------------------------------
-    ! to med: swnet fluxes used for budget calculation
+    ! to med for budget calculation
     ! ---------------------------------------------------------------------
+
     if (phase == 'advertise') then
        call addfld_from(complnd, 'Fall_swnet')
        call addfld_from(compice, 'Faii_swnet')
@@ -167,6 +168,11 @@ contains
        if (fldchk(is_local%wrap%FBImp(compice,compice), 'Faii_swnet', rc=rc)) then
           call addmap_from(compice, 'Faii_swnet', compocn, mapfcopy, 'unset', 'unset')
        end if
+    end if
+
+    if (phase == 'advertise') then
+       call addfld_from(compatm, 'Sa_lfrac')
+       call addfld_to(compmed, 'Sa_lfrac')
     end if
 
     !=====================================================================

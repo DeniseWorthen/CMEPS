@@ -34,6 +34,7 @@ module med_diag_mod
   use med_time_mod          , only : alarmInit        => med_time_alarmInit
   use med_utils_mod         , only : chkerr           => med_utils_ChkErr
   use perf_mod              , only : t_startf, t_stopf
+  use med_methods_mod       , only : FB_diagnose   => med_methods_FB_diagnose
 
   implicit none
   private
@@ -140,6 +141,7 @@ module med_diag_mod
   integer :: f_heat_swnet    = unset_index ! heat : short wave, net
   integer :: f_heat_lwdn     = unset_index ! heat : longwave down
   integer :: f_heat_lwup     = unset_index ! heat : longwave up
+  integer :: f_heat_lwnet    = unset_index ! heat : longwave net
   integer :: f_heat_latvap   = unset_index ! heat : latent, vaporization
   integer :: f_heat_latf     = unset_index ! heat : latent, fusion, snow
   integer :: f_heat_ioff     = unset_index ! heat : latent, fusion, frozen runoff
@@ -322,6 +324,7 @@ contains
     call add_to_budget_diag(budget_diags%fields, f_heat_swnet    ,'hnetsw'      ) ! field  heat : short wave, net
     call add_to_budget_diag(budget_diags%fields, f_heat_lwdn     ,'hlwdn'       ) ! field  heat : longwave down
     call add_to_budget_diag(budget_diags%fields, f_heat_lwup     ,'hlwup'       ) ! field  heat : longwave up
+    call add_to_budget_diag(budget_diags%fields, f_heat_lwnet    ,'hlwnet'      ) ! field  heat : longwave net
     call add_to_budget_diag(budget_diags%fields, f_heat_latvap   ,'hlatvap'     ) ! field  heat : latent, vaporization
     call add_to_budget_diag(budget_diags%fields, f_heat_latf     ,'hlatfus'     ) ! field  heat : latent, fusion, snow
     call add_to_budget_diag(budget_diags%fields, f_heat_ioff     ,'hiroff'      ) ! field  heat : latent, fusion, frozen runoff
@@ -430,21 +433,26 @@ contains
 
     ! period types
     call add_to_budget_diag(budget_diags%periods, period_inst,'    inst')
+    if(maintask)print *,'YYY0 ',size(budget_counter,1),size(budget_counter,2),size(budget_counter,3)
     if(budget_print_daily > 0) call add_to_budget_diag(budget_diags%periods, period_day ,'   daily')
+    if(maintask)print *,'YYY1 ',size(budget_counter,1),size(budget_counter,2),size(budget_counter,3)
     if(budget_print_month > 0) call add_to_budget_diag(budget_diags%periods, period_mon ,' monthly')
+    if(maintask)print *,'YYY2 ',size(budget_counter,1),size(budget_counter,2),size(budget_counter,3)
     if(budget_print_ann   > 0) call add_to_budget_diag(budget_diags%periods, period_ann ,'  annual')
     call add_to_budget_diag(budget_diags%periods, period_inf ,'all_time')
+    if(maintask)print *,'YYY3 ',size(budget_counter,1),size(budget_counter,2),size(budget_counter,3)
 
     ! allocate module budget arrays
     c_size = size(budget_diags%comps)
     f_size = size(budget_diags%fields)
     p_size = size(budget_diags%periods)
-
+    if(maintask)print *,'YYY4 ',c_size,f_size,p_size
     allocate(budget_local    (f_size , c_size , p_size)) ! local sum, valid on all pes
     allocate(budget_global   (f_size , c_size , p_size)) ! global sum, valid only on root pe
     allocate(budget_counter  (f_size , c_size , p_size)) ! counter, valid only on root pe
     allocate(budget_global_1d(f_size * c_size * p_size)) ! needed for ESMF_VMReduce call
-
+    if(maintask)print *,'XXX0 ',size(budget_counter,1),size(budget_counter,2),size(budget_counter,3)
+    if(maintask)print *,'DD0 ',budget_print_inst,budget_print_daily,budget_print_month,budget_print_ann,budget_print_ltann,budget_print_ltend
   end subroutine med_diag_init
 
   integer function get_diag_attribute(gcomp, name, rc)
@@ -484,6 +492,8 @@ contains
 
     ! local variables
     character(*), parameter :: subName = '(med_diag_zero) '
+    !DEBUG
+    integer :: n
     ! ------------------------------------------------------------------
 
     rc = ESMF_SUCCESS
@@ -511,8 +521,9 @@ contains
     elseif (trim(mode) == 'all') then
        budget_local(:,:,:) = 0.0_r8
        budget_global(:,:,:) = 0.0_r8
-       budget_counter(:,:,period_inst) = 0.0_r8
-       budget_counter(:,:,period_inst+1:) = 1.0_r8
+       budget_counter(:,:,:) = 0.0_r8
+       !budget_counter(:,:,period_inst) = 0.0_r8
+       !budget_counter(:,:,period_inst+1:) = 0.0_r8
     else
        call ESMF_LogWrite(trim(subname)//' mode '//trim(mode)//&
             ' not recognized', &
@@ -520,6 +531,10 @@ contains
        rc = ESMF_FAILURE
        return
     endif
+    if(maintask)print *,'XXX1 ',size(budget_counter,1),size(budget_counter,2),size(budget_counter,3)
+    do n=1,size(budget_diags%comps)
+       write(108,'(a,i5,3f6.0)')trim(subname),n,budget_counter(f_area,n,1:size(budget_counter,3))
+    end do
   end subroutine med_diag_zero_mode
 
   !===============================================================================
@@ -547,6 +562,7 @@ contains
           budget_counter(:,:,ip) = 0.0_r8
        endif
        if (ip==period_day .and. tod==0) then
+          if(maintask)print *,'CC0 ',ip,year,mon,day,tod,f_area,c_ocn_recv,budget_counter(f_area,c_ocn_recv,ip)
           budget_local(:,:,ip) = 0.0_r8
           budget_global(:,:,ip) = 0.0_r8
           budget_counter(:,:,ip) = 0.0_r8
@@ -576,18 +592,48 @@ contains
     integer, intent(out) :: rc
 
     ! local variables
-    integer     :: ip
+    integer       :: ip
+    !logical, save :: firstcall = .true.
     character(*), parameter :: subName = '(med_diag_accum) '
+
+    ! DEBUG
+    type(ESMF_Clock)      :: clock
+    type(ESMF_Time)       :: currTime
+    character(len=CL)     :: timestr, currtimestr
+    integer               :: date        ! coded date, seconds
+    integer               :: year
+    integer               :: mon
+    integer               :: day
+    integer               :: tod
+    integer               :: n
     ! ------------------------------------------------------------------
 
     call t_startf('MED:'//subname)
     rc = ESMF_SUCCESS
+
+    !if (firstcall) then
+    !   firstcall = .false.
+    !   return
+    !end if
+
     do ip = period_inst+1,size(budget_diags%periods)
        budget_local(:,:,ip) = budget_local(:,:,ip) + budget_local(:,:,period_inst)
     enddo
     budget_counter(:,:,:) = budget_counter(:,:,:) + 1.0_r8
 
+    call ESMF_GridCompGet(gcomp, clock=clock, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_ClockGet(clock, currtime=currtime,rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_TimeGet(currtime, yy=year, mm=mon, dd=day, s=tod, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    write(currtimestr,'(i4.4,a,i2.2,a,i2.2,a,i5.5)') year,'-',mon,'-',day,'-',tod
+    do n=1,size(budget_diags%comps)
+       write(98,'(a,i5,3f6.0)')trim(currtimestr),n,budget_counter(f_area,n,1:size(budget_counter,3))
+    end do
+
     call t_stopf('MED:'//subname)
+
   end subroutine med_phases_diag_accum
 
   !===============================================================================
@@ -666,8 +712,10 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! Get fractions on atm mesh
-    call fldbun_getdata1d(is_local%wrap%FBfrac(compatm), 'lfrac', lfrac, rc=rc)
+    call fldbun_getdata1d(is_local%wrap%FBimp(compatm,compatm), 'Sa_lfrac', lfrac, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    !call FB_diagnose(is_local%wrap%FBImp(compatm,compatm), string=trim(subname)//' FBimp ', rc=rc)
+    !if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call fldbun_getdata1d(is_local%wrap%FBfrac(compatm), 'ifrac', ifrac, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call fldbun_getdata1d(is_local%wrap%FBfrac(compatm), 'ofrac', ofrac, rc=rc)
@@ -699,23 +747,55 @@ contains
     call diag_atm_recv(is_local%wrap%FBImp(compatm,compatm), 'Faxa_swnet', f_heat_swnet, &
          areas, lats, afrac, lfrac, ofrac, ifrac, budget_local, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call diag_atm_recv(is_local%wrap%FBImp(compatm,compatm), 'Faxa_lwdn', f_heat_lwdn, &
-         areas, lats, afrac, lfrac, ofrac, ifrac, budget_local, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    if (fldbun_fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_lwnet', rc=rc)) then
+       call diag_atm_recv(is_local%wrap%FBImp(compatm,compatm), 'Faxa_lwnet', f_heat_lwnet, &
+            areas, lats, afrac, lfrac, ofrac, ifrac, budget_local, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    else
+       call diag_atm_recv(is_local%wrap%FBImp(compatm,compatm), 'Faxa_lwdn', f_heat_lwdn, &
+            areas, lats, afrac, lfrac, ofrac, ifrac, budget_local, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
+
+    if (fldbun_fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_sen', rc=rc)) then
+       call diag_atm_recv(is_local%wrap%FBImp(compatm,compatm), 'Faxa_sen', f_heat_sen, &
+            areas, lats, afrac, lfrac, ofrac, ifrac, budget_local, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
+
     ! Note that passing f_watr_rain twice will just add up contributions from Faxa_rainc and Faxa_rainl
-    call diag_atm_recv(is_local%wrap%FBImp(compatm,compatm), 'Faxa_rainc', f_watr_rain, &
+    if (fldbun_fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_rainc', rc=rc)) then
+       call diag_atm_recv(is_local%wrap%FBImp(compatm,compatm), 'Faxa_rainc', f_watr_rain, &
          areas, lats, afrac, lfrac, ofrac, ifrac, budget_local, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call diag_atm_recv(is_local%wrap%FBImp(compatm,compatm), 'Faxa_rainl', f_watr_rain, &
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
+    if (fldbun_fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_rainl', rc=rc)) then
+       call diag_atm_recv(is_local%wrap%FBImp(compatm,compatm), 'Faxa_rainl', f_watr_rain, &
+            areas, lats, afrac, lfrac, ofrac, ifrac, budget_local, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
+    if (fldbun_fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_rain', rc=rc)) then
+       call diag_atm_recv(is_local%wrap%FBImp(compatm,compatm), 'Faxa_rain', f_watr_rain, &
          areas, lats, afrac, lfrac, ofrac, ifrac, budget_local, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
     ! Note that passing f_watr_rain twice will just add up contributions from Faxa_snowc and Faxa_snowl
-    call diag_atm_recv(is_local%wrap%FBImp(compatm,compatm), 'Faxa_snowc', f_watr_snow, &
+    if (fldbun_fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_snowc', rc=rc)) then
+       call diag_atm_recv(is_local%wrap%FBImp(compatm,compatm), 'Faxa_snowc', f_watr_snow, &
+            areas, lats, afrac, lfrac, ofrac, ifrac, budget_local, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
+    if (fldbun_fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_snowl', rc=rc)) then
+       call diag_atm_recv(is_local%wrap%FBImp(compatm,compatm), 'Faxa_snowl', f_watr_snow, &
+            areas, lats, afrac, lfrac, ofrac, ifrac, budget_local, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
+    if (fldbun_fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_snow', rc=rc)) then
+       call diag_atm_recv(is_local%wrap%FBImp(compatm,compatm), 'Faxa_snow', f_watr_snow, &
          areas, lats, afrac, lfrac, ofrac, ifrac, budget_local, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call diag_atm_recv(is_local%wrap%FBImp(compatm,compatm), 'Faxa_snowl', f_watr_snow, &
-         areas, lats, afrac, lfrac, ofrac, ifrac, budget_local, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
 
     if (flds_wiso) then
        call diag_atm_wiso_recv(is_local%wrap%FBImp(compatm,compatm), 'Faxa_rainc_wiso', &
@@ -798,7 +878,6 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        ip = period_inst
        do n = 1,size(data)
-          if(maintask .and. trim(fldname).eq.'Faxa_swnet')print *,'XX ',n,areas(n),data(n),afrac(n),lfrac(n),ofrac(n)
           budget(nf,c_atm_recv,ip)  = budget(nf,c_atm_recv,ip)  - areas(n)*data(n)*afrac(n)
           budget(nf,c_lnd_arecv,ip) = budget(nf,c_lnd_arecv,ip) + areas(n)*data(n)*lfrac(n)
           budget(nf,c_ocn_arecv,ip) = budget(nf,c_ocn_arecv,ip) + areas(n)*data(n)*ofrac(n)
@@ -1442,6 +1521,9 @@ contains
     ! from ocn to mediator
     !-------------------------------
 
+    ! summary budget
+    !    ocn_area    = data(f_area,c_ocn_recv,ip)
+
     ip = period_inst
     ic = c_ocn_recv
     do n = 1,size(ofrac)
@@ -1473,11 +1555,20 @@ contains
        budget_local(f_area,ic,ip) = budget_local(f_area,ic,ip) + areas(n)*ofrac(n)
     end do
 
+    !these are identical
+    !print *,'ZZZ ',budget_local(f_area,c_ocn_recv,ip),budget_local(f_area,c_ocn_send,ip)
+
     if (fldbun_fldchk(is_local%wrap%FBExp(compocn), 'Foxx_lwnet', rc=rc)) then ! MOM6
-       call diag_ocn(is_local%wrap%FBMed_aoflux_o        , 'Faox_lwup', f_heat_lwup, ic, areas, ofrac, budget_local, rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       call diag_ocn(is_local%wrap%FBImp(compatm,compocn), 'Faxa_lwdn', f_heat_lwdn, ic, areas, ofrac, budget_local, rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (fldbun_fldchk(is_local%wrap%FBImp(compatm,compocn), 'Faxa_lwnet', rc=rc)) then
+          call diag_ocn(is_local%wrap%FBImp(compatm,compocn), 'Faxa_lwnet', f_heat_lwnet, ic, areas, ofrac, budget_local, rc=rc)
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+          !print *,'XX ',budget_local(f_heat_lwup,ic,ip),budget_local(f_heat_lwdn,ic,ip),budget_local(f_heat_lwnet,ic,ip)
+       else
+          call diag_ocn(is_local%wrap%FBMed_aoflux_o        , 'Faox_lwup', f_heat_lwup, ic, areas, ofrac, budget_local, rc=rc)
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+          call diag_ocn(is_local%wrap%FBImp(compatm,compocn), 'Faxa_lwdn', f_heat_lwdn, ic, areas, ofrac, budget_local, rc=rc)
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       end if
     else ! POP
        call diag_ocn(is_local%wrap%FBMed_aoflux_o, 'Faox_lwup' , f_heat_lwup   , ic, areas, ofrac, budget_local, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -1485,20 +1576,36 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     end if
 
-    call diag_ocn(is_local%wrap%FBMed_aoflux_o, 'Faox_sen' , f_heat_sen    , ic, areas, ofrac, budget_local, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call diag_ocn(is_local%wrap%FBMed_aoflux_o, 'Faox_evap', f_watr_evap   , ic, areas, ofrac, budget_local, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (fldbun_fldchk(is_local%wrap%FBImp(compatm,compocn), 'Faxa_sen', rc=rc)) then
+       call diag_ocn(is_local%wrap%FBImp(compatm,compocn), 'Faxa_sen', f_heat_sen , ic, areas, ofrac, budget_local, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    else
+       call diag_ocn(is_local%wrap%FBMed_aoflux_o,        'Faox_sen' , f_heat_sen , ic, areas, ofrac, budget_local, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
+
+    if (fldbun_fldchk(is_local%wrap%FBImp(compatm,compocn), 'Faxa_evap', rc=rc)) then
+       call diag_ocn(is_local%wrap%FBImp(compatm,compocn), 'Faxa_evap' , f_watr_evap , ic, areas, ofrac, budget_local, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    else
+       call diag_ocn(is_local%wrap%FBMed_aoflux_o,          'Faox_evap', f_watr_evap , ic, areas, ofrac, budget_local, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
 
     if (fldbun_fldchk(is_local%wrap%FBExp(compocn), 'Foxx_lat', rc=rc)) then ! POP
        call diag_ocn(is_local%wrap%FBMed_aoflux_o, 'Faox_lat'  , f_heat_latvap , ic, areas, ofrac, budget_local, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     else ! MOM6
-       call diag_ocn(is_local%wrap%FBMed_aoflux_o, 'Faox_evap' , f_heat_latvap , ic, areas, ofrac, budget_local, &
-            scale=shr_const_latvap, rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       if (fldbun_fldchk(is_local%wrap%FBImp(compatm,compocn), 'Faxa_evap', rc=rc)) then
+          call diag_ocn(is_local%wrap%FBImp(compatm,compocn), 'Faxa_evap' , f_heat_latvap , ic, areas, ofrac, budget_local, &
+               scale=shr_const_latvap, rc=rc)
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       else
+          call diag_ocn(is_local%wrap%FBMed_aoflux_o,         'Faox_evap' , f_heat_latvap , ic, areas, ofrac, budget_local, &
+               scale=shr_const_latvap, rc=rc)
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       end if
     end if
-
 
     call diag_ocn(is_local%wrap%FBExp(compocn), 'Fioi_meltw', f_watr_melt   , ic, areas, sfrac, budget_local, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -2018,6 +2125,7 @@ contains
     type(ESMF_Clock)      :: clock
     type(ESMF_Alarm)      :: stop_alarm
     type(ESMF_Time)       :: nextTime
+    type(ESMF_Time)       :: currTime
     integer               :: date        ! coded date, seconds
     integer               :: year
     integer               :: mon
@@ -2031,9 +2139,11 @@ contains
     integer               :: p_size       ! number of period types
     real(r8), allocatable :: datagpr(:,:,:)
     logical, save         :: firstcall = .true.
-#ifdef DEBUG
-    character(len=CL)     :: timestr
-#endif
+!#ifdef DEBUG
+    character(len=CL)     :: timestr, currtimestr
+    integer, save         :: count=0
+    integer               :: n
+!#endif
     character(*), parameter :: subName = '(med_phases_diag_print) '
     ! ------------------------------------------------------------------
 
@@ -2047,6 +2157,21 @@ contains
     call ESMF_GridCompGet(gcomp, clock=clock, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
+    call ESMF_ClockGet(clock, currtime=currtime,rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_TimeGet(currtime, yy=year, mm=mon, dd=day, s=tod, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    write(currtimestr,'(i4.4,a,i2.2,a,i2.2,a,i5.5)') year,'-',mon,'-',day,'-',tod
+
+    ! if (firstcall) then
+    !    write(logunit,' (a,i6)') trim(subname)//": currtime = "//trim(currtimestr),count
+    !    do n=1,size(budget_diags%comps)
+    !       write(128,'(a,2i5,3f6.0)')trim(currtimestr),n,count,budget_counter(f_area,n,1:3)
+    !    end do
+    !    firstcall = .false.
+    !    return
+    ! endif
+
     ! NOTE - we are using the next time to ensure that budgets are
     ! written at the end of the run correctly This duplicates the
     ! behavior in the restart and history file output in that the time
@@ -2057,17 +2182,17 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     date = year*10000 + mon*100 + day
 
-#ifdef DEBUG
+!#ifdef DEBUG
     if(maintask) then
+       count = count+1
        write(timestr,'(i4.4,a,i2.2,a,i2.2,a,i5.5)') year,'-',mon,'-',day,'-',tod
-       write(logunit,' (a)') trim(subname)//": time = "//trim(timestr)
+       write(logunit,' (a,i6)') trim(subname)//": time = "//trim(timestr),count
+       do n=1,size(budget_diags%comps)
+          write(88,'(a,2i5,3f6.0)')trim(currtimestr)//'  '//trim(timestr),n,count,&
+               budget_counter(f_area,n,1:size(budget_counter,3))
+       end do
     endif
-#endif
-
-    if (firstcall) then
-       firstcall = .false.
-       return
-    endif
+!#endif
 
     sumdone = .false.
     do ip = 1,size(budget_diags%periods)
@@ -2098,6 +2223,7 @@ contains
              if (ChkErr(rc,__LINE__,u_FILE_u)) return
           endif
        endif
+       if(maintask)print *,'CC1 '//trim(timestr),ip,output_level,budget_print_daily
 
        ! Currently output_level is limited to levels of 0,1,2, 3
        ! (see comment for print options at top)
@@ -2118,14 +2244,20 @@ contains
              p_size = size(budget_diags%periods)
              allocate(datagpr(f_size, c_size, p_size))
              datagpr(:,:,:) = budget_global(:,:,:)
-
+             print *,'AA0 ',f_size,c_size,p_size
              ! budget normalizations (global area and 1e6 for water)
              datagpr = datagpr/(4.0_r8*shr_const_pi)
              datagpr(f_watr_beg:f_watr_end,:,:) = datagpr(f_watr_beg:f_watr_end,:,:) * 1.0e6_r8
              if ( flds_wiso ) then
                 datagpr(iso0(1):isof(nisotopes),:,:) = datagpr(iso0(1):isof(nisotopes),:,:) * 1.0e6_r8
              end if
+             print *,'ZZ0 ',trim(timestr),ip,datagpr(f_area,c_ocn_recv,ip),datagpr(f_area,c_ocn_send,ip),&
+                  budget_counter(f_area,c_ocn_recv,ip),budget_counter(f_area,c_ocn_send,ip)
              datagpr(:,:,:) = datagpr(:,:,:)/budget_counter(:,:,:)
+             print *,'ZZ1 ',trim(timestr),ip,datagpr(f_area,c_ocn_recv,ip),datagpr(f_area,c_ocn_send,ip),&
+                  budget_counter(f_area,c_ocn_recv,ip),budget_counter(f_area,c_ocn_send,ip)
+
+             print *,'AA1 ',trim(timestr),ip,budget_counter(f_area,:,ip),size(budget_diags%periods)
 
              ! Write diagnostic tables to logunit (maintask only)
              if (output_level >= 3) then
@@ -2134,11 +2266,11 @@ contains
              end if
              if (output_level >= 2) then
                 ! detail lnd/ocn/ice component budgets ----
-                call med_diag_print_lnd_ice_ocn(datagpr, ip, date, tod)
+                !call med_diag_print_lnd_ice_ocn(datagpr, ip, date, tod)
              end if
              if (output_level >= 1) then
                 ! net summary budgets
-                call med_diag_print_summary(datagpr, ip, date, tod)
+                !call med_diag_print_summary(datagpr, ip, date, tod)
              endif
              write(diagunit,*) ' '
 
@@ -2183,7 +2315,8 @@ contains
     ics = 0
     ico = 0
     str = ""
-    do ic = 1,2
+    ic=1
+    !do ic = 1,2
        if (ic == 1) then    ! from atm to mediator
           ica = c_atm_recv ! total from atm
           icl = c_lnd_arecv ! from land   to med on atm grid
@@ -2246,33 +2379,33 @@ contains
             sum(data(f_heat_beg:f_heat_end,icn,ip)) + sum(data(f_heat_beg:f_heat_end,ics,ip)) + &
             sum(data(f_heat_beg:f_heat_end,ico,ip))
 
-       write(diagunit,*) ' '
-       write(diagunit,FAH) subname,trim(str)//' WATER BUDGET (kg/m2s*1e6): period = ',&
-            trim(budget_diags%periods(ip)%name),': date = ',date,tod
-       write(diagunit,FA0) &
-            budget_diags%comps(ica)%name,&
-            budget_diags%comps(icl)%name,&
-            budget_diags%comps(icn)%name,&
-            budget_diags%comps(ics)%name,&
-            budget_diags%comps(ico)%name,' *SUM*  '
-       do nf = f_watr_beg, f_watr_end
-          write(diagunit,FA1) budget_diags%fields(nf)%name,&
-               data(nf,ica,ip), &
-               data(nf,icl,ip), &
-               data(nf,icn,ip), &
-               data(nf,ics,ip), &
-               data(nf,ico,ip), &
-               data(nf,ica,ip) + data(nf,icl,ip) + data(nf,icn,ip) + data(nf,ics,ip) + data(nf,ico,ip)
-       enddo
-       write(diagunit,FA1)    '   *SUM*'   ,&
-            sum(data(f_watr_beg:f_watr_end,ica,ip)), &
-            sum(data(f_watr_beg:f_watr_end,icl,ip)), &
-            sum(data(f_watr_beg:f_watr_end,icn,ip)), &
-            sum(data(f_watr_beg:f_watr_end,ics,ip)), &
-            sum(data(f_watr_beg:f_watr_end,ico,ip)), &
-            sum(data(f_watr_beg:f_watr_end,ica,ip)) + sum(data(f_watr_beg:f_watr_end,icl,ip)) + &
-            sum(data(f_watr_beg:f_watr_end,icn,ip)) + sum(data(f_watr_beg:f_watr_end,ics,ip)) + &
-            sum(data(f_watr_beg:f_watr_end,ico,ip))
+       ! write(diagunit,*) ' '
+       ! write(diagunit,FAH) subname,trim(str)//' WATER BUDGET (kg/m2s*1e6): period = ',&
+       !      trim(budget_diags%periods(ip)%name),': date = ',date,tod
+       ! write(diagunit,FA0) &
+       !      budget_diags%comps(ica)%name,&
+       !      budget_diags%comps(icl)%name,&
+       !      budget_diags%comps(icn)%name,&
+       !      budget_diags%comps(ics)%name,&
+       !      budget_diags%comps(ico)%name,' *SUM*  '
+       ! do nf = f_watr_beg, f_watr_end
+       !    write(diagunit,FA1) budget_diags%fields(nf)%name,&
+       !         data(nf,ica,ip), &
+       !         data(nf,icl,ip), &
+       !         data(nf,icn,ip), &
+       !         data(nf,ics,ip), &
+       !         data(nf,ico,ip), &
+       !         data(nf,ica,ip) + data(nf,icl,ip) + data(nf,icn,ip) + data(nf,ics,ip) + data(nf,ico,ip)
+       ! enddo
+       ! write(diagunit,FA1)    '   *SUM*'   ,&
+       !      sum(data(f_watr_beg:f_watr_end,ica,ip)), &
+       !      sum(data(f_watr_beg:f_watr_end,icl,ip)), &
+       !      sum(data(f_watr_beg:f_watr_end,icn,ip)), &
+       !      sum(data(f_watr_beg:f_watr_end,ics,ip)), &
+       !      sum(data(f_watr_beg:f_watr_end,ico,ip)), &
+       !      sum(data(f_watr_beg:f_watr_end,ica,ip)) + sum(data(f_watr_beg:f_watr_end,icl,ip)) + &
+       !      sum(data(f_watr_beg:f_watr_end,icn,ip)) + sum(data(f_watr_beg:f_watr_end,ics,ip)) + &
+       !      sum(data(f_watr_beg:f_watr_end,ico,ip))
 
        if ( flds_wiso ) then
           do is = 1, nisotopes
@@ -2306,7 +2439,7 @@ contains
           end do
        end if
 
-    enddo
+    !enddo
 
   end subroutine med_diag_print_atm
 
@@ -2335,7 +2468,7 @@ contains
     icxr = 0
     icas = 0
     str = ""
-    do ic = 1,4
+    do ic = 2,4
 
        if (ic == 1) then
           icar = c_lnd_arecv
@@ -2522,6 +2655,9 @@ contains
     ! ------------------------------------------------------------------
 
     call t_startf('MED:'//subname)
+
+    !if complnd .not.exists, then
+    !c_lnd_recv = c_lnd_arecv ??
 
     ! write out areas
     write(diagunit,*) ' '

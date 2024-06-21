@@ -416,6 +416,10 @@ contains
           if (ChkErr(rc,__LINE__,u_FILE_u)) return
           call ESMF_TimeGet(nextTime, dayOfYear_r8=nextsw_cday, rc=rc)
           if (ChkErr(rc,__LINE__,u_FILE_u)) return
+          !call ESMF_ClockGet( clock, currTime=currTime, rc=rc)
+          !if (chkerr(rc,__LINE__,u_FILE_u)) return
+          !call ESMF_TimeGet( currTime, dayOfYear_r8=nextsw_cday, rc=rc )
+          !if (ChkErr(rc,__LINE__,u_FILE_u)) return
        end if
     end if
 

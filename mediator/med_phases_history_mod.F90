@@ -947,6 +947,7 @@ contains
                avgfile%FBaccum_import, avgfile%accumcnt_import,  rc=rc)
           if (ChkErr(rc,__LINE__,u_FILE_u)) return
           if (write_now) then
+             if(maintask)print *,'BBimport ',trim(compname(compid)),avgfile%accumcnt_import
              call med_phases_history_fldbun_average(avgfile%FBaccum_import, avgfile%accumcnt_import, rc=rc)
              if (ChkErr(rc,__LINE__,u_FILE_u)) return
           end if
@@ -956,6 +957,7 @@ contains
                avgfile%FBaccum_export, avgfile%accumcnt_export, rc=rc)
           if (ChkErr(rc,__LINE__,u_FILE_u)) return
           if (write_now) then
+             if(maintask)print *,'BBexport ',trim(compname(compid)),avgfile%accumcnt_export
              call med_phases_history_fldbun_average(avgfile%FBaccum_export, avgfile%accumcnt_export, rc=rc)
              if (ChkErr(rc,__LINE__,u_FILE_u)) return
           end if
@@ -968,7 +970,6 @@ contains
           call med_phases_history_set_timeinfo(gcomp, avgfile%clock, avgfile%alarmname, &
                time_val, time_bnds, time_units, hist_file, doavg=.true., compname=trim(compname(compid)), rc=rc)
           if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
           ! Create history file
           call ESMF_GridCompGet(gcomp, vm=vm, rc=rc)
           if (ChkErr(rc,__LINE__,u_FILE_u)) return
