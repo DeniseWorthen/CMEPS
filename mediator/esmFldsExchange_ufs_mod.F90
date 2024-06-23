@@ -177,6 +177,8 @@ contains
        call addfld_to(compmed, 'Sa_lfrac')
        call addfld_from(compatm, 'Sa_area')
        call addfld_to(compmed, 'Sa_area')
+       call addfld_from(compatm, 'Sa_lakefrac')
+       call addfld_to(compmed, 'Sa_lakefrac')
     end if
 
     !=====================================================================

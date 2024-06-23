@@ -718,7 +718,7 @@ contains
     !if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call fldbun_getdata1d(is_local%wrap%FBfrac(compatm), 'ifrac', ifrac, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call fldbun_getdata1d(is_local%wrap%FBfrac(compatm), 'aofrac', ofrac, rc=rc)
+    call fldbun_getdata1d(is_local%wrap%FBfrac(compatm), 'ofrac', ofrac, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     !call fldbun_getdata1d(is_local%wrap%FBimp(compatm,compatm), 'Sa_area', areas, rc=rc)
