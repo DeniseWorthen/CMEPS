@@ -4,7 +4,7 @@ module med_phases_post_atm_mod
   ! Mediator phase for post atm calculations, maps atm->ice, atm->lnd, atm->ocn
   ! and atm->wav
   !-----------------------------------------------------------------------------
- 
+
   implicit none
   private
 
@@ -58,7 +58,7 @@ contains
     call ESMF_GridCompGetInternalState(gcomp, is_local, rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    ! map atm to ocn
+    ! map atm->ocn
     if (is_local%wrap%med_coupling_active(compatm,compocn)) then
        call t_startf('MED:'//trim(subname)//' map_atm2ocn')
        call med_map_field_packed( &

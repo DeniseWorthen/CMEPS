@@ -2144,6 +2144,7 @@ contains
                      flds_scalar_name=is_local%wrap%flds_scalar_name, &
                      flds_scalar_num=is_local%wrap%flds_scalar_num, rc=rc)
                 if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                print *,'XX ',n1,real_ntile,nint(real_ntile)
                 is_local%wrap%ntile(n1) = nint(real_ntile)
              else
                 is_local%wrap%ntile(n1) = 0

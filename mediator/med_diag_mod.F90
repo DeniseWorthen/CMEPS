@@ -697,6 +697,7 @@ contains
     integer             :: n,nf,ip
     real(r8), pointer   :: afrac(:)
     real(r8), pointer   :: lfrac(:)
+    real(r8), pointer   :: lakefrac(:)
     real(r8), pointer   :: ifrac(:)
     real(r8), pointer   :: ofrac(:)
     real(r8), pointer   :: areas(:)
@@ -714,6 +715,9 @@ contains
     ! Get fractions on atm mesh
     call fldbun_getdata1d(is_local%wrap%FBimp(compatm,compatm), 'Sa_lfrac', lfrac, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call fldbun_getdata1d(is_local%wrap%FBimp(compatm,compatm), 'Sa_lakefrac', lakefrac, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    lfrac = lfrac + lakefrac
     !call FB_diagnose(is_local%wrap%FBImp(compatm,compatm), string=trim(subname)//' FBimp ', rc=rc)
     !if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call fldbun_getdata1d(is_local%wrap%FBfrac(compatm), 'ifrac', ifrac, rc=rc)
@@ -2318,8 +2322,8 @@ contains
     ics = 0
     ico = 0
     str = ""
-    ic=1
-    !do ic = 1,2
+    !ic=1
+    do ic = 1,2
        if (ic == 1) then    ! from atm to mediator
           ica = c_atm_recv ! total from atm
           icl = c_lnd_arecv ! from land   to med on atm grid
@@ -2442,7 +2446,7 @@ contains
           end do
        end if
 
-    !enddo
+    enddo
 
   end subroutine med_diag_print_atm
 
