@@ -608,7 +608,7 @@ contains
       ! ----------------------------------------------
       use ESMF, only : ESMF_Field, ESMF_DistGrid, ESMF_Grid
       use ESMF, only : ESMF_DistGridCreate, ESMF_GridCreate, ESMF_LogFoundError, ESMF_LOGERR_PASSTHRU
-      use ESMF, only : ESMF_FieldCreate, ESMF_GridCreate, ESMF_TYPEKIND_R8
+      use ESMF, only : ESMF_FieldCreate, ESMF_GridCreate, ESMF_TYPEKIND_R8, ESMF_KIND_R8, ESMF_FieldGet
       type(ESMF_Field) , intent(inout) :: field
       character(len=*) , intent(in)    :: flds_scalar_name
       integer          , intent(in)    :: flds_scalar_num
@@ -617,6 +617,7 @@ contains
       ! local variables
       type(ESMF_Distgrid) :: distgrid
       type(ESMF_Grid)     :: grid
+      real(ESMF_KIND_R8), pointer :: farrayptr(:,:)
       character(len=*), parameter :: subname='(SetScalarField)'
       ! ----------------------------------------------
 
@@ -637,6 +638,10 @@ contains
            gridToFieldMap=(/2/), &
            rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=u_FILE_u)) return
+
+      call ESMF_FieldGet(field, farrayPtr = farrayptr, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=u_FILE_u)) return
+      farrayptr = 0.0
 
     end subroutine SetScalarField
 
