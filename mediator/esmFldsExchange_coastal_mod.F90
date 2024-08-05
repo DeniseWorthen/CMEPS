@@ -141,6 +141,27 @@ contains
     !----------------------------------------------------------
     call addfld_from(compocn, 'So_omask')
 
+    ! Temporary
+    allocate(S_flds(10))
+    S_flds = (/&
+         'Sw_hs     ', &
+         'Sw_bhd    ', &
+         'Sw_tauox  ', &
+         'Sw_tauoy  ', &
+         'Sw_taubblx', &
+         'Sw_taubbly', &
+         'Sw_ubax   ', &
+         'Sw_ubay   ', &
+         'Sw_ustokes', &
+         'Sw_vstokes'  &
+         /)
+    do n = 1,size(S_flds)
+       fldname = trim(S_flds(n))
+       call addfld_from(compwav, trim(fldname))
+       call addfld_to(compmed, trim(fldname))
+    end do
+    deallocate(S_flds)
+
     !----------------------------------------------------------
     ! to med: frac from components
     !----------------------------------------------------------
@@ -176,9 +197,9 @@ contains
     ! ---------------------------------------------------------------------
     if (coastal_attr%wav_present .and. coastal_attr%ocn_present) then
       allocate(S_flds(3))
-      S_flds = (/'Sw_wavsuu', & ! eastward_wave_radiation_stress 
+      S_flds = (/'Sw_wavsuu', & ! eastward_wave_radiation_stress
                  'Sw_wavsuv', & ! eastward_northward_wave_radiation_stress
-                 'Sw_wavsvv' /) ! northward_wave_radiation_stress
+                 'Sw_wavsvv'/)  ! northward_wave_radiation_stress
       do n = 1,size(S_flds)
          fldname = trim(S_flds(n))
          call addfld_from(compwav, trim(fldname))
@@ -207,7 +228,7 @@ contains
     end if
 
     ! ---------------------------------------------------------------------
-    ! to wav: ocean fields 
+    ! to wav: ocean fields
     ! ---------------------------------------------------------------------
     if (coastal_attr%ocn_present .and. coastal_attr%wav_present) then
       allocate(S_flds(2))
@@ -366,9 +387,9 @@ contains
     ! ---------------------------------------------------------------------
     if (coastal_attr%wav_present .and. coastal_attr%ocn_present) then
       allocate(S_flds(3))
-      S_flds = (/'Sw_wavsuu', & ! eastward_wave_radiation_stress 
+      S_flds = (/'Sw_wavsuu', & ! eastward_wave_radiation_stress
                  'Sw_wavsuv', & ! eastward_northward_wave_radiation_stress
-                 'Sw_wavsvv' /) ! northward_wave_radiation_stress
+                 'Sw_wavsvv'/)  ! northward_wave_radiation_stress
       do n = 1,size(S_flds)
          fldname = trim(S_flds(n))
          if (fldchk(is_local%wrap%FBExp(compocn),trim(fldname),rc=rc) .and. &
@@ -388,7 +409,7 @@ contains
     !=====================================================================
 
     ! ---------------------------------------------------------------------
-    ! to wav: state fields 
+    ! to wav: state fields
     ! ---------------------------------------------------------------------
     if (coastal_attr%atm_present .and. coastal_attr%wav_present) then
       allocate(S_flds(2))
@@ -409,7 +430,7 @@ contains
     end if
 
     ! ---------------------------------------------------------------------
-    ! to wav: ocean fields 
+    ! to wav: ocean fields
     ! ---------------------------------------------------------------------
     if (coastal_attr%atm_present .and. coastal_attr%wav_present) then
       allocate(S_flds(2))
