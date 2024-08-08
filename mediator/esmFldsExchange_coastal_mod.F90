@@ -141,8 +141,8 @@ contains
     !----------------------------------------------------------
     call addfld_from(compocn, 'So_omask')
 
-    ! Temporary
-    allocate(S_flds(10))
+    ! TODO: Remove---only for temporary testing
+    allocate(S_flds(13))
     S_flds = (/&
          'Sw_hs     ', &
          'Sw_bhd    ', &
@@ -150,10 +150,13 @@ contains
          'Sw_tauoy  ', &
          'Sw_taubblx', &
          'Sw_taubbly', &
-         'Sw_ubax   ', &
-         'Sw_ubay   ', &
+         'Sw_ubrx   ', &
+         'Sw_ubry   ', &
          'Sw_ustokes', &
-         'Sw_vstokes'  &
+         'Sw_vstokes', &
+         'Sw_thm    ', &
+         'Sw_wnmean ', &
+         'Sw_t0m1   '  &
          /)
     do n = 1,size(S_flds)
        fldname = trim(S_flds(n))
@@ -196,16 +199,31 @@ contains
     ! to ocn: wave fields
     ! ---------------------------------------------------------------------
     if (coastal_attr%wav_present .and. coastal_attr%ocn_present) then
-      allocate(S_flds(3))
-      S_flds = (/'Sw_wavsuu', & ! eastward_wave_radiation_stress
-                 'Sw_wavsuv', & ! eastward_northward_wave_radiation_stress
-                 'Sw_wavsvv'/)  ! northward_wave_radiation_stress
-      do n = 1,size(S_flds)
-         fldname = trim(S_flds(n))
-         call addfld_from(compwav, trim(fldname))
-         call addfld_to(compocn, trim(fldname))
-      end do
-      deallocate(S_flds)
+       allocate(S_flds(16))
+       S_flds = (/&
+            'Sw_wavsuu ', & ! eastward_wave_radiation_stress
+            'Sw_wavsuv ', & ! eastward_northward_wave_radiation_stress
+            'Sw_wavsvv ', & ! northward_wave_radiation_stress
+            'Sw_hs     ', & ! significant wave height
+            'Sw_bhd    ', & ! Bernoulli head pressure
+            'Sw_tauox  ', & ! wave to ocean momentum flux x
+            'Sw_tauoy  ', & ! wave to ocean momentum flux y
+            'Sw_taubblx', & ! momentum flux due to bottom friction x
+            'Sw_taubbly', & ! momentum flux due to bottom friction y
+            'Sw_ubrx   ', & ! near bottom rms wave velocities x
+            'Sw_ubry   ', & ! near bottom rms wave velocities y
+            'Sw_ustokes', & ! surface drift component x
+            'Sw_vstokes', & ! surface drift component y
+            'Sw_thm    ', & ! mean wave direction
+            'Sw_wnmean ', & ! mean wave number
+            'Sw_t0m1   '  & ! mean wave period
+            /)
+       do n = 1,size(S_flds)
+          fldname = trim(S_flds(n))
+          call addfld_from(compwav, trim(fldname))
+          call addfld_to(compocn, trim(fldname))
+       end do
+       deallocate(S_flds)
     end if
 
     !=====================================================================
@@ -231,9 +249,10 @@ contains
     ! to wav: ocean fields
     ! ---------------------------------------------------------------------
     if (coastal_attr%ocn_present .and. coastal_attr%wav_present) then
-      allocate(S_flds(2))
+      allocate(S_flds(3))
       S_flds = (/'So_u', & ! ocn_current_zonal
-                 'So_v' /) ! ocn_current_merid
+                 'So_v', & ! ocn_current_merid
+                 'So_h' /) ! sea_surface_height_above_sea_level
       do n = 1,size(S_flds)
          fldname = trim(S_flds(n))
          call addfld_from(compocn, trim(fldname))
@@ -386,10 +405,25 @@ contains
     ! to ocn: wave fields
     ! ---------------------------------------------------------------------
     if (coastal_attr%wav_present .and. coastal_attr%ocn_present) then
-      allocate(S_flds(3))
-      S_flds = (/'Sw_wavsuu', & ! eastward_wave_radiation_stress
-                 'Sw_wavsuv', & ! eastward_northward_wave_radiation_stress
-                 'Sw_wavsvv'/)  ! northward_wave_radiation_stress
+       allocate(S_flds(16))
+       S_flds = (/&
+            'Sw_wavsuu ', & ! eastward_wave_radiation_stress
+            'Sw_wavsuv ', & ! eastward_northward_wave_radiation_stress
+            'Sw_wavsvv ', & ! northward_wave_radiation_stress
+            'Sw_hs     ', & ! significant wave height
+            'Sw_bhd    ', & ! Bernoulli head pressure
+            'Sw_tauox  ', & ! wave to ocean momentum flux x
+            'Sw_tauoy  ', & ! wave to ocean momentum flux y
+            'Sw_taubblx', & ! momentum flux due to bottom friction x
+            'Sw_taubbly', & ! momentum flux due to bottom friction y
+            'Sw_ubrx   ', & ! near bottom rms wave velocities x
+            'Sw_ubry   ', & ! near bottom rms wave velocities y
+            'Sw_ustokes', & ! surface drift component x
+            'Sw_vstokes', & ! surface drift component y
+            'Sw_thm    ', & ! mean wave direction
+            'Sw_wnmean ', & ! mean wave number
+            'Sw_t0m1   '  & ! mean wave period
+            /)
       do n = 1,size(S_flds)
          fldname = trim(S_flds(n))
          if (fldchk(is_local%wrap%FBExp(compocn),trim(fldname),rc=rc) .and. &
@@ -433,9 +467,10 @@ contains
     ! to wav: ocean fields
     ! ---------------------------------------------------------------------
     if (coastal_attr%atm_present .and. coastal_attr%wav_present) then
-      allocate(S_flds(2))
+      allocate(S_flds(3))
       S_flds = (/'So_u', & ! ocn_current_zonal
-                 'So_v' /) ! ocn_current_merid
+                 'So_v', & ! ocn_current_merid
+                 'So_h' /) ! sea_surface_height_above_sea_level
       do n = 1,size(S_flds)
          fldname = trim(S_flds(n))
          if (fldchk(is_local%wrap%FBExp(compwav),trim(fldname),rc=rc) .and. &
