@@ -12,8 +12,8 @@ module med_phases_prep_rof_mod
 
   use med_kind_mod          , only : CX=>SHR_KIND_CX, CS=>SHR_KIND_CS, CL=>SHR_KIND_CL, R8=>SHR_KIND_R8
   use ESMF                  , only : ESMF_FieldBundle, ESMF_Field
-  use esmFlds               , only : ncomps, complnd, comprof, compname, mapconsf, mapconsd, mapfcopy
-  use med_internalstate_mod , only : InternalState, mastertask, logunit
+  use med_internalstate_mod , only : complnd, compglc, comprof, mapconsf, mapfcopy
+  use med_internalstate_mod , only : InternalState, maintask, logunit
   use med_constants_mod     , only : dbug_flag        => med_constants_dbug_flag
   use med_constants_mod     , only : czero            => med_constants_czero
   use med_utils_mod         , only : chkerr           => med_utils_chkerr
@@ -23,6 +23,8 @@ module med_phases_prep_rof_mod
   use med_methods_mod       , only : fldbun_reset     => med_methods_FB_reset
   use med_methods_mod       , only : fldbun_average   => med_methods_FB_average
   use med_methods_mod       , only : field_getdata1d  => med_methods_Field_getdata1d
+  use med_methods_mod       , only : fldbun_fldchk    => med_methods_FB_fldchk
+  use med_methods_mod       , only : FB_check_for_nans => med_methods_FB_check_for_nans
   use perf_mod              , only : t_startf, t_stopf
 
   implicit none
@@ -60,6 +62,8 @@ module med_phases_prep_rof_mod
   type(ESMF_FieldBundle), public :: FBlndAccum2rof_l
   type(ESMF_FieldBundle), public :: FBlndAccum2rof_r
 
+  character(len=9) :: fldnames_fr_glc(2) = (/'Fgrg_rofl', 'Fgrg_rofi'/)
+
   character(*)    , parameter :: u_FILE_u = &
        __FILE__
 
@@ -80,7 +84,8 @@ contains
     use ESMF        , only : ESMF_FieldBundle, ESMF_FieldBundleCreate, ESMF_FieldBundleGet, ESMF_FieldBundleAdd
     use ESMF        , only : ESMF_LogWrite, ESMF_LOGMSG_INFO, ESMF_SUCCESS
     use ESMF        , only : ESMF_TYPEKIND_R8
-    use esmFlds     , only : fldListFr, fldlistTo, med_fldlist_GetNumFlds, med_fldlist_getFldInfo
+    use esmFlds     , only : med_fldList_GetfldListFr, med_fldList_GetfldlistTo, med_fldlist_GetNumFlds, med_fld_getFldInfo
+    use esmFlds     , only : med_fldList_type, med_fldList_entry_type
     use med_map_mod , only : med_map_packed_field_create
 
     ! input/output variables
@@ -89,10 +94,13 @@ contains
 
     ! local variables
     type(InternalState) :: is_local
-    integer             :: n, n1, nflds
+    integer             :: n, nflds
     type(ESMF_Mesh)     :: mesh_l
     type(ESMF_Mesh)     :: mesh_r
     type(ESMF_Field)    :: lfield
+    type(med_fldList_type), pointer :: fldList
+    type(med_fldList_entry_type), pointer :: fldptr
+    character(len=CS)  :: fldname
     character(len=CS), allocatable  :: fldnames_temp(:)
     character(len=*),parameter  :: subname=' (med_phases_prep_rof_init) '
     !---------------------------------------
@@ -106,23 +114,21 @@ contains
 
     ! Determine lnd2rof_flds (module variable) - note that fldListTo is set in esmFldsExchange_cesm.F90
     ! Remove scalar field from lnd2rof_flds
-    nflds = med_fldlist_getnumflds(fldlistTo(comprof))
+    fldList => med_fldList_GetfldlistTo(comprof)
+    nflds = med_fldlist_getnumflds(fldList)
     allocate(fldnames_temp(nflds))
-    do n = 1,nflds
-       call med_fldList_GetFldInfo(fldListTo(comprof), n, fldnames_temp(n))
-    end do
-    do n = 1,nflds
-       if (trim(fldnames_temp(n)) == trim(is_local%wrap%flds_scalar_name)) then
-          do n1 = n, nflds-1
-             fldnames_temp(n1) = fldnames_temp(n1+1)
-          enddo
-          nflds = nflds - 1
+    fldptr => fldList%fields
+    n = 0
+    do while(associated(fldptr))
+       call med_fld_GetFldInfo(fldptr, stdname=fldname)
+       if (trim(fldname) .ne. trim(is_local%wrap%flds_scalar_name)) then
+          n = n+1
+          fldnames_temp(n) = fldname
        endif
+       fldptr => fldptr%next
     enddo
-    allocate(lnd2rof_flds(nflds))
-    do n = 1,nflds
-       lnd2rof_flds(n) = trim(fldnames_temp(n))
-    end do
+    allocate(lnd2rof_flds(n))
+    lnd2rof_flds = fldnames_temp(1:n)
     deallocate(fldnames_temp)
 
     ! Get lnd and rof meshes
@@ -136,6 +142,7 @@ contains
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     FBlndAccum2rof_r = ESMF_FieldBundleCreate(name='FBlndAccum2rof_r', rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
+
     do n = 1,size(lnd2rof_flds)
        lfield = ESMF_FieldCreate(mesh_l, ESMF_TYPEKIND_R8, name=lnd2rof_flds(n), meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
@@ -152,16 +159,20 @@ contains
     end do
 
     ! Initialize field bundles and accumulation count
+
     call fldbun_reset(FBlndAccum2rof_l, value=0.0_r8, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
+
     call fldbun_reset(FBlndAccum2rof_r, value=0.0_r8, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     lndAccum2rof_cnt = 0
 
+    fldList => med_fldList_GetFldListFr(complnd)
     ! Create packed mapping from rof->lnd
+
     call med_map_packed_field_create(destcomp=comprof, &
          flds_scalar_name=is_local%wrap%flds_scalar_name, &
-         fldsSrc=fldListFr(complnd)%flds, &
+         fieldsSrc=fldList, &
          FBSrc=FBLndAccum2rof_l, FBDst=FBLndAccum2rof_r, &
          packed_data=is_local%wrap%packed_data(complnd,comprof,:), rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -190,9 +201,7 @@ contains
 
     ! local variables
     type(InternalState)       :: is_local
-    integer                   :: i,j,n,ncnt
-    integer                   :: fieldCount
-    integer                   :: ungriddedUBound(1)
+    integer                   :: n
     logical                   :: exists
     real(r8), pointer         :: dataptr1d(:)
     real(r8), pointer         :: dataptr1d_accum(:)
@@ -259,7 +268,7 @@ contains
     use ESMF              , only : ESMF_GridComp, ESMF_GridCompGet
     use ESMF              , only : ESMF_FieldBundleGet, ESMF_FieldGet
     use ESMF              , only : ESMF_LogWrite, ESMF_LOGMSG_INFO, ESMF_SUCCESS
-    use esmFlds           , only : fldListTo
+    use esmFlds           , only : med_fldList_GetfldListTo, med_fldList_type
     use med_map_mod       , only : med_map_field_packed
     use med_merge_mod     , only : med_merge_auto
     use med_constants_mod , only : czero => med_constants_czero
@@ -270,17 +279,13 @@ contains
 
     ! local variables
     type(InternalState)       :: is_local
-    integer                   :: i,j,n,n1,ncnt
+    integer                   :: n,ns,nf
     integer                   :: count
     logical                   :: exists
-    real(r8), pointer         :: dataptr(:)
-    real(r8), pointer         :: dataptr1d(:)
-    type(ESMF_Field)          :: field_irrig_flux
+    real(r8), pointer         :: dataptr_in(:)
+    real(r8), pointer         :: dataptr_out(:)
     type(ESMF_Field)          :: lfield
-    type(ESMF_Field)          :: lfield_src
-    type(ESMF_Field)          :: lfield_dst
-    type(ESMF_Field)          :: field_lfrac_lnd
-    character(CL), pointer    :: lfieldnamelist(:)
+    type(med_fldList_type), pointer :: fldList
     character(len=*),parameter  :: subname='(med_phases_prep_rof_mod: med_phases_prep_rof)'
     !---------------------------------------
 
@@ -298,13 +303,14 @@ contains
     call ESMF_GridCompGetInternalState(gcomp, is_local, rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
+    fldList => med_fldList_GetfldListTo(comprof)
     !---------------------------------------
     ! Average import from land accumuled FB
     !---------------------------------------
 
     count = lndAccum2rof_cnt
     if (count == 0) then
-       if (mastertask) then
+       if (maintask) then
           write(logunit,'(a)')trim(subname)//'accumulation count for land input averging to river is 0 '// &
                ' accumulation field is set to zero'
        end if
@@ -316,12 +322,12 @@ contains
        if (exists) then
           call ESMF_FieldBundleGet(FBlndAccum2rof_l, fieldName=trim(lnd2rof_flds(n)), field=lfield, rc=rc)
           if (chkerr(rc,__LINE__,u_FILE_u)) return
-          call field_getdata1d(lfield, dataptr1d, rc=rc)
+          call field_getdata1d(lfield, dataptr_out, rc=rc)
           if (chkerr(rc,__LINE__,u_FILE_u)) return
           if (count == 0) then
-             dataptr1d(:) = czero
+             dataptr_out(:) = czero
           else
-             dataptr1d(:) = dataptr1d(:) / real(count, r8)
+             dataptr_out(:) = dataptr_out(:) / real(count, r8)
           end if
        end if
     end do
@@ -356,12 +362,12 @@ contains
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     else
        ! This will ensure that no irrig is sent from the land
-       call fldbun_getdata1d(FBlndAccum2rof_r, irrig_flux_field, dataptr, rc)
-       dataptr(:) = czero
+       call fldbun_getdata1d(FBlndAccum2rof_r, irrig_flux_field, dataptr_out, rc)
+       dataptr_out(:) = czero
     end if
 
     !---------------------------------------
-    ! auto merges to create FBExp(comprof) - assumes that all data is coming from FBlndAccum2rof_r
+    ! create FBExp(comprof)
     !---------------------------------------
 
     if (dbug_flag > 1) then
@@ -370,9 +376,38 @@ contains
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     end if
 
+    ! data coming from FBlndAccum2rof_r
     call med_merge_auto(compsrc=complnd, FBout=is_local%wrap%FBExp(comprof), &
-         FBfrac=is_local%wrap%FBFrac(comprof), FBin=FBlndAccum2rof_r, fldListTo=fldListTo(comprof), rc=rc)
+         FBfrac=is_local%wrap%FBFrac(comprof), FBin=FBlndAccum2rof_r, fldListTo=fldList, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+    ! custom merge for glc->rof
+    ! glc->rof is mapped in med_phases_post_glc
+    do ns = 1,is_local%wrap%num_icesheets
+      if (is_local%wrap%med_coupling_active(compglc(ns),comprof)) then
+        do nf = 1,size(fldnames_fr_glc)
+          if ( fldbun_fldchk(is_local%wrap%FBImp(compglc(ns),comprof), fldnames_fr_glc(nf), rc=rc) .and. &
+               fldbun_fldchk(is_local%wrap%FBExp(comprof), fldnames_fr_glc(nf), rc=rc) ) then
+            call fldbun_getdata1d(is_local%wrap%FBImp(compglc(ns),comprof), &
+                 trim(fldnames_fr_glc(nf)), dataptr_in, rc)
+            if (chkerr(rc,__LINE__,u_FILE_u)) return
+            call fldbun_getdata1d(is_local%wrap%FBExp(comprof), &
+                 trim(fldnames_fr_glc(nf)), dataptr_out , rc)
+            if (chkerr(rc,__LINE__,u_FILE_u)) return
+            ! Determine export data
+            if (ns == 1) then
+              dataptr_out(:) = dataptr_in(:)
+            else
+              dataptr_out(:) = dataptr_out(:) + dataptr_in(:)
+            end if
+          end if
+        end do
+      end if
+    end do
+
+    ! Check for nans in fields export to rof
+    call FB_check_for_nans(is_local%wrap%FBExp(comprof), maintask, logunit, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     if (dbug_flag > 1) then
        call fldbun_diagnose(is_local%wrap%FBExp(comprof), &
@@ -395,9 +430,9 @@ contains
        if (exists) then
           call ESMF_FieldBundleGet(FBlndAccum2rof_l, fieldName=trim(lnd2rof_flds(n)), field=lfield, rc=rc)
           if (chkerr(rc,__LINE__,u_FILE_u)) return
-          call field_getdata1d(lfield, dataptr1d, rc=rc)
+          call field_getdata1d(lfield, dataptr_out, rc=rc)
           if (chkerr(rc,__LINE__,u_FILE_u)) return
-          dataptr1d(:) = czero
+          dataptr_out(:) = czero
        end if
     end do
 
@@ -446,10 +481,6 @@ contains
     ! local variables
     integer                   :: r,l
     type(InternalState)       :: is_local
-    integer                   :: fieldcount
-    type(ESMF_Field)          :: field_import_rof
-    type(ESMF_Field)          :: field_import_lnd
-    type(ESMF_Field)          :: field_irrig_flux
     type(ESMF_Field)          :: field_lfrac_lnd
     type(ESMF_Mesh)           :: lmesh_lnd
     type(ESMF_Mesh)           :: lmesh_rof

@@ -29,7 +29,7 @@ contains
   !-----------------------------------------------------------------------
   function glc_get_num_elevation_classes() result(num_elevation_classes)
     integer :: num_elevation_classes  ! function result
-    integer :: rc
+    num_elevation_classes = 0
   end function glc_get_num_elevation_classes
 
   !-----------------------------------------------------------------------
@@ -37,6 +37,7 @@ contains
     real(r8), intent(in)  :: glc_topo(:)      ! topographic height
     integer , intent(out) :: glc_elevclass(:) ! elevation class
     integer , intent(in)  :: logunit
+    glc_elevclass = 0
   end subroutine glc_get_elevation_classes_without_bareland
 
   !-----------------------------------------------------------------------
@@ -45,6 +46,7 @@ contains
     real(r8), intent(in)  :: glc_topo(:)        ! ice topographic height
     integer , intent(out) :: glc_elevclass(:)   ! elevation class
     integer , intent(in)  :: logunit
+    glc_elevclass = 0
   end subroutine glc_get_elevation_classes_with_bareland
 
   !-----------------------------------------------------------------------
@@ -52,15 +54,17 @@ contains
     real(r8) :: mean_elevation  ! function result
     integer, intent(in) :: elevation_class
     integer, optional, intent(in) :: logunit
+    mean_elevation = 0.0_r8
   end function glc_mean_elevation_virtual
 
   !-----------------------------------------------------------------------
   subroutine glc_get_fractional_icecov(nec, glc_topo, glc_icefrac, glc_icefrac_ec, logunit)
-    integer , intent(in)  :: nec              ! number of elevation classes 
+    integer , intent(in)  :: nec              ! number of elevation classes
     real(r8), intent(in)  :: glc_topo(:)      ! topographic height
     real(r8), intent(in)  :: glc_icefrac(:)
     real(r8), intent(out) :: glc_icefrac_ec(:,:)
     integer , intent(in)  :: logunit
+    glc_icefrac_ec = 0.0_r8
   end subroutine glc_get_fractional_icecov
 
 end module glc_elevclass_mod

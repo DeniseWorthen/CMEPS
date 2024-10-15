@@ -5,13 +5,11 @@ module ESM
   !-----------------------------------------------------------------------------
 
   use shr_kind_mod , only : r8=>shr_kind_r8, cl=>shr_kind_cl, cs=>shr_kind_cs
-  use shr_log_mod  , only : shrlogunit=> shr_log_unit
   use shr_sys_mod  , only : shr_sys_abort
   use shr_mpi_mod  , only : shr_mpi_bcast
   use shr_mem_mod  , only : shr_mem_init
-  use shr_file_mod , only : shr_file_setLogunit
-  use esm_utils_mod, only : logunit, mastertask, dbug_flag, chkerr
-  use perf_mod     , only : t_initf
+  use shr_log_mod  , only : shr_log_setLogunit
+  use esm_utils_mod, only : logunit, maintask, dbug_flag, chkerr
 
   implicit none
   private
@@ -55,7 +53,6 @@ contains
     integer, intent(out) :: rc
 
     ! local variables
-    type(ESMF_Config) :: runSeq
     character(len=*), parameter :: subname = "(esm.F90:SetServices)"
     !---------------------------------------
 
@@ -126,9 +123,7 @@ contains
     ! local variables
     type(ESMF_VM)     :: vm
     type(ESMF_Config) :: config
-    integer           :: n, i, stat
-    character(len=20) :: model, prefix
-    integer           :: localPet, medpet
+    integer           :: localPet
     character(len=CL) :: meminitStr
     integer           :: global_comm
     integer           :: maxthreads
@@ -142,10 +137,8 @@ contains
 
     !-------------------------------------------
     ! Set the io logunit to the value defined in ensemble_driver
-    ! TODO: - is this statement still correct?
-    ! it may be corrected below if the med mastertask is not the driver mastertask
     !-------------------------------------------
-    call shr_file_setLogunit(logunit)
+    call shr_log_setLogunit(logunit)
 
     !-------------------------------------------
     ! Get the config and vm objects from the driver
@@ -157,12 +150,10 @@ contains
     call ESMF_VMGet(vm, localPet=localPet, mpiCommunicator=global_comm, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
-    call ESMF_VMGet(vm, localPet=localPet, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
     if (localPet == 0) then
-       mastertask=.true.
+       maintask=.true.
     else
-       mastertask = .false.
+       maintask = .false.
     end if
 
     !-------------------------------------------
@@ -212,16 +203,10 @@ contains
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
     ! Memory test
-    if (mastertask) then
+    if (maintask) then
        call shr_mem_init(strbuf=meminitstr)
        write(logunit,*) trim(meminitstr)
     end if
-
-    !-------------------------------------------
-    ! Timer initialization (has to be after pelayouts are determined)
-    !-------------------------------------------
-
-    call t_initf('drv_in', LogPrint=.true., mpicom=global_comm, mastertask=mastertask, MaxThreads=maxthreads)
 
     call ESMF_LogWrite(trim(subname)//": done", ESMF_LOGMSG_INFO)
 
@@ -245,7 +230,6 @@ contains
     integer, intent(out) :: rc
 
     ! local variables
-    integer                 :: localrc
     type(ESMF_Config)       :: runSeq
     type(NUOPC_FreeFormat)  :: runSeqFF
     character(len=*), parameter :: subname = "(esm.F90:SetRunSequence)"
@@ -253,6 +237,7 @@ contains
 
     rc = ESMF_SUCCESS
     call ESMF_LogWrite(trim(subname)//": called", ESMF_LOGMSG_INFO)
+    call shr_log_setLogunit(logunit)
 
     !--------
     ! Run Sequence and Connectors
@@ -271,7 +256,7 @@ contains
 
     call NUOPC_DriverIngestRunSequence(driver, runSeqFF, autoAddConnectors=.true., rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-
+#ifdef DEBUG
     ! Uncomment these to add debugging information for driver
     ! call NUOPC_DriverPrint(driver, orderflag=.true.)
     ! if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
@@ -279,9 +264,9 @@ contains
     !   file=__FILE__)) &
     !   return  ! bail out
 
-    ! call pretty_print_nuopc_freeformat(runSeqFF, 'run sequence', rc=rc)
-    ! if (chkerr(rc,__LINE__,u_FILE_u)) return
-
+!    call pretty_print_nuopc_freeformat(runSeqFF, 'run sequence', rc=rc)
+!    if (chkerr(rc,__LINE__,u_FILE_u)) return
+#endif
     call NUOPC_FreeFormatDestroy(runSeqFF, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
@@ -309,7 +294,7 @@ contains
 
     rc = ESMF_SUCCESS
 
-    if (mastertask .or. dbug_flag > 3) then
+    if (maintask .or. dbug_flag > 3) then
        write(logunit, *) 'BEGIN: ', trim(label)
        call NUOPC_FreeFormatGet(ffstuff, linecount=linecnt, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
@@ -351,6 +336,7 @@ contains
 
     rc = ESMF_SUCCESS
     call ESMF_LogWrite(trim(subname)//": called", ESMF_LOGMSG_INFO)
+    call shr_log_setLogunit(logunit)
 
     call ESMF_LogWrite("Driver is in ModifyCplLists()", ESMF_LOGMSG_INFO, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
@@ -437,11 +423,7 @@ contains
     type(ShrWVSatTableSpec)      :: liquid_spec
     type(ShrWVSatTableSpec)      :: ice_spec
     type(ShrWVSatTableSpec)      :: mixed_spec
-    logical                      :: flag
-    integer                      :: i, it, n
-    integer                      :: unitn                 ! Namelist unit number to read
     integer                      :: localPet, rootpe_med
-    character(len=CL)            :: msgstr
     integer          , parameter :: ens1=1                ! use first instance of ensemble only
     integer          , parameter :: fix1=1                ! temporary hard-coding to first ensemble, needs to be fixed
     real(R8)         , parameter :: epsilo = shr_const_mwwv/shr_const_mwdair
@@ -450,6 +432,7 @@ contains
 
     rc = ESMF_SUCCESS
     call ESMF_LogWrite(trim(subname)//": called", ESMF_LOGMSG_INFO)
+    call shr_log_setLogunit(logunit)
 
     !----------------------------------------------------------
     ! Initialize options for reproducible sums
@@ -479,7 +462,7 @@ contains
     call NUOPC_CompAttributeGet(driver, name="tfreeze_option", value=tfreeze_option, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
-    call shr_frz_freezetemp_init(tfreeze_option, mastertask)
+    call shr_frz_freezetemp_init(tfreeze_option, maintask)
 
     call NUOPC_CompAttributeGet(driver, name='cpl_rootpe', value=cvalue, rc=rc)
     read(cvalue, *) rootpe_med
@@ -572,8 +555,6 @@ contains
     integer             , intent(out)   :: rc
 
     !----- local -----
-    character(len=CL) :: cvalue         ! temporary
-    character(len=CL) :: start_type     ! Type of startup
     character(len=CS) :: logFilePostFix ! postfix for output log files
     character(len=CL) :: outPathRoot    ! root for output log files
     character(len=CS) :: cime_model
@@ -629,19 +610,17 @@ contains
     character(len=*)    , intent(in)    :: inst_suffix
     integer             , intent(in)    :: nthrds
     integer             , intent(inout) :: rc
-
     ! local variables
-    integer                        :: n
-    integer                        :: stat
     integer                        :: inst_index
+    logical                        :: computetask
     character(len=CL)              :: cvalue
     character(len=CS)              :: attribute
-    integer                        :: componentCount
     character(len=*), parameter    :: subname = "(esm.F90:AddAttributes)"
     !-------------------------------------------
-
+    computetask = .false.
     rc = ESMF_Success
     call ESMF_LogWrite(trim(subname)//": called", ESMF_LOGMSG_INFO)
+    call shr_log_setLogunit(logunit)
 
     !------
     ! Add compid to gcomp attributes
@@ -653,9 +632,13 @@ contains
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
     !------
-    ! Add driver restart flag a to gcomp attributes
+    ! Add driver restart flag to gcomp attributes
     !------
     attribute = 'read_restart'
+    call NUOPC_CompAttributeGet(driver, name=trim(attribute), isPresent=computetask, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    if(.not. computetask) return
+
     call NUOPC_CompAttributeGet(driver, name=trim(attribute), value=cvalue, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     call NUOPC_CompAttributeAdd(gcomp, (/trim(attribute)/), rc=rc)
@@ -670,8 +653,14 @@ contains
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     call ReadAttributes(gcomp, config, "ALLCOMP_attributes::", rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ReadAttributes(gcomp, config, trim(compname)//"_modelio"//trim(inst_suffix)//"::", rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+    call ESMF_LogWrite(trim(subname)//": call Readattributes for"//trim(compname), ESMF_LOGMSG_INFO)
+
+    call ReadAttributes(gcomp, config, trim(compname)//"_modelio::", rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) then
+       print *,__FILE__,__LINE__,"ERROR reading ",trim(compname)," modelio from runconfig"
+       return
+    endif
     call ReadAttributes(gcomp, config, "CLOCK_attributes::", rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
@@ -740,6 +729,7 @@ contains
     !-------------------------------------------
 
     rc = ESMF_SUCCESS
+    call shr_log_setLogunit(logunit)
 
     if (present(relaxedflag)) then
        attrFF = NUOPC_FreeFormatCreate(config, label=trim(label), relaxedflag=.true., rc=rc)
@@ -751,12 +741,12 @@ contains
 
     call NUOPC_CompAttributeIngest(gcomp, attrFF, addFlag=.true., rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-
-    !    if (present (formatprint)) then
-    !       call pretty_print_nuopc_freeformat(attrFF, trim(label)//' attributes', rc=rc)
-    !       if (chkerr(rc,__LINE__,u_FILE_u)) return
-    !    end if
-
+#ifdef DEBUG
+!    if (present (formatprint)) then
+!       call pretty_print_nuopc_freeformat(attrFF, trim(label)//' attributes', rc=rc)
+!       if (chkerr(rc,__LINE__,u_FILE_u)) return
+!    end if
+#endif
     call NUOPC_FreeFormatDestroy(attrFF, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
@@ -806,8 +796,6 @@ contains
 #ifndef NO_MPI2
     use mpi          , only : MPI_COMM_NULL, mpi_comm_size
 #endif
-    use mct_mod      , only : mct_world_init
-    use shr_pio_mod  , only : shr_pio_init2
 
 #ifdef MED_PRESENT
     use med_internalstate_mod , only : med_id
@@ -871,11 +859,10 @@ contains
     type(ESMF_VM)                  :: vm
     type(ESMF_Config)              :: config
     type(ESMF_Info)                :: info
-    integer                        :: componentcount
     integer                        :: PetCount
-    integer                        :: LocalPet
+    integer                        :: ComponentCount
     integer                        :: ntasks, rootpe, nthrds, stride
-    integer                        :: ntask, cnt
+    integer                        :: ntask
     integer                        :: i
     integer                        :: stat
     character(len=32), allocatable :: compLabels(:)
@@ -890,9 +877,13 @@ contains
     character(len=5)               :: inst_suffix
     character(CL)                  :: cvalue
     logical                        :: found_comp
+#ifdef ESMF_AWARE_THREADING
+    integer                        :: cnt
+#endif
     integer :: rank, nprocs, ierr
     character(len=*), parameter    :: subname = "(esm_pelayout.F90:esm_init_pelayout)"
     !---------------------------------------
+    call shr_log_setLogunit(logunit)
 
     rc = ESMF_SUCCESS
     call ESMF_LogWrite(trim(subname)//": called", ESMF_LOGMSG_INFO)
@@ -955,7 +946,7 @@ contains
        read(cvalue,*) ntasks
 
        if (ntasks < 0 .or. ntasks > PetCount) then
-          write (msgstr, *) "Invalid NTASKS value specified for component: ",namestr, ' ntasks: ',ntasks
+          write (msgstr, *) "Invalid NTASKS value specified for component: ",namestr, ' ntasks: ',ntasks, petcount
           call ESMF_LogSetError(ESMF_RC_NOT_VALID, msg=msgstr, line=__LINE__, file=__FILE__, rcToReturn=rc)
           return
        endif
@@ -1175,12 +1166,6 @@ contains
 
     enddo
 
-    ! Initialize MCT (this is needed for data models and cice prescribed capability)
-    call mct_world_init(componentCount+1, GLOBAL_COMM, comms, comps)
-
-    ! Initialize PIO
-    call shr_pio_init2(comps(2:), compLabels, comp_iamin, comms(2:), comp_comm_iam)
-
     deallocate(petlist, comms, comps, comp_iamin, comp_comm_iam)
 
   end subroutine esm_init_pelayout
@@ -1195,6 +1180,8 @@ contains
     use netcdf, only : nf90_inq_dimid, nf90_inquire_dimension, nf90_inq_varid, nf90_get_var
     use NUOPC , only : NUOPC_CompAttributeGet, NUOPC_CompAttributeSet, NUOPC_CompAttributeAdd
     use ESMF  , only : ESMF_GridComp, ESMF_GridCompGet, ESMF_VM, ESMF_VMGet, ESMF_SUCCESS
+    use ESMF  , only : ESMF_Mesh, ESMF_MeshCreate, ESMF_FILEFORMAT_ESMFMESH, ESMF_MeshGet, ESMF_MESHLOC_ELEMENT
+    use ESMF  , only : ESMF_Field, ESMF_FieldCreate, ESMF_FieldGet, ESMF_FieldRegridGetArea, ESMF_TYPEKIND_r8
 
     ! input/output variables
     character(len=*)    , intent(in)    :: compname
@@ -1204,6 +1191,7 @@ contains
     ! local variables
     type(ESMF_VM)          :: vm
     character(len=CL)      :: single_column_lnd_domainfile
+    character(len=CL)      :: single_column_global_meshfile
     real(r8)               :: scol_lon
     real(r8)               :: scol_lat
     real(r8)               :: scol_area
@@ -1211,7 +1199,16 @@ contains
     real(r8)               :: scol_lndfrac
     integer                :: scol_ocnmask
     real(r8)               :: scol_ocnfrac
-    integer                :: i,j,ni,nj
+    integer                :: scol_mesh_n
+    type(ESMF_Mesh)        :: mesh
+    type(ESMF_Field)       :: lfield
+    integer                :: lsize
+    integer                :: spatialdim
+    real(r8), pointer      :: ownedElemCoords(:)
+    real(r8), pointer      :: latMesh(:)
+    real(r8), pointer      :: lonMesh(:)
+    real(r8), pointer      :: dataptr(:)
+    integer                :: i,j,ni,nj,n
     integer                :: ncid
     integer                :: dimid
     integer                :: varid_xc
@@ -1226,17 +1223,22 @@ contains
     real (r8), allocatable :: lats(:)        ! temporary
     real (r8), allocatable :: lons(:)        ! temporary
     real (r8), allocatable :: pos_lons(:)    ! temporary
+    real (r8), allocatable :: pos_lats(:)    ! temporary
+    real (r8), allocatable :: cols(:)        ! temporary
     real (r8), allocatable :: glob_grid(:,:) ! temporary
     real (r8)              :: pos_scol_lon   ! temporary
+    real (r8)              :: pos_scol_lat   ! temporary
     real (r8)              :: scol_data(1)
     integer                :: iscol_data(1)
     integer                :: petcount
     character(len=CL)      :: cvalue
     character(len=*), parameter :: subname= ' (esm_get_single_column_attributes) '
+    logical                :: unstructured = .false.
     !-------------------------------------------------------------------------------
 
-
     rc = ESMF_SUCCESS
+    call shr_log_setLogunit(logunit)
+    scol_mesh_n = 0
 
     ! obtain the single column lon and lat
     call NUOPC_CompAttributeGet(gcomp, name='scol_lon', value=cvalue, rc=rc)
@@ -1246,6 +1248,8 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     read(cvalue,*) scol_lat
     call NUOPC_CompAttributeGet(gcomp, name='single_column_lnd_domainfile', value=single_column_lnd_domainfile, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call NUOPC_CompAttributeGet(gcomp, name='mesh_atm', value=single_column_global_meshfile, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call NUOPC_CompAttributeAdd(gcomp, attrList=(/'scol_spval'/), rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
@@ -1323,7 +1327,15 @@ contains
           if (status /= nf90_noerr) call shr_sys_abort (subname//' inq_varid frac')
 
           ! Read in domain file for single column
-          allocate(lats(nj))
+          ! Check for unstructured data ni>1 and nj==1
+          if (ni.gt.1 .and. nj == 1) unstructured=.true.
+
+          if (unstructured) then
+             allocate(lats(ni))
+             allocate(pos_lats(ni))
+          else
+             allocate(lats(nj))
+          end if
           allocate(lons(ni))
           allocate(pos_lons(ni))
           allocate(glob_grid(ni,nj))
@@ -1333,27 +1345,37 @@ contains
           count3=(/ni,nj,1/)
           status = nf90_get_var(ncid, varid_xc, glob_grid, start3, count3)
           if (status /= nf90_noerr) call shr_sys_abort (subname//' get_var xc')
-          do i = 1,ni
-             lons(i) = glob_grid(i,1)
-          end do
+          lons(1:ni) = glob_grid(1:ni,1)
           status = nf90_get_var(ncid, varid_yc, glob_grid, start3, count3)
           if (status /= nf90_noerr) call shr_sys_abort (subname//' get_var yc')
-          do j = 1,nj
-             lats(j) = glob_grid(1,j)
-          end do
+          if (unstructured) then
+             lats(1:ni) = glob_grid(1:ni,1)
+          else
+             lats(1:nj) = glob_grid(1,1:nj)
+          end if
           ! find nearest neighbor indices of scol_lon and scol_lat in single_column_lnd_domain file
           ! convert lons array and scol_lon to 0,360 and find index of value closest to 0
           ! and obtain single-column longitude/latitude indices to retrieve
-          pos_lons(:)  = mod(lons(:)  + 360._r8, 360._r8)
-          pos_scol_lon = mod(scol_lon + 360._r8, 360._r8)
-          start(1) = (MINLOC(abs(pos_lons - pos_scol_lon), dim=1))
-          start(2) = (MINLOC(abs(lats      -scol_lat    ), dim=1))
-
+          if (unstructured) then
+             allocate(cols(ni))
+             pos_lons(:)  = mod(lons(:)  + 360._r8, 360._r8)
+             pos_scol_lon = mod(scol_lon + 360._r8, 360._r8)
+             pos_lats(:)  = lats(:)  + 90._r8
+             pos_scol_lat = scol_lat + 90._r8
+             cols=abs(pos_lons - pos_scol_lon)+abs(pos_lats - pos_scol_lat)
+             start(1) = MINLOC(cols, dim=1)
+             start(2) = 1
+             deallocate(cols)
+          else
+             pos_lons(:)  = mod(lons(:)  + 360._r8, 360._r8)
+             pos_scol_lon = mod(scol_lon + 360._r8, 360._r8)
+             start(1) = (MINLOC(abs(pos_lons - pos_scol_lon), dim=1))
+             start(2) = (MINLOC(abs(lats      -scol_lat    ), dim=1))
+          end if
           deallocate(lats)
           deallocate(lons)
           deallocate(pos_lons)
           deallocate(glob_grid)
-
           ! read in value of nearest neighbor lon and RESET scol_lon and scol_lat
           ! also get area of gridcell, mask and frac
           status = nf90_get_var(ncid, varid_xc, scol_lon, start)
@@ -1380,26 +1402,54 @@ contains
                   //' ocean and land mask cannot both be zero')
           end if
 
-          write(cvalue,*) scol_lon
-          call NUOPC_CompAttributeSet(gcomp, name='scol_lon', value=trim(cvalue), rc=rc)
-          if (chkerr(rc,__LINE__,u_FILE_u)) return
-
-          write(cvalue,*) scol_lat
-          call NUOPC_CompAttributeSet(gcomp, name='scol_lat', value=trim(cvalue), rc=rc)
-          if (chkerr(rc,__LINE__,u_FILE_u)) return
-
-          write(cvalue,*) ni
-          call NUOPC_CompAttributeSet(gcomp, name='scol_ni', value=trim(cvalue), rc=rc)
-          if (chkerr(rc,__LINE__,u_FILE_u)) return
-
-          write(cvalue,*) nj
-          call NUOPC_CompAttributeSet(gcomp, name='scol_nj', value=trim(cvalue), rc=rc)
-          if (chkerr(rc,__LINE__,u_FILE_u)) return
-
           status = nf90_close(ncid)
           if (status /= nf90_noerr) call shr_sys_abort (trim(subname) //': closing '//&
                trim(single_column_lnd_domainfile))
 
+          ! Now read in mesh file to get exact values of scol_lon and scol_lat that will be used
+          ! by the models - assume that this occurs only on 1 processor
+          mesh = ESMF_MeshCreate(filename=trim(single_column_global_meshfile), fileformat=ESMF_FILEFORMAT_ESMFMESH, rc=rc)
+          if (chkerr(rc,__LINE__,u_FILE_u)) return
+          call ESMF_MeshGet(mesh, spatialDim=spatialDim, numOwnedElements=lsize, rc=rc)
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+          allocate(ownedElemCoords(spatialDim*lsize))
+          allocate(lonMesh(lsize), latMesh(lsize))
+          call ESMF_MeshGet(mesh, ownedElemCoords=ownedElemCoords)
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+          scol_mesh_n = 0
+          do n = 1,lsize
+             lonMesh(n) = ownedElemCoords(2*n-1)
+             latMesh(n) = ownedElemCoords(2*n)
+             if (abs(lonMesh(n) - scol_lon) < 1.e-4 .and. abs(latMesh(n) - scol_lat) < 1.e-4) then
+                scol_mesh_n = n
+                exit
+             end if
+          end do
+          scol_lon  = lonMesh(scol_mesh_n)
+          scol_lat  = latMesh(scol_mesh_n)
+
+          ! Obtain mesh info areas
+          lfield = ESMF_FieldCreate(mesh, ESMF_TYPEKIND_r8, name='area', meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+          call ESMF_FieldRegridGetArea(lfield, rc=rc)
+          if (chkerr(rc,__LINE__,u_FILE_u)) return
+          call ESMF_FieldGet(lfield, farrayPtr=dataptr, rc=rc)
+          if (chkerr(rc,__LINE__,u_FILE_u)) return
+          scol_area = dataptr(scol_mesh_n)
+
+          ! Set single column attribute values for all components
+          write(cvalue,*) scol_lon
+          call NUOPC_CompAttributeSet(gcomp, name='scol_lon', value=trim(cvalue), rc=rc)
+          if (chkerr(rc,__LINE__,u_FILE_u)) return
+          write(cvalue,*) scol_lat
+          call NUOPC_CompAttributeSet(gcomp, name='scol_lat', value=trim(cvalue), rc=rc)
+          if (chkerr(rc,__LINE__,u_FILE_u)) return
+          write(cvalue,*) scol_area
+          call NUOPC_CompAttributeSet(gcomp, name='scol_area', value=trim(cvalue), rc=rc)
+          if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+          ! Write out diagnostic info
           write(logunit,'(a,2(f13.5,2x))')trim(subname)//' nearest neighbor scol_lon and scol_lat in '&
                //trim(single_column_lnd_domainfile)//' are ',scol_lon,scol_lat
           if (trim(compname) == 'LND') then
@@ -1411,6 +1461,12 @@ contains
           else
              write(logunit,'(a)')trim(subname)//' atm point has unit mask and unit fraction '
           end if
+          write(cvalue,*) ni
+          call NUOPC_CompAttributeSet(gcomp, name='scol_ni', value=trim(cvalue), rc=rc)
+          if (chkerr(rc,__LINE__,u_FILE_u)) return
+          write(cvalue,*) nj
+          call NUOPC_CompAttributeSet(gcomp, name='scol_nj', value=trim(cvalue), rc=rc)
+          if (chkerr(rc,__LINE__,u_FILE_u)) return
 
        else
 
@@ -1423,12 +1479,11 @@ contains
           scol_ocnfrac = 1._r8
           scol_area = 1.e30
 
+          write(cvalue,*) 1
           call NUOPC_CompAttributeSet(gcomp, name='scol_ni', value=trim(cvalue), rc=rc)
           if (chkerr(rc,__LINE__,u_FILE_u)) return
-          write(cvalue,*) 1
           call NUOPC_CompAttributeSet(gcomp, name='scol_nj', value=trim(cvalue), rc=rc)
           if (chkerr(rc,__LINE__,u_FILE_u)) return
-          write(cvalue,*) 1
 
           write(logunit,'(a)')' single point mode is active'
           write(logunit,'(a,f13.5,a,f13.5,a)')' scol_lon is ',scol_lon,' and scol_lat is '
@@ -1463,7 +1518,7 @@ contains
   subroutine esm_finalize(driver, rc)
 
     use ESMF     , only : ESMF_GridComp, ESMF_GridCompGet, ESMF_VM, ESMF_VMGet
-    use ESMF     , only : ESMF_SUCCESS
+    use ESMF     , only : ESMF_SUCCESS, ESMF_LOGMSG_INFO, ESMF_LOGWRITE
     use NUOPC    , only : NUOPC_CompAttributeGet
     use perf_mod , only : t_prf, t_finalizef
 
@@ -1477,14 +1532,13 @@ contains
     logical              :: isPresent
     type(ESMF_VM)        :: vm
     integer              :: mpicomm
+    character(len=*), parameter :: subname = '(esm_finalize) '
     !---------------------------------------
 
+    call ESMF_LogWrite(trim(subname)//": called", ESMF_LOGMSG_INFO)
     rc = ESMF_SUCCESS
 
-    if (mastertask) then
-       write(logunit,*)' SUCCESSFUL TERMINATION OF CESM'
-    end if
-
+    call shr_log_setLogunit(logunit)
     call ESMF_GridCompGet(driver, vm=vm, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     call ESMF_VMGet(vm, mpiCommunicator=mpicomm, rc=rc)
@@ -1502,6 +1556,11 @@ contains
        inst_suffix = ""
     endif
     call t_prf(trim(timing_dir)//'/model_timing'//trim(inst_suffix), mpicom=mpicomm)
+
+    if (maintask) then
+       write(logunit,*)' SUCCESSFUL TERMINATION OF CESM'
+    end if
+    call ESMF_LogWrite(trim(subname)//": done", ESMF_LOGMSG_INFO)
 
     call t_finalizef()
   end subroutine esm_finalize

@@ -27,7 +27,7 @@ module med_diag_mod
   use med_constants_mod     , only : shr_const_rearth, shr_const_pi, shr_const_latice, shr_const_latvap
   use med_constants_mod     , only : shr_const_ice_ref_sal, shr_const_ocn_ref_sal, shr_const_isspval
   use med_kind_mod          , only : CX=>SHR_KIND_CX, CS=>SHR_KIND_CS, CL=>SHR_KIND_CL, R8=>SHR_KIND_R8
-  use med_internalstate_mod , only : InternalState, logunit, mastertask, diagunit
+  use med_internalstate_mod , only : InternalState, logunit, maintask, diagunit, samegrid_atmlnd
   use med_methods_mod       , only : fldbun_getdata2d => med_methods_FB_getdata2d
   use med_methods_mod       , only : fldbun_getdata1d => med_methods_FB_getdata1d
   use med_methods_mod       , only : fldbun_fldChk    => med_methods_FB_FldChk
@@ -50,7 +50,7 @@ module med_diag_mod
   public  :: med_phases_diag_ice_ice2med
   public  :: med_phases_diag_ice_med2ice
 
-  private :: med_diag_sum_master
+  private :: med_diag_sum_main
   private :: med_diag_print_atm
   private :: med_diag_print_lnd_ice_ocn
   private :: med_diag_print_summary
@@ -95,6 +95,8 @@ module med_diag_mod
   character(*), parameter :: FA1  = "('    ',a12,6f15.8)"
   character(*), parameter :: FA0r = "('    ',12x,8(6x,a8,1x))"
   character(*), parameter :: FA1r = "('    ',a12,8f15.8)"
+  character(*), parameter :: FA0s = "('    ',12x,8(7x,a8,2x))"
+  character(*), parameter :: FA1s = "('    ',a12,8g18.8)"
 
   ! ---------------------------------
   ! C for component
@@ -142,6 +144,15 @@ module med_diag_mod
   integer :: f_heat_latf     = unset_index ! heat : latent, fusion, snow
   integer :: f_heat_ioff     = unset_index ! heat : latent, fusion, frozen runoff
   integer :: f_heat_sen      = unset_index ! heat : sensible
+  integer :: f_heat_rain     = unset_index ! heat : heat content of rain
+  integer :: f_heat_snow     = unset_index ! heat : heat content of snow
+  integer :: f_heat_evap     = unset_index ! heat : heat content of evaporation
+  integer :: f_heat_cond     = unset_index ! heat : heat content of evaporation
+  integer :: f_heat_rofl     = unset_index ! heat : heat content of liquid runoff
+  integer :: f_heat_rofi     = unset_index ! heat : heat content of ice runoff
+  integer :: f_heat_rofl_glc = unset_index ! heat : heat content of liquid glc runoff
+  integer :: f_heat_rofi_glc = unset_index ! heat : heat content of ice glc runoff
+
   integer :: f_watr_frz      = unset_index ! water: freezing
   integer :: f_watr_melt     = unset_index ! water: melting
   integer :: f_watr_rain     = unset_index ! water: precip, liquid
@@ -224,7 +235,7 @@ module med_diag_mod
   ! public data members
   ! ---------------------------------
 
-  ! note: call med_diag_sum_master then save budget_global and budget_counter on restart from/to root pe ---
+  ! note: call med_diag_sum_main then save budget_global and budget_counter on restart from/to root pe ---
 
   real(r8), allocatable :: budget_local  (:,:,:) ! local sum, valid on all pes
   real(r8), allocatable :: budget_global (:,:,:) ! global sum, valid only on root pe
@@ -256,13 +267,16 @@ contains
     integer           :: c_size   ! number of component send/recvs
     integer           :: f_size   ! number of fields
     integer           :: p_size   ! number of period types
-    type(ESMF_Clock)  :: mediatorClock
     character(CS)     :: cvalue
     logical           :: isPresent, isSet
     character(*), parameter :: subName = '(med_phases_diag_init) '
     ! ------------------------------------------------------------------
 
     rc = ESMF_SUCCESS
+
+    if(maintask) then
+       write(logunit,'(a)') ' Creating budget_diags%comps '
+    end if
 
     call NUOPC_CompAttributeGet(gcomp, name="budget_table_version", value=cvalue, &
          isPresent=isPresent, isSet=isSet, rc=rc)
@@ -271,7 +285,7 @@ contains
     else
        budget_table_version = 'v1'
     end if
-    if (mastertask) then
+    if (maintask) then
        write(logunit,'(a)') trim(subname) //' budget table version is '//trim(budget_table_version)
     end if
 
@@ -314,8 +328,21 @@ contains
     call add_to_budget_diag(budget_diags%fields, f_heat_latf     ,'hlatfus'     ) ! field  heat : latent, fusion, snow
     call add_to_budget_diag(budget_diags%fields, f_heat_ioff     ,'hiroff'      ) ! field  heat : latent, fusion, frozen runoff
     call add_to_budget_diag(budget_diags%fields, f_heat_sen      ,'hsen'        ) ! field  heat : sensible
-    f_heat_beg = f_heat_frz      ! field  first index for heat
-    f_heat_end = f_heat_sen      ! field  last  index for heat
+    if (trim(budget_table_version) == 'v0') then
+       f_heat_beg = f_heat_frz      ! field  first index for heat
+       f_heat_end = f_heat_sen      ! field  last  index for heat
+    else if (trim(budget_table_version) == 'v1') then
+       call add_to_budget_diag(budget_diags%fields, f_heat_rain    ,'hrain'     ) ! field  heat : enthalpy of rain
+       call add_to_budget_diag(budget_diags%fields, f_heat_snow    ,'hsnow'     ) ! field  heat : enthalpy of snow
+       call add_to_budget_diag(budget_diags%fields, f_heat_evap    ,'hevap'     ) ! field  heat : enthalpy of evaporation
+       call add_to_budget_diag(budget_diags%fields, f_heat_cond    ,'hcond'     ) ! field  heat : enthalpy of evaporation
+       call add_to_budget_diag(budget_diags%fields, f_heat_rofl    ,'hrofl'     ) ! field  heat : enthalpy of liquid runoff
+       call add_to_budget_diag(budget_diags%fields, f_heat_rofi    ,'hrofi'     ) ! field  heat : enthalpy of ice runoff
+       call add_to_budget_diag(budget_diags%fields, f_heat_rofl_glc,'hrofl_glc' ) ! field  heat : enthalpy of liquid glc runoff
+       call add_to_budget_diag(budget_diags%fields, f_heat_rofi_glc,'hrofi_glc' ) ! field  heat : enthalpy of ice glc runoff
+       f_heat_beg = f_heat_frz      ! field  first index for heat
+       f_heat_end = f_heat_rofi_glc ! field  last  index for heat
+    end if
 
     ! -----------------------------------------
     ! Water fluxes budget terms
@@ -553,7 +580,7 @@ contains
     integer, intent(out) :: rc
 
     ! local variables
-    integer     :: ip, ic
+    integer     :: ip
     character(*), parameter :: subName = '(med_diag_accum) '
     ! ------------------------------------------------------------------
 
@@ -568,7 +595,7 @@ contains
   end subroutine med_phases_diag_accum
 
   !===============================================================================
-  subroutine med_diag_sum_master(gcomp, rc)
+  subroutine med_diag_sum_main(gcomp, rc)
 
     ! ------------------------------------------------------------------
     ! Sum local values to global on root
@@ -584,7 +611,7 @@ contains
     integer       :: c_size  ! number of component send/recvs
     integer       :: f_size  ! number of fields
     integer       :: p_size  ! number of period types
-    character(*), parameter :: subName = '(med_diag_sum_master) '
+    character(*), parameter :: subName = '(med_diag_sum_main) '
     ! ------------------------------------------------------------------
 
     call t_startf('MED:'//subname)
@@ -608,7 +635,7 @@ contains
 
     call t_stopf('MED:'//subname)
 
-  end subroutine med_diag_sum_master
+  end subroutine med_diag_sum_main
 
   !===============================================================================
   subroutine med_phases_diag_atm(gcomp, rc)
@@ -617,7 +644,7 @@ contains
     ! Compute global atm input/output flux diagnostics
     ! ------------------------------------------------------------------
 
-    use esmFlds, only : compatm
+    use med_internalstate_mod, only : compatm
 
     ! input/output variables
     type(ESMF_GridComp) :: gcomp
@@ -625,14 +652,13 @@ contains
 
     ! local variables
     type(InternalState) :: is_local
-    integer             :: n,nf,ic,ip
+    integer             :: n,nf,ip
     real(r8), pointer   :: afrac(:)
     real(r8), pointer   :: lfrac(:)
     real(r8), pointer   :: ifrac(:)
     real(r8), pointer   :: ofrac(:)
     real(r8), pointer   :: areas(:)
     real(r8), pointer   :: lats(:)
-    type(ESMF_Field)    :: lfield
     character(*), parameter :: subName = '(med_phases_diag_atm) '
     !-------------------------------------------------------------------------------
 
@@ -644,8 +670,13 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! Get fractions on atm mesh
-    call fldbun_getdata1d(is_local%wrap%FBfrac(compatm), 'lfrac', lfrac, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (samegrid_atmlnd) then
+      call fldbun_getdata1d(is_local%wrap%FBfrac(compatm), 'lfrac', lfrac, rc=rc)
+      if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    else
+      call fldbun_getdata1d(is_local%wrap%FBfrac(compatm), 'lfrin', lfrac, rc=rc)
+      if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
     call fldbun_getdata1d(is_local%wrap%FBfrac(compatm), 'ifrac', ifrac, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call fldbun_getdata1d(is_local%wrap%FBfrac(compatm), 'ofrac', ofrac, rc=rc)
@@ -768,7 +799,6 @@ contains
     integer                , intent(out)   :: rc
     ! local variables
     integer           :: n, ip
-    type(ESMF_field)  :: lfield
     real(r8), pointer :: data(:)
     ! ------------------------------------------------------------------
     rc = ESMF_SUCCESS
@@ -804,7 +834,6 @@ contains
     integer                , intent(out)   :: rc
     ! local variables
     integer           :: n, ip
-    type(ESMF_field)  :: lfield
     real(r8), pointer :: data(:)
     ! ------------------------------------------------------------------
     rc = ESMF_SUCCESS
@@ -843,7 +872,6 @@ contains
     integer                , intent(out)   :: rc
     ! local variables
     integer           :: n, ip
-    type(ESMF_Field)  :: lfield
     real(r8), pointer :: data(:,:)
     ! ------------------------------------------------------------------
     rc = ESMF_SUCCESS
@@ -900,7 +928,6 @@ contains
     integer                , intent(out)   :: rc
     ! local variables
     integer           :: n, ip
-    type(ESMF_Field)  :: lfield
     real(r8), pointer :: data(:,:)
     ! ------------------------------------------------------------------
     rc = ESMF_SUCCESS
@@ -946,7 +973,7 @@ contains
     ! Compute global lnd input/output flux diagnostics
     ! ------------------------------------------------------------------
 
-    use esmFlds, only : complnd
+    use med_internalstate_mod, only : complnd
 
     ! intput/output variables
     type(ESMF_GridComp) :: gcomp
@@ -957,7 +984,6 @@ contains
     real(r8), pointer   :: lfrac(:)
     integer             :: n,ip, ic
     real(r8), pointer   :: areas(:)
-    type(ESMF_Field)    :: lfield
     character(*), parameter :: subName = '(med_phases_diag_lnd) '
     ! ------------------------------------------------------------------
 
@@ -969,7 +995,7 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! get fractions on lnd mesh
-    call fldbun_getdata1d(is_local%wrap%FBfrac(complnd), 'lfrac', lfrac, rc=rc)
+    call fldbun_getdata1d(is_local%wrap%FBfrac(complnd), 'lfrin', lfrac, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     areas => is_local%wrap%mesh_info(complnd)%areas
@@ -1083,7 +1109,6 @@ contains
     integer                , intent(out)   :: rc
     ! local variables
     integer           :: n, ip
-    type(ESMF_field)  :: lfield
     real(r8), pointer :: data(:)
     ! ------------------------------------------------------------------
     rc = ESMF_SUCCESS
@@ -1117,7 +1142,6 @@ contains
     integer                , intent(out)   :: rc
     ! local variables
     integer           :: n, ip
-    type(ESMF_field)  :: lfield
     real(r8), pointer :: data(:,:)
     ! ------------------------------------------------------------------
     rc = ESMF_SUCCESS
@@ -1147,7 +1171,7 @@ contains
     ! Compute global river input/output
     ! ------------------------------------------------------------------
 
-    use esmFlds, only : comprof
+    use med_internalstate_mod, only : comprof
 
     ! input/output variables
     type(ESMF_GridComp) :: gcomp
@@ -1155,7 +1179,7 @@ contains
 
     ! local variables
     type(InternalState) :: is_local
-    integer             :: ic, ip, n
+    integer             :: ic, ip
     real(r8), pointer   :: areas(:)
     character(*), parameter :: subName = '(med_phases_diag_rof) '
     ! ------------------------------------------------------------------
@@ -1182,8 +1206,15 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call diag_rof(is_local%wrap%FBImp(comprof,comprof), 'Forr_rofi' , f_watr_ioff, ic, areas, budget_local, minus=.true., rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call diag_rof(is_local%wrap%FBImp(comprof,comprof), 'Firr_rofi' , f_watr_ioff, ic, areas, budget_local, minus=.true., rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    if ( fldbun_fldchk(is_local%wrap%FBImp(comprof,comprof), 'Forr_rofl_glc', rc=rc)) then
+      call diag_rof(is_local%wrap%FBImp(comprof,comprof), 'Forr_rofi_glc' , f_watr_roff, ic, areas, budget_local, minus=.true., rc=rc)
+      if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
+    if ( fldbun_fldchk(is_local%wrap%FBImp(comprof,comprof), 'Forr_rofi_glc', rc=rc)) then
+      call diag_rof(is_local%wrap%FBImp(comprof,comprof), 'Forr_rofi_glc' , f_watr_ioff, ic, areas, budget_local, minus=.true., rc=rc)
+      if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
 
     if (flds_wiso) then
        call diag_rof_wiso(is_local%wrap%FBExp(comprof), 'Forr_flood_wiso', &
@@ -1216,6 +1247,14 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call diag_rof(is_local%wrap%FBExp(comprof), 'Flrl_rofi'  , f_watr_ioff, ic, areas, budget_local, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (fldbun_fldchk(is_local%wrap%FBExp(comprof), 'Fgrg_rofl', rc=rc)) then
+      call diag_rof(is_local%wrap%FBExp(comprof), 'Fgrg_rofl'  , f_watr_roff, ic, areas, budget_local, rc=rc)
+      if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
+    if (fldbun_fldchk(is_local%wrap%FBExp(comprof), 'Fgrg_rofi', rc=rc)) then
+      call diag_rof(is_local%wrap%FBExp(comprof), 'Fgrg_rofi'  , f_watr_ioff, ic, areas, budget_local, rc=rc)
+      if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
 
     if (flds_wiso) then
        call diag_rof_wiso(is_local%wrap%FBExp(comprof), 'Flrl_rofl_wiso', &
@@ -1244,7 +1283,6 @@ contains
 
     ! local variables
     integer           :: n, ip
-    type(ESMF_field)  :: lfield
     real(r8), pointer :: data(:)
     ! ------------------------------------------------------------------
     rc = ESMF_SUCCESS
@@ -1278,7 +1316,6 @@ contains
 
     ! local variables
     integer           :: n, ip
-    type(ESMF_field)  :: lfield
     real(r8), pointer :: data(:,:)
     ! ------------------------------------------------------------------
     rc = ESMF_SUCCESS
@@ -1308,7 +1345,7 @@ contains
     ! Compute global glc output
     ! ------------------------------------------------------------------
 
-    use esmFlds, only : compglc, num_icesheets
+    use med_internalstate_mod, only : compglc
 
     ! input/output variables
     type(ESMF_GridComp) :: gcomp
@@ -1337,11 +1374,11 @@ contains
     ic = c_glc_recv
     ip = period_inst
 
-    do ns = 1,num_icesheets
+    do ns = 1,is_local%wrap%num_icesheets
        areas => is_local%wrap%mesh_info(compglc(ns))%areas
-       call diag_glc(is_local%wrap%FBImp(compglc(ns),compglc(ns)), 'Fogg_rofl', f_watr_roff, ic, areas, budget_local, minus=.true., rc=rc)
+       call diag_glc(is_local%wrap%FBImp(compglc(ns),compglc(ns)), 'Fgrg_rofl', f_watr_roff, ic, areas, budget_local, minus=.true., rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
-       call diag_glc(is_local%wrap%FBImp(compglc(ns),compglc(ns)), 'Fogg_rofi', f_watr_ioff, ic, areas, budget_local, minus=.true., rc=rc)
+       call diag_glc(is_local%wrap%FBImp(compglc(ns),compglc(ns)), 'Fgrg_rofi', f_watr_ioff, ic, areas, budget_local, minus=.true., rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        call diag_glc(is_local%wrap%FBImp(compglc(ns),compglc(ns)), 'Figg_rofi', f_watr_ioff, ic, areas, budget_local, minus=.true., rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -1364,7 +1401,6 @@ contains
     integer                , intent(out)   :: rc
     ! local variables
     integer           :: n, ip
-    type(ESMF_field)  :: lfield
     real(r8), pointer :: data(:)
     ! ------------------------------------------------------------------
     rc = ESMF_SUCCESS
@@ -1389,7 +1425,7 @@ contains
     ! Compute global ocn input from mediator
     ! ------------------------------------------------------------------
 
-    use esmFlds, only : compocn, compatm
+    use med_internalstate_mod, only : compocn, compatm
 
     ! input/output variables
     type(ESMF_GridComp) :: gcomp
@@ -1402,10 +1438,8 @@ contains
     real(r8), pointer   :: ifrac(:)  ! ice fraction in ocean grid cell
     real(r8), pointer   :: ofrac(:)  ! non-ice fraction nin ocean grid cell
     real(r8), pointer   :: sfrac(:)  ! sum of ifrac and ofrac
-    real(r8), pointer   :: sfrac_x_ofrac(:)
     real(r8), pointer   :: areas(:)
     real(r8), pointer   :: data(:)
-    type(ESMF_field)    :: lfield
     character(*), parameter :: subName = '(med_phases_diag_ocn) '
     ! ------------------------------------------------------------------
 
@@ -1523,10 +1557,20 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call diag_ocn(is_local%wrap%FBExp(compocn), 'Faxa_snow' , f_watr_snow   , ic, areas, sfrac, budget_local, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
     call diag_ocn(is_local%wrap%FBExp(compocn), 'Foxx_rofl' , f_watr_roff   , ic, areas, sfrac, budget_local, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call diag_ocn(is_local%wrap%FBExp(compocn), 'Foxx_rofi' , f_watr_ioff   , ic, areas, sfrac, budget_local, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    if ( fldbun_fldchk(is_local%wrap%FBExp(compocn), 'Forr_rofl_glc' , rc=rc)) then
+      call diag_ocn(is_local%wrap%FBExp(compocn), 'Forr_rofl_glc' , f_watr_roff   , ic, areas, sfrac, budget_local, rc=rc)
+      if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
+    if ( fldbun_fldchk(is_local%wrap%FBExp(compocn), 'Forr_rofi_glc' , rc=rc)) then
+      call diag_ocn(is_local%wrap%FBExp(compocn), 'Forr_rofi_glc' , f_watr_ioff   , ic, areas, sfrac, budget_local, rc=rc)
+      if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    end if
 
     if (flds_wiso) then
        call diag_ocn_wiso(is_local%wrap%FBMed_aoflux_o, 'Faox_evap_wiso', &
@@ -1549,6 +1593,23 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
     end if
 
+    call diag_ocn(is_local%wrap%FBExp(compocn), 'Foxx_hrain', f_heat_rain , ic, areas, sfrac, budget_local, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call diag_ocn(is_local%wrap%FBExp(compocn), 'Foxx_hsnow', f_heat_snow , ic, areas, sfrac, budget_local, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call diag_ocn(is_local%wrap%FBExp(compocn), 'Foxx_hevap', f_heat_evap , ic, areas, sfrac, budget_local, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call diag_ocn(is_local%wrap%FBExp(compocn), 'Foxx_hcond', f_heat_cond , ic, areas, sfrac, budget_local, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call diag_ocn(is_local%wrap%FBExp(compocn), 'Foxx_hrofl', f_heat_rofl , ic, areas, sfrac, budget_local, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call diag_ocn(is_local%wrap%FBExp(compocn), 'Foxx_hrofi', f_heat_rofi , ic, areas, sfrac, budget_local, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call diag_ocn(is_local%wrap%FBExp(compocn), 'Foxx_hrofl_glc', f_heat_rofl_glc, ic, areas, sfrac, budget_local, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call diag_ocn(is_local%wrap%FBExp(compocn), 'Foxx_hrofi_glc', f_heat_rofi_glc , ic, areas, sfrac, budget_local, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
     budget_local(f_heat_latf,ic,ip) = -budget_local(f_watr_snow,ic,ip)*shr_const_latice
     budget_local(f_heat_ioff,ic,ip) = -budget_local(f_watr_ioff,ic,ip)*shr_const_latice
 
@@ -1570,7 +1631,6 @@ contains
     integer                , intent(out)   :: rc
     ! local variables
     integer           :: n, ip
-    type(ESMF_field)  :: lfield
     real(r8), pointer :: data(:)
     ! ------------------------------------------------------------------
     rc = ESMF_SUCCESS
@@ -1604,7 +1664,6 @@ contains
 
     ! local variables
     integer           :: n, ip
-    type(ESMF_field)  :: lfield
     real(r8), pointer :: data(:,:)
     ! ------------------------------------------------------------------
     rc = ESMF_SUCCESS
@@ -1627,7 +1686,7 @@ contains
     ! Compute global ice input/output flux diagnostics
     ! ------------------------------------------------------------------
 
-    use esmFlds, only : compice
+    use med_internalstate_mod, only : compice
 
     ! input/output variables
     type(ESMF_GridComp) :: gcomp
@@ -1640,7 +1699,6 @@ contains
     real(r8), pointer   :: ifrac(:)
     real(r8), pointer   :: areas(:)
     real(r8), pointer   :: lats(:)
-    type(ESMF_field)    :: lfield
     character(*), parameter :: subName = '(med_phases_diag_ice_ice2med) '
     ! ------------------------------------------------------------------
 
@@ -1744,7 +1802,6 @@ contains
     integer                , intent(out)   :: rc
     ! local variables
     integer           :: n, ic, ip
-    type(ESMF_Field)  :: lfield
     real(r8), pointer :: data(:)
     ! ------------------------------------------------------------------
     rc = ESMF_SUCCESS
@@ -1790,7 +1847,6 @@ contains
     integer                , intent(out)   :: rc
     ! local variables
     integer           :: n, ic, ip
-    type(ESMF_Field)  :: lfield
     real(r8), pointer :: data(:,:)
     ! ------------------------------------------------------------------
     rc = ESMF_SUCCESS
@@ -1825,7 +1881,7 @@ contains
     ! Compute global ice input/output flux diagnostics
     ! ------------------------------------------------------------------
 
-    use esmFlds, only : compice
+    use med_internalstate_mod, only : compice
 
     ! input/output variables
     type(ESMF_GridComp) :: gcomp
@@ -1840,7 +1896,6 @@ contains
     real(r8), pointer   :: data(:)
     real(r8), pointer   :: areas(:)
     real(r8), pointer   :: lats(:)
-    type(ESMF_Field)    :: lfield
     character(*), parameter :: subName = '(med_phases_diag_ice_med2ice) '
     ! ------------------------------------------------------------------
 
@@ -1876,8 +1931,6 @@ contains
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call diag_ice_send(is_local%wrap%FBExp(compice), 'Faxa_snow', f_watr_snow, areas, lats, ifrac, budget_local, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    call diag_ice_send(is_local%wrap%FBExp(compice), 'Fixx_rofi', f_watr_ioff, areas, lats, ifrac, budget_local, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     if ( fldbun_fldchk(is_local%wrap%FBExp(compice), 'Fioo_q', rc=rc)) then
        call fldbun_getdata1d(is_local%wrap%FBExp(compice), 'Fioo_q', data, rc=rc)
@@ -1896,13 +1949,15 @@ contains
 
     ic = c_inh_send
     budget_local(f_heat_latf,ic,ip) = -budget_local(f_watr_snow,ic,ip)*shr_const_latice
-    budget_local(f_heat_ioff,ic,ip) = -budget_local(f_watr_ioff,ic,ip)*shr_const_latice
-    budget_local(f_watr_frz ,ic,ip) =  budget_local(f_heat_frz ,ic,ip)*HFLXtoWFLX
+    if (trim(budget_table_version) == 'v0') then
+       budget_local(f_watr_frz ,ic,ip) =  budget_local(f_heat_frz ,ic,ip)*HFLXtoWFLX
+    end if
 
     ic = c_ish_send
     budget_local(f_heat_latf,ic,ip) = -budget_local(f_watr_snow,ic,ip)*shr_const_latice
-    budget_local(f_heat_ioff,ic,ip) = -budget_local(f_watr_ioff,ic,ip)*shr_const_latice
-    budget_local(f_watr_frz ,ic,ip) =  budget_local(f_heat_frz ,ic,ip)*HFLXtoWFLX
+    if (trim(budget_table_version) == 'v0') then
+       budget_local(f_watr_frz ,ic,ip) =  budget_local(f_heat_frz ,ic,ip)*HFLXtoWFLX
+    end if
 
     if (flds_wiso) then
        call diag_ice_send_wiso(is_local%wrap%FBExp(compice), 'Faxa_rain_wiso', &
@@ -1928,7 +1983,6 @@ contains
     integer                , intent(out)   :: rc
     ! local variables
     integer           :: n, ic, ip
-    type(ESMF_Field)  :: lfield
     real(r8), pointer :: data(:)
     ! ------------------------------------------------------------------
     rc = ESMF_SUCCESS
@@ -1962,7 +2016,6 @@ contains
 
     ! local variables
     integer           :: n, ic, ip
-    type(ESMF_Field)  :: lfield
     real(r8), pointer :: data(:,:)
     ! ------------------------------------------------------------------
     rc = ESMF_SUCCESS
@@ -2005,14 +2058,15 @@ contains
     integer               :: tod
     integer               :: output_level ! print level
     logical               :: sumdone      ! has a sum been computed yet
-    character(CS)         :: cvalue
     integer               :: ip
     integer               :: c_size       ! number of component send/recvs
     integer               :: f_size       ! number of fields
     integer               :: p_size       ! number of period types
     real(r8), allocatable :: datagpr(:,:,:)
-    character(len=64)     :: timestr
     logical, save         :: firstcall = .true.
+#ifdef DEBUG
+    character(len=CL)     :: timestr
+#endif
     character(*), parameter :: subName = '(med_phases_diag_print) '
     ! ------------------------------------------------------------------
 
@@ -2037,7 +2091,7 @@ contains
     date = year*10000 + mon*100 + day
 
 #ifdef DEBUG
-    if(mastertask) then
+    if(maintask) then
        write(timestr,'(i4.4,a,i2.2,a,i2.2,a,i5.5)') year,'-',mon,'-',day,'-',tod
        write(logunit,' (a)') trim(subname)//": time = "//trim(timestr)
     endif
@@ -2085,13 +2139,13 @@ contains
           if (.not. sumdone) then
              ! Some budgets will be printed for this period type
              ! Determine sums if not already done
-             call med_diag_sum_master(gcomp, rc)
+             call med_diag_sum_main(gcomp, rc)
              if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
              sumdone = .true.
           end if
 
-          if (mastertask) then
+          if (maintask) then
              c_size = size(budget_diags%comps)
              f_size = size(budget_diags%fields)
              p_size = size(budget_diags%periods)
@@ -2106,7 +2160,7 @@ contains
              end if
              datagpr(:,:,:) = datagpr(:,:,:)/budget_counter(:,:,:)
 
-             ! Write diagnostic tables to logunit (mastertask only)
+             ! Write diagnostic tables to logunit (maintask only)
              if (output_level >= 3) then
                 ! detail atm budgets and breakdown into components ---
                 call med_diag_print_atm(datagpr, ip, date, tod)
@@ -2123,8 +2177,8 @@ contains
 
              deallocate(datagpr)
 
-          endif ! output_level > 0 and mastertask
-       end if ! if mastertask
+          endif ! output_level > 0 and maintask
+       end if ! if maintask
     enddo  ! ip = 1, period_types
 
     !-------------------------------------------------------------------------------
@@ -2156,6 +2210,12 @@ contains
     character(*), parameter:: subName = '(med_phases_diag_print_atm) '
     ! ------------------------------------------------------------------
 
+    ica = 0
+    icl = 0
+    icn = 0
+    ics = 0
+    ico = 0
+    str = ""
     do ic = 1,2
        if (ic == 1) then    ! from atm to mediator
           ica = c_atm_recv ! total from atm
@@ -2303,7 +2363,11 @@ contains
     character(len=40) :: str      ! string
     character(*), parameter :: subName = '(med_diag_print_lnd_ice_ocn) '
     ! ------------------------------------------------------------------
-
+    icar = 0
+    icxs = 0
+    icxr = 0
+    icas = 0
+    str = ""
     do ic = 1,4
 
        if (ic == 1) then
@@ -2459,10 +2523,10 @@ contains
     integer , intent(in) :: tod
 
     ! local variables
-    integer  :: ic,nf,is ! data array indicies
+    integer  :: nf,is ! data array indicies
     real(r8) :: atm_area, lnd_area, ocn_area
     real(r8) :: ice_area_nh, ice_area_sh
-    real(r8) :: sum_area, sum_area_tot
+    real(r8) :: sum_area
     real(r8) :: net_water_atm    , sum_net_water_atm
     real(r8) :: net_water_lnd    , sum_net_water_lnd
     real(r8) :: net_water_rof    , sum_net_water_rof
@@ -2487,7 +2551,6 @@ contains
     real(r8) :: net_salt_ice_nh  , sum_net_salt_ice_nh
     real(r8) :: net_salt_ice_sh  , sum_net_salt_ice_sh
     real(r8) :: net_salt_tot     , sum_net_salt_tot
-    character(len=40) :: str
     character(*), parameter:: subName = '(med_diag_print_summary) '
     ! ------------------------------------------------------------------
 
@@ -2656,7 +2719,7 @@ contains
        write(diagunit,*) ' '
        write(diagunit,FAH) subname,'NET SALT BUDGET (kg/m2s): period = ',&
             trim(budget_diags%periods(ip)%name), ': date = ',date,tod
-       write(diagunit,FA0r) '     atm','     lnd','     rof','     ocn','  ice nh','  ice sh','     glc',' *SUM*  '
+       write(diagunit,FA0s) '     atm','     lnd','     rof','     ocn','  ice nh','  ice sh','     glc',' *SUM*  '
        do nf = f_salt_beg, f_salt_end
           net_salt_atm    = data(nf, c_atm_recv, ip) + data(nf, c_atm_send, ip)
           net_salt_lnd    = data(nf, c_lnd_recv, ip) + data(nf, c_lnd_send, ip)
@@ -2668,7 +2731,7 @@ contains
           net_salt_tot    = net_salt_atm + net_salt_lnd + net_salt_rof + net_salt_ocn + &
                net_salt_ice_nh + net_salt_ice_sh + net_salt_glc
 
-          write(diagunit,FA1r) budget_diags%fields(nf)%name,&
+          write(diagunit,FA1s) budget_diags%fields(nf)%name,&
                net_salt_atm, net_salt_lnd, net_salt_rof, net_salt_ocn, &
                net_salt_ice_nh, net_salt_ice_sh, net_salt_glc, net_salt_tot
        enddo
@@ -2691,7 +2754,7 @@ contains
        sum_net_salt_tot    = sum_net_salt_atm + sum_net_salt_lnd + sum_net_salt_rof + sum_net_salt_ocn + &
             sum_net_salt_ice_nh + sum_net_salt_ice_sh + sum_net_salt_glc
 
-       write(diagunit,FA1r)'   *SUM*',&
+       write(diagunit,FA1s)'   *SUM*',&
             sum_net_salt_atm, sum_net_salt_lnd, sum_net_salt_rof, sum_net_salt_ocn, &
             sum_net_salt_ice_nh, sum_net_salt_ice_sh, sum_net_salt_glc, sum_net_salt_tot
     end if
@@ -2733,7 +2796,7 @@ contains
     ! create new entry if fldname is not in original list
 
     if (.not. found) then
-       if(mastertask) write(logunit,*) ' Add ',trim(name),' to budgets with index ',index
+       if(maintask) write(logunit,*) ' Add ',trim(name),' to budgets with index ',index
        ! 1) allocate newfld to be size (one element larger than input flds)
        allocate(new_entries(index))
 
