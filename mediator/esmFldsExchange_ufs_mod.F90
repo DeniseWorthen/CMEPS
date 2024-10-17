@@ -41,7 +41,7 @@ contains
     use esmFlds               , only : addfld_ocnalb => med_fldList_addfld_ocnalb
     use esmFlds               , only : addmap_ocnalb => med_fldList_addmap_ocnalb
     !debug
-    use med_internalstate_mod , only : mapbilinr_nstod
+    use med_internalstate_mod , only : mapbilnr_nstod, test_interp
 
     ! input/output parameters:
     type(ESMF_GridComp)              :: gcomp
