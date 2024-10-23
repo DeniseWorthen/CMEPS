@@ -668,9 +668,9 @@ contains
     if (is_local%wrap%comp_present(compocn)) defaultMasks(compocn,:) = 0
     if (is_local%wrap%comp_present(compice)) defaultMasks(compice,:) = 0
     if (is_local%wrap%comp_present(compwav)) defaultMasks(compwav,:) = 0
-    if ( coupling_mode(1:3) == 'ufs') then
-       if (is_local%wrap%comp_present(compatm)) defaultMasks(compatm,:) = 1
-    endif
+    ! if ( coupling_mode(1:3) == 'ufs') then
+    !    if (is_local%wrap%comp_present(compatm)) defaultMasks(compatm,:) = 1
+    ! endif
     if ( trim(coupling_mode) == 'hafs') then
        if (is_local%wrap%comp_present(compatm)) defaultMasks(compatm,1) = 1
     endif
@@ -683,3 +683,4 @@ contains
   end subroutine med_internalstate_defaultmasks
 
 end module med_internalstate_mod
+41;2500;0c

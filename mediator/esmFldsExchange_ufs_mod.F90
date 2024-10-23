@@ -342,11 +342,11 @@ contains
        if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Sa_pslv', rc=rc) .and. &
             fldchk(is_local%wrap%FBImp(compatm,compatm), 'Sa_pslv', rc=rc)) then
           ! debug
-          if (trim(test_interp) == 'mapbilnr' ) then
-             call addmap_from(compatm, 'Sa_pslv', compocn, mapbilnr_nstod, 'one', 'unset')
-          else
+          !if (trim(test_interp) == 'mapbilnr' ) then
+          !   call addmap_from(compatm, 'Sa_pslv', compocn, mapbilnr_nstod, 'one', 'unset')
+          !else
              call addmap_from(compatm, 'Sa_pslv', compocn, maptype, 'one', 'unset')
-          end if
+          !end if
           call addmrg_to(compocn, 'Sa_pslv', mrg_from=compatm, mrg_fld='Sa_pslv', mrg_type='copy')
        end if
     end if
@@ -634,7 +634,11 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compice)        , fldname, rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
-             call addmap_from(compatm, fldname, compice, maptype, 'one', 'unset')
+             if (trim(test_interp) == 'mapbilnr' ) then
+                call addmap_from(compatm, fldname, compice, mapbilnr, 'one', 'unset')
+             else
+                call addmap_from(compatm, fldname, compice, maptype, 'one', 'unset')
+             end if
              call addmrg_to(compice, fldname, mrg_from=compatm, mrg_fld=fldname, mrg_type='copy')
           end if
        end if
