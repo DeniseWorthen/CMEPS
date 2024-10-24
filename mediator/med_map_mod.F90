@@ -352,6 +352,8 @@ contains
     use med_internalstate_mod , only : coupling_mode, dststatus_print
     use med_internalstate_mod , only : defaultMasks
     use med_constants_mod     , only : ispval_mask => med_constants_ispval_mask
+    ! debug
+    use med_internalstate_mod , only : test_spval
 
     ! input/output variables
     integer                    , intent(in)    :: n1
@@ -416,6 +418,14 @@ contains
        if (n1 == complnd .and. n2 == compatm) then
           srcMaskValue = ispval_mask
           dstMaskValue = ispval_mask
+       end if
+       ! debug
+       ! map the sea level pressure from atm->ocn bilinearly and set the
+       ! dstMaskValue = ispval_mask when mapping from ocn->atm, the issue does not arise:
+       if (trim(test_spval) == 'true') then
+          if (n1 == compocn .and. n2 == compatm) then
+             dstMaskValue = ispval_mask
+          end if
        end if
     end if
     if (coupling_mode(1:4) == 'hafs') then

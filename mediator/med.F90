@@ -53,7 +53,7 @@ module MED
   use esmFldsExchange_hafs_mod , only : esmFldsExchange_hafs
   use med_phases_profile_mod   , only : med_phases_profile_finalize
   ! debug
-  use med_internalstate_mod    , only : test_interp
+  use med_internalstate_mod    , only : test_interp, test_spval
 
   implicit none
   private
@@ -833,7 +833,18 @@ contains
     call ESMF_LogWrite('test_interp = '// trim(test_interp), ESMF_LOGMSG_INFO)
     if (maintask) then
        write(logunit,*) '========================================================'
-       write(logunit,'(a)')trim(subname)//' Mediator Coupling Mode is '//trim(test_interp)
+       write(logunit,'(a)')trim(subname)//' Mediator test_interp is '//trim(test_interp)
+       write(logunit,*) '========================================================'
+       write(logunit,*)
+    end if
+    ! debug
+    test_spval = 'false'
+    call NUOPC_CompAttributeGet(gcomp, name='test_spval', value=test_spval, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_LogWrite('test_spval = '// trim(test_spval), ESMF_LOGMSG_INFO)
+    if (maintask) then
+       write(logunit,*) '========================================================'
+       write(logunit,'(a)')trim(subname)//' Mediator test_spval is '//trim(test_spval)
        write(logunit,*) '========================================================'
        write(logunit,*)
     end if
