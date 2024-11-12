@@ -29,7 +29,7 @@ contains
     use med_internalstate_mod , only : compmed, compatm, compocn, compice, complnd, compwav, ncomps
     use med_internalstate_mod , only : mapbilnr, mapconsf, mapconsd, mappatch
     use med_internalstate_mod , only : mapfcopy, mapnstod, mapnstod_consd, mapnstod_consf
-    use med_internalstate_mod , only : mapconsf_aofrac, mapbilnr_nstod
+    use med_internalstate_mod , only : mapconsf_aofrac, mapbilnr_nstod, mapconsf2nd
     use med_internalstate_mod , only : coupling_mode, mapnames
     use esmFlds               , only : med_fldList_type
     use esmFlds               , only : addfld_to => med_fldList_addfld_to
@@ -443,7 +443,7 @@ contains
                   fldchk(is_local%wrap%FBImp(compice,compice), 'Fioi_'//fldname, rc=rc) .and. &
                   fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_'//fldname, rc=rc)) then
                 call addmap_from(compice, 'Fioi_'//fldname, compocn, mapfcopy, 'unset', 'unset')
-                call addmap_from(compatm, 'Faxa_'//fldname, compocn, mapconsf_aofrac, 'aofrac', 'unset')
+                call addmap_from(compatm, 'Faxa_'//fldname, compocn, mapconsf, 'one', 'unset')
                 call addmrg_to(compocn, 'Foxx_'//fldname, &
                      mrg_from=compice, mrg_fld='Fioi_'//fldname, mrg_type='merge', mrg_fracname='ifrac')
                 call addmrg_to(compocn, 'Foxx_'//fldname, &
@@ -476,7 +476,6 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Foxx_lwnet', rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_lwnet', rc=rc)) then
-             !call addmap_from(compatm, 'Faxa_lwnet', compocn, mapconsf_aofrac, 'aofrac', 'unset')
              call addmap_from(compatm, 'Faxa_lwnet', compocn, mapconsf2nd, 'one', 'unset')
              call addmrg_to(compocn, 'Foxx_lwnet', &
                   mrg_from=compatm, mrg_fld='Faxa_lwnet', mrg_type='copy_with_weights', mrg_fracname='ofrac')
@@ -501,7 +500,7 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Foxx_sen', rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_sen', rc=rc)) then
-             call addmap_from(compatm, 'Faxa_sen', compocn, mapconsf_aofrac, 'aofrac', 'unset')
+             call addmap_from(compatm, 'Faxa_sen', compocn, mapconsf, 'one', 'unset')
              call addmrg_to(compocn, 'Foxx_sen', &
                   mrg_from=compatm, mrg_fld='Faxa_sen', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
@@ -525,7 +524,7 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Foxx_evap', rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_evap' , rc=rc)) then
-             call addmap_from(compatm, 'Faxa_evap', compocn, mapconsf_aofrac, 'aofrac', 'unset')
+             call addmap_from(compatm, 'Faxa_evap', compocn, mapconsf, 'one', 'unset')
              call addmrg_to(compocn, 'Foxx_evap', &
                   mrg_from=compatm, mrg_fld='Faxa_evap', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
