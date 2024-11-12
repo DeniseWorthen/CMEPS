@@ -57,7 +57,7 @@ contains
     character(len=*) , parameter   :: subname='(esmFldsExchange_ufs)'
 
     ! component name
-    character(len=CS) :: lnd_name = ''    
+    character(len=CS) :: lnd_name = ''
     !--------------------------------------
 
     rc = ESMF_SUCCESS
@@ -476,7 +476,8 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Foxx_lwnet', rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_lwnet', rc=rc)) then
-             call addmap_from(compatm, 'Faxa_lwnet', compocn, mapconsf_aofrac, 'aofrac', 'unset')
+             !call addmap_from(compatm, 'Faxa_lwnet', compocn, mapconsf_aofrac, 'aofrac', 'unset')
+             call addmap_from(compatm, 'Faxa_lwnet', compocn, mapconsf2nd, 'one', 'unset')
              call addmrg_to(compocn, 'Foxx_lwnet', &
                   mrg_from=compatm, mrg_fld='Faxa_lwnet', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
@@ -801,8 +802,8 @@ contains
                 call addmrg_to(complnd, fldname, mrg_from=compatm, mrg_fld=fldname, mrg_type='copy')
              end if
           end if
-       end do 
-       deallocate(flds)       
+       end do
+       deallocate(flds)
     end if ! lm4
 
   end subroutine esmFldsExchange_ufs

@@ -345,7 +345,7 @@ contains
     use ESMF                  , only : ESMF_MeshGet, ESMF_DistGridGet, ESMF_DistGrid, ESMF_TYPEKIND_R8
     use ESMF                  , only : ESMF_FieldGet, ESMF_FieldCreate, ESMF_FieldWrite, ESMF_FieldDestroy
     use med_internalstate_mod , only : mapbilnr, mapconsf, mapconsd, mappatch, mappatch_uv3d, mapbilnr_uv3d, mapfcopy
-    use med_internalstate_mod , only : mapunset, mapnames, nmappers
+    use med_internalstate_mod , only : mapconsf2nd, mapunset, mapnames, nmappers
     use med_internalstate_mod , only : mapnstod, mapnstod_consd, mapnstod_consf, mapnstod_consd
     use med_internalstate_mod , only : mapfillv_bilnr, mapbilnr_nstod, mapconsf_aofrac
     use med_internalstate_mod , only : compocn, compwav, complnd, compname, compatm
@@ -552,6 +552,19 @@ contains
             dstMaskValues=(/dstMaskValue/), &
             regridmethod=ESMF_REGRIDMETHOD_CONSERVE, &
             normType=ESMF_NORMTYPE_DSTAREA, &
+            srcTermProcessing=srcTermProcessing_Value, &
+            ignoreDegenerate=.true., &
+            dstStatusField=dststatusfield, &
+            unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
+            rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       ldstprint = .true.
+    else if (mapindex == mapconsf2nd) then
+       call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mapconsf), &
+            srcMaskValues=(/srcMaskValue/), &
+            dstMaskValues=(/dstMaskValue/), &
+            regridmethod=ESMF_REGRIDMETHOD_CONSERVE_2ND, &
+            normType=ESMF_NORMTYPE_FRACAREA, &
             srcTermProcessing=srcTermProcessing_Value, &
             ignoreDegenerate=.true., &
             dstStatusField=dststatusfield, &
