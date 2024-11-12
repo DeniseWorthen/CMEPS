@@ -547,6 +547,18 @@ contains
           routehandles(mapconsf_aofrac) = ESMF_RouteHandleCreate(routehandles(mapconsf), rc=rc)
           if (chkerr(rc,__LINE__,u_FILE_u)) return
        end if
+    else if (mapindex == mapconsf2nd) then
+       call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mapconsf2nd), &
+            srcMaskValues=(/srcMaskValue/), &
+            dstMaskValues=(/dstMaskValue/), &
+            regridmethod=ESMF_REGRIDMETHOD_CONSERVE_2ND, &
+            normType=ESMF_NORMTYPE_FRACAREA, &
+            srcTermProcessing=srcTermProcessing_Value, &
+            ignoreDegenerate=.true., &
+            dstStatusField=lfield, &
+            unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
+            rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
     else if (mapindex == mapconsd .or. mapindex == mapnstod_consd) then
        if (maintask) then
           write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
@@ -559,18 +571,6 @@ contains
             srcTermProcessing=srcTermProcessing_Value, &
             ignoreDegenerate=.true., &
             dstStatusField=lfield, &
-            unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
-            rc=rc)
-       if (chkerr(rc,__LINE__,u_FILE_u)) return
-    else if (mapindex == mapconsf2nd) then
-       call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mapconsf), &
-            srcMaskValues=(/srcMaskValue/), &
-            dstMaskValues=(/dstMaskValue/), &
-            regridmethod=ESMF_REGRIDMETHOD_CONSERVE_2ND, &
-            normType=ESMF_NORMTYPE_FRACAREA, &
-            srcTermProcessing=srcTermProcessing_Value, &
-            ignoreDegenerate=.true., &
-            dstStatusField=dststatusfield, &
             unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
             rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
