@@ -43,7 +43,7 @@ module MED
   use med_internalstate_mod    , only : med_internalstate_defaultmasks, logunit, maintask
   use med_internalstate_mod    , only : ncomps, compname
   use med_internalstate_mod    , only : compmed, compatm, compocn, compice, complnd, comprof, compwav, compglc
-  use med_internalstate_mod    , only : coupling_mode, aoflux_code, aoflux_ccpp_suite
+  use med_internalstate_mod    , only : coupling_mode, aoflux_code, aoflux_ccpp_suite, dststatus_print
   use esmFlds                  , only : med_fldList_GetocnalbfldList, med_fldList_type
   use esmFlds                  , only : med_fldList_GetNumFlds, med_fldList_GetFldNames, med_fldList_GetFldInfo
   use esmFlds                  , only : med_fldList_Document_Mapping, med_fldList_Document_Merging
@@ -59,14 +59,15 @@ module MED
   public  SetServices
   public  SetVM
   private InitializeP0
-  private AdvertiseFields ! advertise fields
+  private AdvertiseFields                   ! advertise fields
   private RealizeFieldsWithTransferProvided ! realize connected Fields with transfer action "provide"
-  private ModifyDecompofMesh ! optionally modify the decomp/distr of transferred Grid/Mesh
-  private RealizeFieldsWithTransferAccept ! realize all Fields with transfer action "accept"
-  private DataInitialize     ! finish initialization and resolve data dependencies
+  private ModifyDecompofMesh                ! optionally modify the decomp/distr of transferred Grid/Mesh
+  private RealizeFieldsWithTransferAccept   ! realize all Fields with transfer action "accept"
+  private DataInitialize                    ! finish initialization and resolve data dependencies
   private SetRunClock
   private med_meshinfo_create
   private med_grid_write
+  private med_dststatus_write
   private med_finalize
 
   character(len=*), parameter :: u_FILE_u  = &
@@ -2179,6 +2180,14 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
        !---------------------------------------
+       ! write dstStatus fields if requested
+       !---------------------------------------
+       if (dststatus_print) then
+          call med_dststatus_write(gcomp, rc)
+          if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       end if
+
+       !---------------------------------------
        ! read mediator restarts
        !---------------------------------------
        call NUOPC_CompAttributeGet(gcomp, name="read_restart", value=cvalue, rc=rc)
@@ -2561,6 +2570,77 @@ contains
     end if
 
   end subroutine med_grid_write
+
+  !-----------------------------------------------------------------------------
+  subroutine med_dststatus_write (gcomp, rc)
+
+    use ESMF                  , only : ESMF_GridComp, ESMF_GridCompGet, ESMF_SUCCESS, ESMF_VM
+    use ESMF                  , only : ESMF_FieldBundleIsCreated, ESMF_FieldBundleDestroy
+    use ESMF                  , only : ESMF_Mesh, ESMF_MESHLOC_ELEMENT, ESMF_TYPEKIND_R8
+    use ESMF                  , only : ESMF_LOGMSG_INFO, ESMF_LogWrite
+    use med_internalstate_mod , only : ncomps, compname
+    use med_io_mod            , only : med_io_write, med_io_wopen, med_io_enddef, med_io_close
+    use pio                   , only : file_desc_t
+
+    ! input/output variables
+    type(ESMF_GridComp)  :: gcomp
+    integer, intent(out) :: rc
+
+    ! local variables
+    type(file_desc_t)         :: io_file
+    type(InternalState)       :: is_local
+    type(ESMF_VM)             :: vm
+    type(ESMF_Mesh)           :: lmesh
+    integer                   :: m,n
+    logical                   :: whead(2) = (/.true. , .false./)
+    logical                   :: wdata(2) = (/.false., .true. /)
+    character(len=*), parameter :: subname = '('//__FILE__//':med_dststatus_write)'
+    !-------------------------------------------------------------------------------
+
+    rc = ESMF_SUCCESS
+
+    ! Get the internal state
+    nullify(is_local%wrap)
+    call ESMF_GridCompGetInternalState(gcomp, is_local, rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! Create dststatus file
+    call ESMF_GridCompGet(gcomp, vm=vm, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    call med_io_wopen('dststatus.nc', io_file, vm, rc, clobber=.true.)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! Loop over whead/wdata phases
+    do m = 1,2
+       if (m == 2) then
+          call med_io_enddef(io_file)
+       end if
+
+       ! write dststatusfields for each dst component
+       do n = 2,ncomps
+          if (is_local%wrap%comp_present(n)) then
+             if (ESMF_FieldBundleIsCreated(is_local%wrap%FBdststatus(n),rc=rc)) then
+                call med_io_write(io_file, is_local%wrap%FBdststatus(n), whead(m), wdata(m), &
+                     is_local%wrap%nx(n), is_local%wrap%ny(n), pre='dst'//trim(compname(n)), &
+                     use_float=.true., ntile=is_local%wrap%ntile(n), rc=rc)
+                if (ChkErr(rc,__LINE__,u_FILE_u)) return
+             endif
+          end if
+       end do
+    end do
+    ! Close file
+    call med_io_close(io_file, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! Destroy the dststatus FBs
+    do n = 2,ncomps
+       if (ESMF_FieldBundleIsCreated(is_local%wrap%FBdststatus(n),rc=rc)) then
+          call ESMF_FieldBundleDestroy(is_local%wrap%FBdststatus(n), rc=rc)
+          if (chkerr(rc,__LINE__,u_FILE_u)) return
+       end if
+    end do
+
+  end subroutine med_dststatus_write
 
   !-----------------------------------------------------------------------------
 

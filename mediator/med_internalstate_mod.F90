@@ -189,6 +189,8 @@ module med_internalstate_mod
 
     ! Data
     type(ESMF_FieldBundle) , pointer :: FBData(:)    ! Background data for various components, on their grid, provided by CDEPS inline
+    ! DstStatus
+    type(ESMF_FieldBundle) , pointer :: FBDstStatus(:) ! DstStatus fields for components for each source component and maptype
 
     ! Accumulators for export field bundles
     type(ESMF_FieldBundle) :: FBExpAccumOcn      ! Accumulator for Ocn export on Ocn grid
@@ -388,6 +390,7 @@ contains
     allocate(is_local%wrap%FBfrac(ncomps))
     allocate(is_local%wrap%FBArea(ncomps))
     allocate(is_local%wrap%FBData(ncomps))
+    allocate(is_local%wrap%FBDstStatus(ncomps))
     allocate(is_local%wrap%mesh_info(ncomps))
 
     ! Determine component names
@@ -430,11 +433,12 @@ contains
     end if
 
     ! Obtain dststatus_print setting if present
-    call NUOPC_CompAttributeGet(gcomp, name='dststatus_print', value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent .and. isSet) dststatus_print=(trim(cvalue) == "true")
-    write(msgString,*) trim(subname)//': Mediator dststatus_print is ',dststatus_print
-    call ESMF_LogWrite(trim(msgString), ESMF_LOGMSG_INFO)
+    dststatus_print = .true.
+    ! call NUOPC_CompAttributeGet(gcomp, name='dststatus_print', value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
+    ! if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    ! if (isPresent .and. isSet) dststatus_print=(trim(cvalue) == "true")
+    ! write(msgString,*) trim(subname)//': Mediator dststatus_print is ',dststatus_print
+    ! call ESMF_LogWrite(trim(msgString), ESMF_LOGMSG_INFO)
 
     ! Initialize flag for background fill using data
     is_local%wrap%med_data_active(:,:) = .false.
