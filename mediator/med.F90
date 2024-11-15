@@ -52,6 +52,8 @@ module MED
   use esmFldsExchange_cesm_mod , only : esmFldsExchange_cesm
   use esmFldsExchange_hafs_mod , only : esmFldsExchange_hafs
   use med_phases_profile_mod   , only : med_phases_profile_finalize
+  ! debug
+  use med_internalstate_mod    , only : atmsrcmask,atmdstmask
 
   implicit none
   private
@@ -825,6 +827,28 @@ contains
        write(logunit,*) '========================================================'
        write(logunit,*)
     end if
+
+    ! debug
+    call NUOPC_CompAttributeGet(gcomp, name='atmsrcmask', value=atmsrcmask, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_LogWrite('atmsrcmask = '// trim(atmsrcmask), ESMF_LOGMSG_INFO)
+    if (maintask) then
+       write(logunit,*) '========================================================'
+       write(logunit,'(a)')trim(subname)//' Mediator Coupling Mode is '//trim(atmsrcmask)
+       write(logunit,*) '========================================================'
+       write(logunit,*)
+    end if
+    call NUOPC_CompAttributeGet(gcomp, name='atmdstmask', value=atmdstmask, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_LogWrite('atmdstmask = '// trim(atmdstmask), ESMF_LOGMSG_INFO)
+    if (maintask) then
+       write(logunit,*) '========================================================'
+       write(logunit,'(a)')trim(subname)//' Mediator Coupling Mode is '//trim(atmdstmask)
+       write(logunit,*) '========================================================'
+       write(logunit,*)
+    end if
+
+
 
     ! Initialize memory for fldlistTo and fldlistFr - this is need for the calls below for the
     ! advertise phase
