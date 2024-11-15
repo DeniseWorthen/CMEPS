@@ -2576,24 +2576,34 @@ contains
 
     use ESMF                  , only : ESMF_GridComp, ESMF_GridCompGet, ESMF_SUCCESS, ESMF_VM
     use ESMF                  , only : ESMF_FieldBundleIsCreated, ESMF_FieldBundleDestroy
-    use ESMF                  , only : ESMF_Mesh, ESMF_MESHLOC_ELEMENT, ESMF_TYPEKIND_R8
+    use ESMF                  , only : ESMF_FieldBundleAdd, ESMF_Array, ESMF_Field, ESMF_MeshGet
+    use ESMF                  , only : ESMF_FieldGet, ESMF_FieldCreate
+    use ESMF                  , only : ESMF_Mesh, ESMF_MESHLOC_ELEMENT, ESMF_TYPEKIND_R8, ESMF_TYPEKIND_I4
     use ESMF                  , only : ESMF_LOGMSG_INFO, ESMF_LogWrite
     use med_internalstate_mod , only : ncomps, compname
     use med_io_mod            , only : med_io_write, med_io_wopen, med_io_enddef, med_io_close
     use pio                   , only : file_desc_t
+    use med_methods_mod       , only : med_methods_FB_getFieldN
+    use med_kind_mod          , only : I4=>SHR_KIND_I4, R8=>SHR_KIND_R8
 
     ! input/output variables
     type(ESMF_GridComp)  :: gcomp
     integer, intent(out) :: rc
 
     ! local variables
-    type(file_desc_t)         :: io_file
-    type(InternalState)       :: is_local
-    type(ESMF_VM)             :: vm
-    type(ESMF_Mesh)           :: lmesh
-    integer                   :: m,n
-    logical                   :: whead(2) = (/.true. , .false./)
-    logical                   :: wdata(2) = (/.false., .true. /)
+    type(file_desc_t)    :: io_file
+    type(InternalState)  :: is_local
+    type(ESMF_VM)        :: vm
+    type(ESMF_Mesh)      :: mesh_dst
+    type(ESMF_Field)     :: flddst, lfield
+    type(ESMF_Field)     :: maskfield
+    type(ESMF_Array)     :: maskarray
+    integer(I4), pointer :: meshmask(:)
+    real(R8), pointer    :: r8ptr(:)
+    integer              :: m,n
+    logical              :: elementMaskIsPresent
+    logical              :: whead(2) = (/.true. , .false./)
+    logical              :: wdata(2) = (/.false., .true. /)
     character(len=*), parameter :: subname = '('//__FILE__//':med_dststatus_write)'
     !-------------------------------------------------------------------------------
 
@@ -2607,6 +2617,43 @@ contains
     ! Create dststatus file
     call ESMF_GridCompGet(gcomp, vm=vm, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+    ! add mesh masks for any destination component in the dststatusFB
+    do n = 2,ncomps
+       if (is_local%wrap%comp_present(n)) then
+          if (ESMF_FieldBundleIsCreated(is_local%wrap%FBdststatus(n),rc=rc)) then
+             call med_methods_FB_getFieldN(is_local%wrap%FBdststatus(n), 1, flddst, rc=rc)
+             if (ChkErr(rc,__LINE__,u_FILE_u)) return
+             call ESMF_FieldGet(flddst, mesh=mesh_dst, rc=rc)
+             if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+             call ESMF_MeshGet(mesh_dst, elementMaskIsPresent=elementMaskIsPresent, rc=rc)
+             if (chkerr(rc,__LINE__,u_FILE_u)) return
+             if (elementMaskIsPresent) then
+                ! create mask Field
+                maskfield = ESMF_FieldCreate(mesh_dst, ESMF_TYPEKIND_I4, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
+                if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                ! get mask Array
+                call ESMF_FieldGet(maskfield, array=maskarray, rc=rc)
+		if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                call ESMF_MeshGet(mesh_dst, elemMaskArray=maskarray, rc=rc)
+		if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                call ESMF_FieldGet(maskfield, localDe=0, farrayPtr=meshmask, rc=rc)
+                if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                ! now create an R8 mask for writing
+                lfield = ESMF_FieldCreate(mesh_dst, ESMF_TYPEKIND_R8, meshloc=ESMF_MESHLOC_ELEMENT, &
+                     name=trim(compname(n))//'mask', rc=rc)
+                if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                call ESMF_FieldGet(lfield, farrayPtr=r8ptr, rc=rc)
+                if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                r8ptr = real(meshmask,R8)
+                call ESMF_FieldBundleAdd(is_local%wrap%FBdststatus(n), (/lfield/), rc=rc)
+                if (ChkErr(rc,__LINE__,u_FILE_u)) return
+             end if
+          end if
+       end if
+    end do
+
     call med_io_wopen('dststatus.nc', io_file, vm, rc, clobber=.true.)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
