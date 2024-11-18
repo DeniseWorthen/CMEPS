@@ -183,7 +183,7 @@ contains
                          call med_fld_GetFldInfo(fldptr, compsrc=n2, mapfile=mapfile)
                          call med_map_routehandles_initfrom_field(n1, n2, fldsrc, flddst, &
                               mapindex, is_local%wrap%rh(n1,n2,:), mapfile=trim(mapfile), &
-                              dststatusfield=dstatfield, rc=rc)
+                              dstatfield=dstatfield, rc=rc)
                          if (chkerr(rc,__LINE__,u_FILE_u)) return
 
                          if (mapindex /= mapfcopy) then
@@ -343,7 +343,7 @@ contains
 
   !================================================================================
   subroutine med_map_routehandles_initfrom_field(n1, n2, fldsrc, flddst, mapindex, routehandles, &
-       mapfile, dststatusfield, rc)
+       mapfile, dstatfield, rc)
 
     use ESMF                  , only : ESMF_RouteHandle, ESMF_RouteHandlePrint, ESMF_Field, ESMF_MAXSTR
     use ESMF                  , only : ESMF_PoleMethod_Flag, ESMF_POLEMETHOD_ALLAVG, ESMF_POLEMETHOD_NONE
@@ -373,7 +373,7 @@ contains
     integer                    , intent(in)    :: mapindex
     type(ESMF_RouteHandle)     , intent(inout) :: routehandles(:)
     character(len=*), optional , intent(in)    :: mapfile
-    type(ESMF_Field), optional , intent(out)   :: dststatusfield
+    type(ESMF_Field), optional , intent(out)   :: dstatfield
     integer                    , intent(out)   :: rc
 
     ! local variables
@@ -384,6 +384,8 @@ contains
     character(len=CS)          :: dstatname
     integer                    :: srcMaskValue
     integer                    :: dstMaskValue
+    real(R8), pointer          :: r8ptr(:)
+    integer(I4), pointer       :: i4ptr(:)
     character(len=ESMF_MAXSTR) :: lmapfile
     logical                    :: rhprint = .false.
     integer                    :: srcTermProcessing_Value = 0
@@ -396,15 +398,15 @@ contains
        lmapfile = trim(mapfile)
     end if
 
+    mapname = trim(mapnames(mapindex))
+    call ESMF_LogWrite(trim(subname)//": mapname "//trim(mapname), ESMF_LOGMSG_INFO)
+
     ! create a field to retrieve the dststatus field
-    dstatname = trim(compname(n1))//'_'//trim(compname(n2))//'_'//trim(mapnames(mapindex))
+    dstatname = trim(compname(n1))//'_'//trim(compname(n2))//'_'//mapname
     call ESMF_FieldGet(flddst, mesh=mesh_dst, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     lfield = ESMF_FieldCreate(mesh_dst, ESMF_TYPEKIND_I4, meshloc=ESMF_MESHLOC_ELEMENT, name=trim(dstatname), rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-
-    mapname = trim(mapnames(mapindex))
-    call ESMF_LogWrite(trim(subname)//": mapname "//trim(mapname), ESMF_LOGMSG_INFO)
 
     ! set src and dst masking using defaults
     srcMaskValue = defaultMasks(n1,1)
@@ -623,9 +625,18 @@ contains
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     endif
 
-    ! Return dststatusfield if requested
-    if (present(dststatusfield)) then
-       dststatusfield = lfield
+    ! Copy R8 values into a returned field
+    if (present(dstatfield)) then
+       dstatfield = ESMF_FieldCreate(mesh_dst, ESMF_TYPEKIND_R8, meshloc=ESMF_MESHLOC_ELEMENT, &
+            name=trim(dstatname), rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_FieldGet(lfield, farrayPtr=i4ptr, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_FieldGet(dstatfield, farrayPtr=r8ptr, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       r8ptr = real(i4ptr,R8)
+       call ESMF_FieldDestroy(lfield, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
     end if
 
   end subroutine med_map_routehandles_initfrom_field
