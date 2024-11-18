@@ -49,9 +49,6 @@ module med_internalstate_mod
   ! Coupling mode
   character(len=CS), public :: coupling_mode ! valid values are [cesm,ufs.nfrac,ufs.frac,ufs.nfrac.aoflux,ufs.frac.aoflux,hafs,hafs.mom6]
 
-  ! debug
-  character(len=CS), public :: atmsrcmask, atmdstmask
-
   ! Atmosphere-ocean flux algorithm
   character(len=CS), public :: aoflux_code   ! valid values are [cesm,ccpp]
 
@@ -673,17 +670,7 @@ contains
     if (is_local%wrap%comp_present(compice)) defaultMasks(compice,:) = 0
     if (is_local%wrap%comp_present(compwav)) defaultMasks(compwav,:) = 0
     if ( coupling_mode(1:3) == 'ufs') then
-
-       if ( (trim(atmsrcmask) == '1') .and. (trim(atmdstmask) == '1') ) then
-          if (is_local%wrap%comp_present(compatm)) defaultMasks(compatm,:) = 1
-       else
-          if (trim(atmsrcmask) == '1') then
-             if (is_local%wrap%comp_present(compatm)) defaultMasks(compatm,1) = 1
-          elseif (trim(atmdstmask) == '1') then
-             if (is_local%wrap%comp_present(compatm)) defaultMasks(compatm,2) = 1
-          end if
-       end if
-
+       if (is_local%wrap%comp_present(compatm)) defaultMasks(compatm,:) = 1
     endif
     if ( trim(coupling_mode) == 'hafs') then
        if (is_local%wrap%comp_present(compatm)) defaultMasks(compatm,1) = 1
