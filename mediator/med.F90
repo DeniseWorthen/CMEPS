@@ -2577,13 +2577,15 @@ contains
     use ESMF                  , only : ESMF_GridComp, ESMF_GridCompGet, ESMF_SUCCESS, ESMF_VM
     use ESMF                  , only : ESMF_FieldBundleIsCreated, ESMF_FieldBundleDestroy
     use ESMF                  , only : ESMF_FieldBundleAdd, ESMF_Array, ESMF_Field, ESMF_MeshGet
-    use ESMF                  , only : ESMF_FieldGet, ESMF_FieldCreate,  ESMF_FieldIsCreated
+    use ESMF                  , only : ESMF_FieldGet, ESMF_FieldCreate,  ESMF_FieldIsCreated, ESMF_FieldDestroy
     use ESMF                  , only : ESMF_Mesh, ESMF_MESHLOC_ELEMENT, ESMF_TYPEKIND_R8, ESMF_TYPEKIND_I4
+    use ESMF                  , only : ESMF_RouteHandleIsCreated
     use ESMF                  , only : ESMF_LOGMSG_INFO, ESMF_LogWrite
-    use med_internalstate_mod , only : ncomps, compname, mapnames, nmappers
+    use med_internalstate_mod , only : ncomps, compname, mapnames, nmappers, mapfcopy
     use med_io_mod            , only : med_io_write, med_io_wopen, med_io_enddef, med_io_close
     use pio                   , only : file_desc_t
     use med_methods_mod       , only : med_methods_FB_getFieldN
+    use med_map_mod           , only : med_map_field
     use med_kind_mod          , only : I4=>SHR_KIND_I4, R8=>SHR_KIND_R8
 
     ! input/output variables
@@ -2594,12 +2596,12 @@ contains
     type(file_desc_t)    :: io_file
     type(InternalState)  :: is_local
     type(ESMF_VM)        :: vm
-    type(ESMF_Mesh)      :: mesh_dst
-    type(ESMF_Field)     :: flddst, lfield
+    type(ESMF_Mesh)      :: mesh_src, mesh_dst
+    type(ESMF_Field)     :: fldsrc, flddst, lfield
     type(ESMF_Field)     :: maskfield
     type(ESMF_Array)     :: maskarray
     integer(I4), pointer :: meshmask(:)
-    real(R8), pointer    :: r8ptr(:)
+    real(R8), pointer    :: r8ptr(:), ptrsrc(:), ptrdst(:)
     character(len=CS)    :: fname
     character(len=CS)    :: mapname
     integer              :: m,n1,n2,mapindex
@@ -2651,6 +2653,8 @@ contains
                 r8ptr = real(meshmask,R8)
                 call ESMF_FieldBundleAdd(is_local%wrap%FBdststatus(n2), (/lfield/), rc=rc)
                 if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                !call ESMF_FieldDestroy(lfield, rc=rc)
+                !if (ChkErr(rc,__LINE__,u_FILE_u)) return
              end if
           end if
        end if
@@ -2660,15 +2664,35 @@ contains
        mapname = trim(mapnames(mapindex))
        do n2 = 2,ncomps
           do n1 = 2,ncomps
-             if (n1 /= n2) then
-                if ( ESMF_FieldIsCreated(is_local%wrap%field_NormOne(n1,n2,mapindex))) then
+             if (n1 /= n2 .and. mapindex /= mapfcopy) then
+                if (ESMF_RouteHandleIsCreated(is_local%wrap%RH(n1,n2,mapindex), rc=rc)) then
+                   call med_methods_FB_getFieldN(is_local%wrap%FBimp(n1,n1), 1, fldsrc, rc=rc)
+                   if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                   call ESMF_FieldGet(fldsrc, farrayPtr=ptrsrc, rc=rc)
+                   ptrsrc(:) = 1.0_R8
+                   call med_methods_FB_getFieldN(is_local%wrap%FBimp(n2,n2), 1, flddst, rc=rc)
+                   if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                   call ESMF_FieldGet(flddst, farrayPtr=ptrdst, rc=rc)
+                   if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                   ptrdst(:) = 0.0_R8
+                   ! map n1:n2:mapindex
+                   call med_map_field( field_src=fldsrc, field_dst=flddst, &
+                        routehandles=is_local%wrap%RH(n1,n2,:), maptype=mapindex, rc=rc)
+                   if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
                    fname = 'fld_'//trim(compname(n1))//'_'//trim(compname(n2))//'_'//mapname
+                   if (maintask) print *,'XXX '//trim(fname),minval(ptrsrc),maxval(ptrsrc),minval(ptrdst),maxval(ptrdst)
+
+                   call ESMF_FieldGet(flddst, mesh=mesh_dst, rc=rc)
+                   if (chkerr(rc,__LINE__,u_FILE_u)) return
                    lfield = ESMF_FieldCreate(mesh_dst, ESMF_TYPEKIND_R8, meshloc=ESMF_MESHLOC_ELEMENT, &
                         name = trim(fname), rc=rc)
+                   if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                   if (maintask) print *,'XXX '//trim(fname)
                    call ESMF_FieldGet(lfield, farrayPtr=r8ptr, rc=rc)
                    if (ChkErr(rc,__LINE__,u_FILE_u)) return
-                   r8ptr = 0.0_R8
 
+                   r8ptr(:) = ptrdst(:)
                    call ESMF_FieldBundleAdd(is_local%wrap%FBdststatus(n2), (/lfield/), rc=rc)
                    if (ChkErr(rc,__LINE__,u_FILE_u)) return
                 end if
@@ -2677,6 +2701,7 @@ contains
        end do
     end do
 
+    ! write the FB
     call med_io_wopen('dststatus.nc', io_file, vm, rc, clobber=.true.)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
