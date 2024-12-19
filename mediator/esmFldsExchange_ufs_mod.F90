@@ -40,6 +40,8 @@ contains
     use esmFlds               , only : addmap_aoflux => med_fldList_addmap_aoflux
     use esmFlds               , only : addfld_ocnalb => med_fldList_addfld_ocnalb
     use esmFlds               , only : addmap_ocnalb => med_fldList_addmap_ocnalb
+    !debug
+    use med_internalstate_mod , only : mapbilnr_nstod, test_interp_state, test_interp_flux
 
     ! input/output parameters:
     type(ESMF_GridComp)              :: gcomp
@@ -627,7 +629,13 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compice)        , fldname, rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
+             if (trim(test_interp_state) == 'mapbilnr' ) then
+                call addmap_from(compatm, fldname, compice, mapbilnr, 'one', 'unset')
+             elseif (trim(test_interp_state) == 'mappatch' ) then
+                call addmap_from(compatm, fldname, compice, mappatch, 'one', 'unset')
+             else
              call addmap_from(compatm, fldname, compice, maptype, 'one', 'unset')
+             end if
              call addmrg_to(compice, fldname, mrg_from=compatm, mrg_fld=fldname, mrg_type='copy')
           end if
        end if

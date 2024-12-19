@@ -51,6 +51,8 @@ module MED
   use esmFldsExchange_cesm_mod , only : esmFldsExchange_cesm
   use esmFldsExchange_hafs_mod , only : esmFldsExchange_hafs
   use med_phases_profile_mod   , only : med_phases_profile_finalize
+  ! debug
+  use med_internalstate_mod    , only : test_interp_state, test_interp_flux, test_mask
 
   implicit none
   private
@@ -825,6 +827,37 @@ contains
        write(logunit,*)
     end if
 
+    ! debug
+    test_interp_state = 'none'
+    call NUOPC_CompAttributeGet(gcomp, name='test_interp_state', value=test_interp_state, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_LogWrite('test_interp_state = '// trim(test_interp_state), ESMF_LOGMSG_INFO)
+    if (maintask) then
+       write(logunit,*) '========================================================'
+       write(logunit,'(a)')trim(subname)//' Mediator test_interp_state is '//trim(test_interp_state)
+       write(logunit,*) '========================================================'
+       write(logunit,*)
+    end if
+    test_interp_flux = 'none'
+    call NUOPC_CompAttributeGet(gcomp, name='test_interp_flux', value=test_interp_flux, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_LogWrite('test_interp_flux = '// trim(test_interp_flux), ESMF_LOGMSG_INFO)
+    if (maintask) then
+       write(logunit,*) '========================================================'
+       write(logunit,'(a)')trim(subname)//' Mediator test_interp_flux is '//trim(test_interp_flux)
+       write(logunit,*) '========================================================'
+       write(logunit,*)
+    end if
+    test_mask = 'false'
+    call NUOPC_CompAttributeGet(gcomp, name='test_mask', value=test_mask, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_LogWrite('test_mask = '// trim(test_mask), ESMF_LOGMSG_INFO)
+    if (maintask) then
+       write(logunit,*) '========================================================'
+       write(logunit,'(a)')trim(subname)//' Mediator test_mask is '//trim(test_mask)
+       write(logunit,*) '========================================================'
+       write(logunit,*)
+    end if
     ! Initialize memory for fldlistTo and fldlistFr - this is need for the calls below for the
     ! advertise phase
     call med_fldlist_init1(ncomps)
@@ -2641,9 +2674,9 @@ contains
                 if (ChkErr(rc,__LINE__,u_FILE_u)) return
                 ! get mask Array
                 call ESMF_FieldGet(maskfield, array=maskarray, rc=rc)
-		if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                if (ChkErr(rc,__LINE__,u_FILE_u)) return
                 call ESMF_MeshGet(mesh_dst, elemMaskArray=maskarray, rc=rc)
-		if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                if (ChkErr(rc,__LINE__,u_FILE_u)) return
                 call ESMF_FieldGet(maskfield, localDe=0, farrayPtr=meshmask, rc=rc)
                 if (ChkErr(rc,__LINE__,u_FILE_u)) return
                 ! now create an R8 mask for writing
