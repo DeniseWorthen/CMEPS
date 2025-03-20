@@ -528,7 +528,7 @@ contains
             rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     else if (mapindex == mapconsf_aofrac) then
-       if (.not. ESMF_RouteHandleIsCreated(routehandles(mapconsf))) then
+       if (.not. ESMF_RouteHandleIsCreated(routehandles(mapconsf_aofrac))) then
           if (maintask) then
              write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
           end if
@@ -542,13 +542,6 @@ contains
                dstStatusField=lfield, &
                unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
                rc=rc)
-          if (chkerr(rc,__LINE__,u_FILE_u)) return
-       else
-          ! Copy existing consf RH
-          if (maintask) then
-             write(logunit,'(A)') trim(subname)//' copying RH(mapconsf) to '//trim(mapname)//' for '//trim(string)
-          end if
-          routehandles(mapconsf_aofrac) = ESMF_RouteHandleCreate(routehandles(mapconsf), rc=rc)
           if (chkerr(rc,__LINE__,u_FILE_u)) return
        end if
     else if (mapindex == mapconsd .or. mapindex == mapnstod_consd) then
