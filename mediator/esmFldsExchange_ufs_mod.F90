@@ -629,7 +629,7 @@ contains
     ! - meridional wind at the lowest model level from atm
     ! - specific humidity at the lowest model level from atm
     allocate(flds(4))
-    flds = (/'Sa_u   ', 'Sa_v   ', 'Sa_z   ', 'Sa_tbot', 'Sa_pbot', 'Sa_shum'/)
+    flds = (/'Sa_z   ', 'Sa_tbot', 'Sa_pbot', 'Sa_shum'/)
     do n = 1,size(flds)
        fldname = trim(flds(n))
        if (phase == 'advertise') then
