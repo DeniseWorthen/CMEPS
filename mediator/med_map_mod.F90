@@ -380,8 +380,10 @@ contains
     integer                    , intent(out)   :: rc
 
     ! local variables
+    type(ESMF_Mesh)            :: mesh_src
     type(ESMF_Mesh)            :: mesh_dst
     type(ESMF_Field)           :: lfield
+    type(ESMF_Field)           :: fldsrc2d, flddst2d
     character(len=CS)          :: string
     character(len=CS)          :: mapname
     character(len=CS)          :: dstatname
@@ -410,6 +412,21 @@ contains
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     lfield = ESMF_FieldCreate(mesh_dst, ESMF_TYPEKIND_I4, meshloc=ESMF_MESHLOC_ELEMENT, name=trim(dstatname), rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+    if (mapindex == mapbilnr_uv3d .or. mapindex == mappatch_uv3d) then
+       call ESMF_FieldGet(fldsrc, mesh=mesh_src, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       fldsrc2d = ESMF_FieldCreate(mesh_src, ESMF_TYPEKIND_R8,  &
+            ungriddedLbound=(/1/), ungriddedUbound=(/2/),       &
+            gridToFieldMap=(/2/), meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_FieldGet(flddst, mesh=mesh_dst, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       flddst2d = ESMF_FieldCreate(mesh_dst, ESMF_TYPEKIND_R8,  &
+            ungriddedLbound=(/1/), ungriddedUbound=(/2/),       &
+            gridToFieldMap=(/2/), meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+    end if
 
     ! set src and dst masking using defaults
     srcMaskValue = defaultMasks(n1,1)
@@ -486,7 +503,7 @@ contains
        if (maintask) then
           write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
        end if
-       call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mapbilnr_uv3d), &
+       call ESMF_FieldRegridStore(fldsrc2d, flddst2d, routehandle=routehandles(mapbilnr_uv3d), &
             srcMaskValues=(/srcMaskValue/),            &
             dstMaskValues=(/dstMaskValue/),            &
             regridmethod=ESMF_REGRIDMETHOD_BILINEAR,   &
@@ -605,7 +622,7 @@ contains
        if (maintask) then
           write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
        end if
-       call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mappatch_uv3d), &
+       call ESMF_FieldRegridStore(fldsrc2d, flddst2d, routehandle=routehandles(mappatch_uv3d), &
             srcMaskValues=(/srcMaskValue/),            &
             dstMaskValues=(/dstMaskValue/),            &
             regridmethod=ESMF_REGRIDMETHOD_PATCH,      &
@@ -660,6 +677,14 @@ contains
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
        r8ptr = real(i4ptr,R8)
        call ESMF_FieldDestroy(lfield, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+    end if
+
+    ! Clean up
+    if (mapindex == mapbilnr_uv3d .or. mapindex == mappatch_uv3d) then
+       call ESMF_FieldDestroy(fldsrc2d, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_FieldDestroy(flddst2d, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     end if
 

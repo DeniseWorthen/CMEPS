@@ -32,7 +32,7 @@ contains
     use med_internalstate_mod , only : compmed, compatm, compocn, compice, complnd, compwav, ncomps
     use med_internalstate_mod , only : mapbilnr, mapconsf, mapconsd, mappatch
     use med_internalstate_mod , only : mapfcopy, mapnstod, mapnstod_consd, mapnstod_consf
-    use med_internalstate_mod , only : mapconsf_aofrac, mapbilnr_nstod
+    use med_internalstate_mod , only : mapconsf_aofrac, mapbilnr_nstod, mappatch_uv3d
     use med_internalstate_mod , only : coupling_mode, mapnames, samegrid_atmlnd
     use esmFlds               , only : med_fldList_type
     use esmFlds               , only : addfld_to => med_fldList_addfld_to
@@ -60,7 +60,7 @@ contains
     character(len=*) , parameter   :: subname='(esmFldsExchange_ufs)'
 
     ! component name
-    character(len=CS) :: lnd_name = ''    
+    character(len=CS) :: lnd_name = ''
     !--------------------------------------
 
     rc = ESMF_SUCCESS
@@ -628,7 +628,7 @@ contains
     ! - zonal wind at the lowest model level from atm
     ! - meridional wind at the lowest model level from atm
     ! - specific humidity at the lowest model level from atm
-    allocate(flds(6))
+    allocate(flds(4))
     flds = (/'Sa_u   ', 'Sa_v   ', 'Sa_z   ', 'Sa_tbot', 'Sa_pbot', 'Sa_shum'/)
     do n = 1,size(flds)
        fldname = trim(flds(n))
@@ -641,6 +641,25 @@ contains
           if ( fldchk(is_local%wrap%FBexp(compice)        , fldname, rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
              call addmap_from(compatm, fldname, compice, maptype, 'one', 'unset')
+             call addmrg_to(compice, fldname, mrg_from=compatm, mrg_fld=fldname, mrg_type='copy')
+          end if
+       end if
+    end do
+    deallocate(flds)
+
+    allocate(flds(2))
+    flds = (/'Sa_u   ', 'Sa_v   '/)
+    do n = 1,size(flds)
+       fldname = trim(flds(n))
+       if (phase == 'advertise') then
+          if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compice)) then
+             call addfld_from(compatm , fldname)
+             call addfld_to(compice   , fldname)
+          endif
+       else
+          if ( fldchk(is_local%wrap%FBexp(compice)        , fldname, rc=rc) .and. &
+               fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
+             call addmap_from(compatm, fldname, compice, mappatch_uv3d, 'one', 'unset')
              call addmrg_to(compice, fldname, mrg_from=compatm, mrg_fld=fldname, mrg_type='copy')
           end if
        end if
@@ -814,8 +833,8 @@ contains
                 call addmrg_to(complnd, fldname, mrg_from=compatm, mrg_fld=fldname, mrg_type='copy')
              end if
           end if
-       end do 
-       deallocate(flds)       
+       end do
+       deallocate(flds)
     end if ! lm4
 
   end subroutine esmFldsExchange_ufs
