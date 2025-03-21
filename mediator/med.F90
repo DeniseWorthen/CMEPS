@@ -51,6 +51,8 @@ module MED
   use esmFldsExchange_cesm_mod , only : esmFldsExchange_cesm
   use esmFldsExchange_hafs_mod , only : esmFldsExchange_hafs
   use med_phases_profile_mod   , only : med_phases_profile_finalize
+  ! debug
+  use med_internalstate_mod    , only : test_mask
 
   implicit none
   private
@@ -825,6 +827,16 @@ contains
        write(logunit,*)
     end if
 
+    test_mask = 'false'
+    call NUOPC_CompAttributeGet(gcomp, name='test_mask', value=test_mask, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_LogWrite('test_mask = '// trim(test_mask), ESMF_LOGMSG_INFO)
+    if (maintask) then
+       write(logunit,*) '========================================================'
+       write(logunit,'(a)')trim(subname)//' Mediator test_mask is '//trim(test_mask)
+       write(logunit,*) '========================================================'
+       write(logunit,*)
+    end if
     ! Initialize memory for fldlistTo and fldlistFr - this is need for the calls below for the
     ! advertise phase
     call med_fldlist_init1(ncomps)
