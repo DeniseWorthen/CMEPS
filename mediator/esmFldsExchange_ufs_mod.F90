@@ -43,6 +43,8 @@ contains
     use esmFlds               , only : addmap_aoflux => med_fldList_addmap_aoflux
     use esmFlds               , only : addfld_ocnalb => med_fldList_addfld_ocnalb
     use esmFlds               , only : addmap_ocnalb => med_fldList_addmap_ocnalb
+    ! debug
+    use med_internalstate_mod    , only : test_mask, test_bilnr
 
     ! input/output parameters:
     type(ESMF_GridComp)              :: gcomp
@@ -60,7 +62,7 @@ contains
     character(len=*) , parameter   :: subname='(esmFldsExchange_ufs)'
 
     ! component name
-    character(len=CS) :: lnd_name = ''    
+    character(len=CS) :: lnd_name = ''
     !--------------------------------------
 
     rc = ESMF_SUCCESS
@@ -640,7 +642,11 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compice)        , fldname, rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
-             call addmap_from(compatm, fldname, compice, maptype, 'one', 'unset')
+             if ( trim(test_bilnr) == 'true') then
+                call addmap_from(compatm, fldname, compice, mapbilnr, 'one', 'unset')
+             else
+                call addmap_from(compatm, fldname, compice, maptype, 'one', 'unset')
+             end if
              call addmrg_to(compice, fldname, mrg_from=compatm, mrg_fld=fldname, mrg_type='copy')
           end if
        end if
@@ -814,8 +820,8 @@ contains
                 call addmrg_to(complnd, fldname, mrg_from=compatm, mrg_fld=fldname, mrg_type='copy')
              end if
           end if
-       end do 
-       deallocate(flds)       
+       end do
+       deallocate(flds)
     end if ! lm4
 
   end subroutine esmFldsExchange_ufs

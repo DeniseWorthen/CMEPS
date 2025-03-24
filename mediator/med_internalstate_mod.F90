@@ -51,6 +51,7 @@ module med_internalstate_mod
 
   ! debug
   character(len=CS), public :: test_mask
+  character(len=CS), public :: test_bilnr
 
   ! Atmosphere-ocean flux algorithm
   character(len=CS), public :: aoflux_code   ! valid values are [cesm,ccpp]

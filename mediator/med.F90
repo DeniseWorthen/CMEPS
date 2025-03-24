@@ -52,7 +52,7 @@ module MED
   use esmFldsExchange_hafs_mod , only : esmFldsExchange_hafs
   use med_phases_profile_mod   , only : med_phases_profile_finalize
   ! debug
-  use med_internalstate_mod    , only : test_mask
+  use med_internalstate_mod    , only : test_mask, test_bilnr
 
   implicit none
   private
@@ -837,6 +837,18 @@ contains
        write(logunit,*) '========================================================'
        write(logunit,*)
     end if
+
+    test_bilnr = 'false'
+    call NUOPC_CompAttributeGet(gcomp, name='test_bilnr', value=test_bilnr, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_LogWrite('test_bilnr = '// trim(test_bilnr), ESMF_LOGMSG_INFO)
+    if (maintask) then
+       write(logunit,*) '========================================================'
+       write(logunit,'(a)')trim(subname)//' Mediator test_bilnr is '//trim(test_bilnr)
+       write(logunit,*) '========================================================'
+       write(logunit,*)
+    end if
+
     ! Initialize memory for fldlistTo and fldlistFr - this is need for the calls below for the
     ! advertise phase
     call med_fldlist_init1(ncomps)
@@ -2281,9 +2293,9 @@ contains
     use ESMF                  , only : ESMF_ClockGetAlarmList
     use NUOPC                 , only : NUOPC_CompCheckSetClock, NUOPC_CompAttributeGet
     use NUOPC_Mediator        , only : NUOPC_MediatorGet
-    ! NUOPC_shr_methods is now in cesm_share and cdeps 
+    ! NUOPC_shr_methods is now in cesm_share and cdeps
     use nuopc_shr_methods, only : AlarmInit
-    
+
     ! input/output variables
     type(ESMF_GridComp)  :: gcomp
     integer, intent(out) :: rc
