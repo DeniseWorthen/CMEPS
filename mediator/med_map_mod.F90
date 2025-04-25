@@ -10,7 +10,7 @@ module med_map_mod
   use med_utils_mod         , only : chkerr    => med_utils_ChkErr
   use perf_mod              , only : t_startf, t_stopf
   use shr_log_mod           , only : shr_log_error
-  
+
   implicit none
   private
 
@@ -300,7 +300,7 @@ contains
   subroutine med_map_routehandles_initfrom_fieldbundle(n1, n2, FBsrc, FBdst, mapindex, RouteHandle, rc)
 
     use ESMF            , only : ESMF_LogWrite, ESMF_LOGMSG_INFO, ESMF_SUCCESS, ESMF_LogFlush
-    use ESMF            , only : ESMf_Field, ESMF_FieldBundle, ESMF_RouteHandle
+    use ESMF            , only : ESMF_Field, ESMF_FieldBundle, ESMF_RouteHandle
     use med_methods_mod , only : med_methods_FB_getFieldN
 
     !---------------------------------------------
@@ -485,21 +485,21 @@ contains
             ignoreUnmatchedIndices=.true., &
             srcTermProcessing=srcTermProcessing_Value, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
-    else if (mapindex == mapbilnr) then
-       if (maintask) then
-          write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
-       end if
-       call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mapbilnr), &
-            srcMaskValues=(/srcMaskValue/),            &
-            dstMaskValues=(/dstMaskValue/),            &
-            regridmethod=ESMF_REGRIDMETHOD_BILINEAR,   &
-            polemethod=polemethod,                     &
-            srcTermProcessing=srcTermProcessing_Value, &
-            ignoreDegenerate=.true.,                   &
-            dstStatusField=lfield,                     &
-            unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, rc=rc)
-       if (chkerr(rc,__LINE__,u_FILE_u)) return
-    else if (mapindex == mapbilnr_uv3d) then
+    else if (mapindex == mapbilnr ) then
+          if (maintask) then
+             write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
+          end if
+          call ESMF_FieldRegridStore(fldsrc, flddst, routehandle=routehandles(mapbilnr), &
+               srcMaskValues=(/srcMaskValue/),            &
+               dstMaskValues=(/dstMaskValue/),            &
+               regridmethod=ESMF_REGRIDMETHOD_BILINEAR,   &
+               polemethod=polemethod,                     &
+               srcTermProcessing=srcTermProcessing_Value, &
+               ignoreDegenerate=.true.,                   &
+               dstStatusField=lfield,                     &
+               unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, rc=rc)
+          if (chkerr(rc,__LINE__,u_FILE_u)) return
+    else if (mapindex == mapbilnr_uv3d ) then
        if (maintask) then
           write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
        end if
@@ -555,8 +555,7 @@ contains
             srcTermProcessing=srcTermProcessing_Value, &
             ignoreDegenerate=.true.,                   &
             dstStatusField=lfield,                     &
-            unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
-            rc=rc)
+            unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     else if (mapindex == mapconsf_aofrac) then
        if (maintask) then
@@ -570,8 +569,7 @@ contains
             srcTermProcessing=srcTermProcessing_Value, &
             ignoreDegenerate=.true.,                   &
             dstStatusField=lfield,                     &
-            unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
-            rc=rc)
+            unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     else if (mapindex == mapconsf_uv3d) then
        if (maintask) then
@@ -586,8 +584,7 @@ contains
             srcTermProcessing=srcTermProcessing_Value, &
             ignoreDegenerate=.true.,                   &
             dstStatusField=lfield,                     &
-            unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
-            rc=rc)
+            unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     else if (mapindex == mapconsd .or. mapindex == mapnstod_consd) then
        if (maintask) then
@@ -601,10 +598,9 @@ contains
             srcTermProcessing=srcTermProcessing_Value, &
             ignoreDegenerate=.true.,                   &
             dstStatusField=lfield,                     &
-            unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
-            rc=rc)
+            unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
-    else if (mapindex == mappatch) then
+    else if (mapindex == mappatch ) then
        if (maintask) then
           write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//' for '//trim(string)
        end if
@@ -981,7 +977,7 @@ contains
     use ESMF                  , only : ESMF_KIND_R8
     use ESMF                  , only : ESMF_Region_Flag, ESMF_REGION_SELECT, ESMF_REGION_TOTAL
     use med_internalstate_mod , only : nmappers, mapfcopy
-    use med_internalstate_mod , only : mappatch_uv3d, mappatch, mapbilnr_uv3d, mapbilnr, mapconsf_uv3d
+    use med_internalstate_mod , only : mappatch_uv3d, mappatch, mapbilnr_uv3d, mapconsf_uv3d, mapbilnr
     use med_internalstate_mod , only : packed_data_type
     use med_methods_mod       , only : Field_diagnose => med_methods_Field_diagnose
 
