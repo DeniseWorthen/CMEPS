@@ -16,7 +16,7 @@ module med_phases_restart_mod
   use pio                     , only : file_desc_t
 #ifndef CESMCOUPLED
   use shr_is_restart_fh_mod   , only : init_is_restart_fh, is_restart_fh, is_restart_fh_type
-  use shr_is_restart_fh_mod   , only : log_restart_fh
+  !use shr_is_restart_fh_mod   , only : log_restart_fh
 #endif
   use shr_log_mod             , only : shr_log_error
 
@@ -492,8 +492,8 @@ contains
        call med_io_close(io_file, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
 #ifndef CESMCOUPLED
-       call log_restart_fh(nextTime, startTime, 'cmeps', rc=rc)
-       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+       !call log_restart_fh(nextTime, startTime, 'cmeps', rc=rc)
+       !if (ChkErr(rc,__LINE__,u_FILE_u)) return
 #endif
     endif
 

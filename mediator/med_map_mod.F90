@@ -89,7 +89,7 @@ contains
     use esmFlds               , only : med_fldList_GetfldListFr, med_fldlist_type
     use esmFlds               , only : med_fld_GetFldInfo, med_fldList_entry_type
     use med_internalstate_mod , only : mapunset, compname, write_dststatus
-    use med_internalstate_mod , only : ncomps, nmappers, compname, mapnames, mapfcopy
+    use med_internalstate_mod , only : ncomps, nmappers, compname, mapnames, mapfcopy, mappatch_uv3d, mapbilnr_uv3d
 
     ! input/output variables
     type(ESMF_GridComp)          :: gcomp
@@ -261,20 +261,22 @@ contains
 
                 ! Create is_local%wrap%field_NormOne(n1,n2,mapindex) if appropriate (don't create if mapping is redist)
                 do mapindex = 1,nmappers
-                   if (mapindex /= mapfcopy .and. med_map_RH_is_created(is_local%wrap%RH,n1,n2,mapindex,rc=rc)) then
-                      is_local%wrap%field_NormOne(n1,n2,mapindex) = ESMF_FieldCreate(mesh_dst, &
-                           ESMF_TYPEKIND_R8, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
-                      if (chkerr(rc,__LINE__,u_FILE_u)) return
-                      call ESMF_FieldGet(is_local%wrap%field_NormOne(n1,n2,mapindex), farrayptr=dataptr, rc=rc)
-                      if (chkerr(rc,__LINE__,u_FILE_u)) return
-                      dataptr(:) = czero
-                      call med_map_field(field_src=field_src, field_dst=is_local%wrap%field_NormOne(n1,n2,mapindex), &
-                           routehandles=is_local%wrap%RH(n1,n2,:), maptype=mapindex, rc=rc)
-                      if (chkerr(rc,__LINE__,u_FILE_u)) return
-                      if (maintask) then
-                         write(logunit,'(a)') trim(subname)//' created field_NormOne for '&
-                              //trim(compname(n1))//'->'//trim(compname(n2))//' with mapping '&
-                              //trim(mapnames(mapindex))
+                   if (mapindex /= mapfcopy .and. mapindex /= mappatch_uv3d .and. mapindex /= mapbilnr_uv3d ) then
+                      if (med_map_RH_is_created(is_local%wrap%RH,n1,n2,mapindex,rc=rc)) then
+                         is_local%wrap%field_NormOne(n1,n2,mapindex) = ESMF_FieldCreate(mesh_dst, &
+                              ESMF_TYPEKIND_R8, meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
+                         if (chkerr(rc,__LINE__,u_FILE_u)) return
+                         call ESMF_FieldGet(is_local%wrap%field_NormOne(n1,n2,mapindex), farrayptr=dataptr, rc=rc)
+                         if (chkerr(rc,__LINE__,u_FILE_u)) return
+                         dataptr(:) = czero
+                         call med_map_field(field_src=field_src, field_dst=is_local%wrap%field_NormOne(n1,n2,mapindex), &
+                              routehandles=is_local%wrap%RH(n1,n2,:), maptype=mapindex, rc=rc)
+                         if (chkerr(rc,__LINE__,u_FILE_u)) return
+                         if (maintask) then
+                            write(logunit,'(a)') trim(subname)//' created field_NormOne for '&
+                                 //trim(compname(n1))//'->'//trim(compname(n2))//' with mapping '&
+                                 //trim(mapnames(mapindex))
+                         end if
                       end if
                    end if
                 end do ! end of loop over map_index mappers
@@ -1559,7 +1561,6 @@ contains
     character(len=CS)   :: uname, vname
     character(len=*), parameter :: subname=' (med_map_mod:med_map_uv_cart3d) '
     !-------------------------------------------------------------------------------
-
     rc = ESMF_SUCCESS
 
     lmap_stress = .false.
@@ -1646,13 +1647,13 @@ contains
        first_time = .false.
     end if
 
-    ! get pointers to source and destination data that will be filled in with rotation to cart3d
-    call ESMF_FieldGet(uv2d_src, farrayPtr=data2d_src, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-    call ESMF_FieldGet(uv2d_dst, farrayPtr=data2d_dst, rc=rc)
-    if (chkerr(rc,__LINE__,u_FILE_u)) return
-
     if (.not. lmap_stress) then
+       ! get pointers to source and destination data that will be filled in with rotation to cart3d
+       call ESMF_FieldGet(uv2d_src, farrayPtr=data2d_src, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_FieldGet(uv2d_dst, farrayPtr=data2d_dst, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+
        ! fill ungridded dimensions w/ u and v
        data2d_src(1,:) = data_u_src(:)
        data2d_src(2,:) = data_v_src(:)
@@ -1666,6 +1667,12 @@ contains
        data_u_dst(:) = data2d_dst(1,:)
        data_v_dst(:) = data2d_dst(2,:)
     else
+       ! get pointers to source and destination data that will be filled in with rotation to cart3d
+       call ESMF_FieldGet(uv3d_src, farrayPtr=data2d_src, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_FieldGet(uv3d_dst, farrayPtr=data2d_dst, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+
        ! Rotate Source data to cart3d
        do n = 1,size(data_u_src)
           lon = ownedElemCoords_src(2*n-1)
@@ -1684,7 +1691,7 @@ contains
             routehandles=routehandles, maptype=mapindex, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
 
-       ! ! Rotate destination data back from cart3d to original
+       ! Rotate destination data back from cart3d to original
        do n = 1,size(data_u_dst)
           lon = ownedElemCoords_dst(2*n-1)
           lat = ownedElemCoords_dst(2*n)
