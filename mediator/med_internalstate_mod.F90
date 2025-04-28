@@ -690,13 +690,13 @@ contains
     if (is_local%wrap%comp_present(compice)) defaultMasks(compice,:) = 0
     if (is_local%wrap%comp_present(compwav)) defaultMasks(compwav,:) = 0
     if ( coupling_mode(1:3) == 'ufs') then
-       if (is_local%wrap%comp_present(compatm)) defaultMasks(compatm,:) = 1
+       if (is_local%wrap%comp_present(compatm)) defaultMasks(compatm,2) = 1
     endif
-    if ( trim(coupling_mode) == 'hafs') then
+    if ( trim(coupling_mode) == 'hafs') then  ! not hafs.mom6
        if (is_local%wrap%comp_present(compatm)) defaultMasks(compatm,1) = 1
     endif
-    if ( trim(coupling_mode) /= 'cesm') then
-       if (is_local%wrap%comp_present(compatm) .and. trim(atm_name(1:4)) == 'datm') then
+    if ( coupling_mode /= 'cesm') then
+       if (is_local%wrap%comp_present(compatm) .and. atm_name(1:4) == 'datm') then
           defaultMasks(compatm,1) = 0
        end if
     end if

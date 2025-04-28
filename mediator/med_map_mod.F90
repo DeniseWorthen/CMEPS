@@ -33,7 +33,7 @@ module med_map_mod
      module procedure med_map_RH_is_created_RH1d
   end interface
 
-  type(ESMF_Field) :: uv2d_src, uv2d_dst ! needed for 3d mapping of u,v vector pairs
+  type(ESMF_Field) :: uv2d_src, uv2d_dst ! needed for 3d mapping of u,v vector pairs, patch and bilnr
   type(ESMF_Field) :: uv3d_src, uv3d_dst ! needed for 3d consf mapping of u,v vector pairs
 
   ! private module variables
@@ -1621,6 +1621,7 @@ contains
     if (first_time) then
        ! Create two module fields -  vec_src2d and vec_dst2d -  that contain
        ! u,v fields in an undistributed dimension
+       ! patch and bilinear use vector regrid RH directly
        uv2d_src = ESMF_FieldCreate(lmesh_src, ESMF_TYPEKIND_R8, name='src2d', &
             ungriddedLbound=(/1/), ungriddedUbound=(/2/), gridToFieldMap=(/2/), &
             meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
