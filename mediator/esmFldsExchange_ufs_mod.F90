@@ -32,7 +32,7 @@ contains
     use med_internalstate_mod , only : compmed, compatm, compocn, compice, complnd, compwav, ncomps
     use med_internalstate_mod , only : mapbilnr, mapconsf, mapconsd, mappatch, mappatch_uv3d
     use med_internalstate_mod , only : mapfcopy, mapnstod, mapnstod_consd, mapnstod_consf
-    use med_internalstate_mod , only : mapconsf_aofrac, mapbilnr_nstod, mapconsf_uv3d
+    use med_internalstate_mod , only : mapconsf_aofrac, mapbilnr_nstodd
     use med_internalstate_mod , only : coupling_mode, mapnames, samegrid_atmlnd
     use esmFlds               , only : med_fldList_type
     use esmFlds               , only : addfld_to => med_fldList_addfld_to
@@ -468,11 +468,11 @@ contains
                   fldchk(is_local%wrap%FBImp(compice,compice), 'Fioi_'//fldname, rc=rc) .and. &
                   fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_'//fldname, rc=rc)) then
                 call addmap_from(compice, 'Fioi_'//fldname, compocn, mapfcopy, 'unset', 'unset')
-                if (mapuv_with_cart3d) then
-                   call addmap_from(compatm, 'Faxa_'//fldname, compocn, mapconsf_uv3d, 'aofrac', 'unset')
-                else
+                !if (mapuv_with_cart3d) then
+                !   call addmap_from(compatm, 'Faxa_'//fldname, compocn, mapconsf_uv3d, 'aofrac', 'unset')
+                !else
                    call addmap_from(compatm, 'Faxa_'//fldname, compocn, mapconsf_aofrac, 'aofrac', 'unset')
-                end if
+                !end if
                 call addmrg_to(compocn, 'Foxx_'//fldname, &
                      mrg_from=compice, mrg_fld='Fioi_'//fldname, mrg_type='merge', mrg_fracname='ifrac')
                 call addmrg_to(compocn, 'Foxx_'//fldname, &
