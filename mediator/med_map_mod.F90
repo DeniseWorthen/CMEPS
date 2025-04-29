@@ -10,7 +10,7 @@ module med_map_mod
   use med_utils_mod         , only : chkerr    => med_utils_ChkErr
   use perf_mod              , only : t_startf, t_stopf
   use shr_log_mod           , only : shr_log_error
-  
+
   implicit none
   private
 
@@ -1459,6 +1459,9 @@ contains
     use ESMF          , only : ESMF_FieldBundle, ESMF_FieldBundleGet
     use ESMF          , only : ESMF_RouteHandle
     use med_constants_mod , only : shr_const_pi
+    ! debug
+    use ESMF,  only : operator(==)
+    use ESMF, only : ESMF_CoordSys_Flag, ESMF_COORDSYS_SPH_DEG, ESMF_COORDSYS_SPH_RAD, ESMF_COORDSYS_CART
 
     ! input/output variables
     type(ESMF_FieldBundle) , intent(in)    :: FBsrc
@@ -1492,9 +1495,19 @@ contains
     real(r8), parameter :: deg2rad = shr_const_pi/180.0_R8  ! deg to rads
     logical             :: first_time = .true.
     character(len=*), parameter :: subname=' (med_map_mod:med_map_uv_cart3d) '
+    ! debug
+    character(CL) :: fbname
+    integer, save :: cnt = 0
+    type(ESMF_CoordSys_Flag)      :: coordsys
     !-------------------------------------------------------------------------------
 
     rc = ESMF_SUCCESS
+    call ESMF_FieldBundleGet(FBSrc, name=fbname, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    !print *,'FB Src = ',trim(fbname)
+    call ESMF_FieldBundleGet(FBDst, name=fbname, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    !print *,'FB Dst = ',trim(fbname)
 
     ! Get fields for atm u,v velocities
     call ESMF_FieldBundleGet(FBSrc, fieldName='Sa_u', field=usrc, rc=rc)
@@ -1525,8 +1538,13 @@ contains
     call ESMF_MeshGet(lmesh_src, spatialDim=spatialDim, numOwnedElements=numOwnedElements, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     allocate(ownedElemCoords_src(spatialDim*numOwnedElements))
-    call ESMF_MeshGet(lmesh_src, ownedElemCoords=ownedElemCoords_src)
+    call ESMF_MeshGet(lmesh_src, ownedElemCoords=ownedElemCoords_src, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_MeshGet(lmesh_src, coordSys=coordsys, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+    if (coordsys == ESMF_COORDSYS_SPH_DEG)print *,'YYY0 source mesh in DEG!!'
+    if (coordsys == ESMF_COORDSYS_SPH_RAD)print *,'YYY0 source mesh in RAD!!'
 
     ! Get destination mesh and coordinates
     call ESMF_FieldGet(udst, mesh=lmesh_dst, rc=rc)
@@ -1534,8 +1552,13 @@ contains
     call ESMF_MeshGet(lmesh_dst, spatialDim=spatialDim, numOwnedElements=numOwnedElements, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     allocate(ownedElemCoords_dst(spatialDim*numOwnedElements))
-    call ESMF_MeshGet(lmesh_dst, ownedElemCoords=ownedElemCoords_dst)
+    call ESMF_MeshGet(lmesh_dst, ownedElemCoords=ownedElemCoords_dst, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
+    call ESMF_MeshGet(lmesh_dst, coordSys=coordsys, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+    if (coordsys == ESMF_COORDSYS_SPH_DEG)print *,'YYY0 dest mesh in DEG!!'
+    if (coordsys == ESMF_COORDSYS_SPH_RAD)print *,'YYY0 dest mesh in RAD!!'
 
     if (first_time) then
        ! Create two module fields -  vec_src3d and vec_dst3d -  that contain
@@ -1549,6 +1572,7 @@ contains
             meshloc=ESMF_MESHLOC_ELEMENT, rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
        first_time = .false.
+       cnt = cnt + 1
     end if
 
     ! get pointers to source and destination data that will be filled in with rotation to cart3d
@@ -1561,16 +1585,16 @@ contains
     do n = 1,size(data_u_src)
        lon = ownedElemCoords_src(2*n-1)
        lat = ownedElemCoords_src(2*n)
-       sinlon = sin(lon*deg2rad)
-       coslon = cos(lon*deg2rad)
-       sinlat = sin(lat*deg2rad)
-       coslat = cos(lat*deg2rad)
+       sinlon = sin(lon)
+       coslon = cos(lon)
+       sinlat = sin(lat)
+       coslat = cos(lat)
        data2d_src(1,n) = -coslon*sinlat*data_v_src(n) - sinlon*data_u_src(n) ! x
        data2d_src(2,n) = -sinlon*sinlat*data_v_src(n) + coslon*data_u_src(n) ! y
        data2d_src(3,n) =  coslat*data_v_src(n)                               ! z
     enddo
 
-    ! Map all thee vector fields at once from source to destination grid
+    ! Map all three vector fields at once from source to destination grid
     call med_map_field(field_src=uv3d_src, field_dst=uv3d_dst, &
          routehandles=routehandles, maptype=mapindex, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
