@@ -32,7 +32,7 @@ contains
     use med_internalstate_mod , only : compmed, compatm, compocn, compice, complnd, compwav, ncomps
     use med_internalstate_mod , only : mapbilnr, mapconsf, mapconsd, mappatch, mappatch_uv3d
     use med_internalstate_mod , only : mapfcopy, mapnstod, mapnstod_consd, mapnstod_consf
-    use med_internalstate_mod , only : mapconsf_aofrac, mapbilnr_nstodd
+    use med_internalstate_mod , only : mapconsf_aofrac, mapbilnr_nstod
     use med_internalstate_mod , only : coupling_mode, mapnames, samegrid_atmlnd
     use esmFlds               , only : med_fldList_type
     use esmFlds               , only : addfld_to => med_fldList_addfld_to
