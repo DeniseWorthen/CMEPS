@@ -1371,7 +1371,7 @@ contains
 
             call shr_log_error(trim(subname)//": ERROR fieldStatus not supported ", rc=rc)
             return
-            
+
          endif   ! fieldStatus
 
       enddo   ! nflds
