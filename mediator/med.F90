@@ -1707,7 +1707,7 @@ contains
     !---------------------------------------
 
     if (first_call) then
-
+       if (maintask) call ufs_trace("cmeps", "FirstCallDataInitialize", "B")
        ! Allocate module variable
        allocate(compDone(ncomps))
 
@@ -1989,7 +1989,7 @@ contains
       ! the correct timestamps, which also indicates that the actual
       ! data has been transferred reliably, and CMEPS can safely use it.
 
-      if (maintask) call ufs_trace("cmeps", "DataInitialize", "E")
+      if (maintask) call ufs_trace("cmeps", "FirstCallDataInitialize", "E")
       RETURN
 
     endif  ! end first_call if-block
