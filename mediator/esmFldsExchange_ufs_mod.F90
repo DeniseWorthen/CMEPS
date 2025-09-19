@@ -6,6 +6,8 @@ module esmFldsExchange_ufs_mod
   ! mapping and merging
   !---------------------------------------------------------------------
 
+  use med_kind_mod , only : CX=>SHR_KIND_CX, CS=>SHR_KIND_CS, CL=>SHR_KIND_CL, R8=>SHR_KIND_R8
+
   implicit none
   public
 
@@ -13,6 +15,15 @@ module esmFldsExchange_ufs_mod
 
   integer :: atm2lnd_maptype
   integer :: lnd2atm_maptype
+
+  ! optional mapping files
+  character(len=CL) :: atm2ice_bilnr = 'unset'
+  character(len=CL) :: atm2ice_patchuv = 'unset'
+  character(len=CL) :: atm2ocn_patchuv = 'unset'
+  character(len=CL) :: atm2wav_bilnr = 'unset'
+
+  character(len=CL) :: wav2ocn_bilnr_nstod = 'unset'
+  character(len=CL) :: ocn2wav_bilnr_nstod = 'unset'
 
   character(*), parameter :: u_FILE_u = &
        __FILE__
@@ -25,7 +36,7 @@ contains
 
     use ESMF
     use NUOPC
-    use med_kind_mod          , only : CX=>SHR_KIND_CX, CS=>SHR_KIND_CS, CL=>SHR_KIND_CL, R8=>SHR_KIND_R8
+
     use med_utils_mod         , only : chkerr => med_utils_chkerr
     use med_methods_mod       , only : fldchk => med_methods_FB_FldChk
     use med_internalstate_mod , only : InternalState
@@ -99,6 +110,61 @@ contains
        if (trim(cvalue) == 'false') then
           mapuv_with_cart3d = .false.
        end if
+    end if
+
+    !character(len=CL) :: atm2ice_bilnr = 'unset'
+    !character(len=CL) :: atm2ice_patchuv = 'unset'
+    !character(len=CL) :: atm2ocn_patchuv = 'unset'
+    !character(len=CL) :: atm2wav_bilnr = 'unset'
+    !character(len=CL) :: wav2ocn_bilnr_nstod = 'unset'
+    !character(len=CL) :: ocn2wav_bilnr_nstod = 'unset'
+
+    ! to ice
+    call NUOPC_CompAttributeGet(gcomp, name='map_atm2ice_bilnr', isPresent=isPresent, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent) then
+       call NUOPC_CompAttributeGet(gcomp, name='map_atm2ice_bilnr', value=cvalue, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       atm2ice_bilnr = trim(cvalue)
+    end if
+    call NUOPC_CompAttributeGet(gcomp, name='map_atm2ice_patchuv', isPresent=isPresent, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent) then
+       call NUOPC_CompAttributeGet(gcomp, name='map_atm2ice_patchuv', value=cvalue, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       atm2ice_patchuv = trim(cvalue)
+    end if
+
+    ! to ocn
+    call NUOPC_CompAttributeGet(gcomp, name='map_atm2ocn_patchuv', isPresent=isPresent, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent) then
+       call NUOPC_CompAttributeGet(gcomp, name='map_atm2ocn_patchuv', value=cvalue, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       atm2ocn_patchuv = trim(cvalue)
+    end if
+    call NUOPC_CompAttributeGet(gcomp, name='map_wav2ocn_bilnr_nstod', isPresent=isPresent, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent) then
+       call NUOPC_CompAttributeGet(gcomp, name='map_wav2ocn_bilnr_nstod', value=cvalue, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       wav2ocn_bilnr_nstod = trim(cvalue)
+    end if
+
+    ! to wav
+    call NUOPC_CompAttributeGet(gcomp, name='map_atm2wav_bilnr', isPresent=isPresent, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent) then
+       call NUOPC_CompAttributeGet(gcomp, name='map_atm2wav_bilnr', value=cvalue, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       atm2wav_bilnr = trim(cvalue)
+    end if
+    call NUOPC_CompAttributeGet(gcomp, name='map_ocn2wav_bilnr_nstod', isPresent=isPresent, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent) then
+       call NUOPC_CompAttributeGet(gcomp, name='map_ocn2wav_bilnr_nstod', value=cvalue, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       ocn2wav_bilnr_nstod = trim(cvalue)
     end if
 
     if (trim(coupling_mode) == 'ufs.nfrac.aoflux' .or. trim(coupling_mode) == 'ufs.frac.aoflux') then
@@ -312,7 +378,7 @@ contains
        deallocate(flds)
     end if
 
-    ! to atm: unmerged from mediator, merge will be done under UFSATM/CCPP composite step
+    ! to atm: unmerged from mediator, merge will be done under FV3/CCPP composite step
     ! - zonal surface stress, meridional surface stress
     ! - surface latent heat flux,
     ! - surface sensible heat flux
@@ -469,7 +535,7 @@ contains
                   fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_'//fldname, rc=rc)) then
                 call addmap_from(compice, 'Fioi_'//fldname, compocn, mapfcopy, 'unset', 'unset')
                 if (mapuv_with_cart3d) then
-                   call addmap_from(compatm, 'Faxa_'//fldname, compocn, mapconsf_uv3d, 'aofrac', 'unset')
+                   call addmap_from(compatm, 'Faxa_'//fldname, compocn, mapconsf_uv3d, 'aofrac', atm2ocn_patchuv)
                 else
                    call addmap_from(compatm, 'Faxa_'//fldname, compocn, mapconsf_aofrac, 'aofrac', 'unset')
                 end if
@@ -597,7 +663,7 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compocn)        , fldname, rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compwav,compwav), fldname, rc=rc)) then
-             call addmap_from(compwav, fldname, compocn, mapbilnr_nstod, 'one', 'unset')
+             call addmap_from(compwav, fldname, compocn, mapbilnr_nstod, 'one', wav2ocn_bilnr_nstod)
              call addmrg_to(compocn, fldname, mrg_from=compwav, mrg_fld=fldname, mrg_type='copy')
           end if
        end if
@@ -656,7 +722,7 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compice)        , fldname, rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
-             call addmap_from(compatm, fldname, compice, mapbilnr, 'one', 'unset')
+             call addmap_from(compatm, fldname, compice, mapbilnr, 'one', atm2ice_bilnr)
              call addmrg_to(compice, fldname, mrg_from=compatm, mrg_fld=fldname, mrg_type='copy')
           end if
        end if
@@ -676,7 +742,7 @@ contains
           if ( fldchk(is_local%wrap%FBexp(compice)        , fldname, rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
              if (mapuv_with_cart3d) then
-                call addmap_from(compatm, fldname, compice, mappatch_uv3d, 'one', 'unset')
+                call addmap_from(compatm, fldname, compice, mappatch_uv3d, 'one', atm2ice_patchuv)
              else
                 call addmap_from(compatm, fldname, compice, mappatch, 'one', 'unset')
              end if
@@ -747,7 +813,7 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compwav)        , fldname, rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
-             call addmap_from(compatm, fldname, compwav, mapbilnr, 'one', 'unset')
+             call addmap_from(compatm, fldname, compwav, mapbilnr, 'one', atm2wav_bilnr)
              call addmrg_to(compwav, fldname, mrg_from=compatm, mrg_fld=fldname, mrg_type='copy')
           end if
        end if
@@ -770,7 +836,7 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compwav)        , fldname, rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compice,compice), fldname, rc=rc)) then
-             call addmap_from(compice, fldname, compwav, mapbilnr_nstod , 'one', 'unset')
+             call addmap_from(compice, fldname, compwav, mapbilnr_nstod , 'one', ocn2wav_bilnr_nstod)
              call addmrg_to(compwav, fldname, mrg_from=compice, mrg_fld=fldname, mrg_type='copy')
           end if
        end if
@@ -793,7 +859,7 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compwav)        , fldname, rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compocn,compocn), fldname, rc=rc)) then
-             call addmap_from(compocn, fldname, compwav, mapbilnr_nstod , 'one', 'unset')
+             call addmap_from(compocn, fldname, compwav, mapbilnr_nstod , 'one', ocn2wav_bilnr_nstod)
              call addmrg_to(compwav, fldname, mrg_from=compocn, mrg_fld=fldname, mrg_type='copy')
           end if
        end if
