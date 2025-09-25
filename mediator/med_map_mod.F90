@@ -485,16 +485,10 @@ contains
           write(logunit,'(A)') trim(subname)//' creating RH '//trim(mapname)//&
                ' via input file '//trim(mapfile)//' for '//trim(string)
        end if
-    else
-          call ESMF_FieldSMMStore(fldsrc, flddst, mapfile, routehandle=routehandles(mapindex), &
-               ignoreUnmatchedIndices=.true., &
-               srcTermProcessing=srcTermProcessing_Value, rc=rc)
-          if (chkerr(rc,__LINE__,u_FILE_u)) return
-          if (use_saved_routehandles) then
-             call ESMF_RouteHandleWrite(routehandles(mapindex), fileName=trim(rh_filename), rc=rc)
-             if (chkerr(rc,__LINE__,u_FILE_u)) return
-          endif
-       end if
+       call ESMF_FieldSMMStore(fldsrc, flddst, mapfile, routehandle=routehandles(mapindex), &
+            ignoreUnmatchedIndices=.true., &
+            srcTermProcessing=srcTermProcessing_Value, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
     else if (mapindex == mapbilnr ) then
        if (rh_file_exist .and. use_saved_routehandles) then
           routehandles(mapbilnr) = ESMF_RouteHandleCreate(fileName=trim(rh_filename), rc=rc)
