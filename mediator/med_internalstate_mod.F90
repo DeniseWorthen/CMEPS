@@ -109,6 +109,7 @@ module med_internalstate_mod
   end type packed_data_type
 
   logical, public :: write_dststatus = .false.
+  logical, public :: use_saved_routehandles = .false.
 
   ! Mesh info
   type, public ::  mesh_info_type
@@ -459,6 +460,14 @@ contains
     if (write_dststatus) then
        allocate(is_local%wrap%FBDstStatus(ncomps))
     end if
+
+    ! Allow use of saved RHs
+    call NUOPC_CompAttributeGet(gcomp, name='use_saved_routehandles', value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent .and. isSet) use_saved_routehandles=(trim(cvalue) == "true")
+    write(msgString,*) trim(subname)//': Mediator use_saved_routehandles is ',use_saved_routehandles
+    call ESMF_LogWrite(trim(msgString), ESMF_LOGMSG_INFO)
+
 
     ! Initialize flag for background fill using data
     is_local%wrap%med_data_active(:,:) = .false.
