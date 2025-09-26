@@ -366,6 +366,7 @@ contains
     use med_internalstate_mod , only : coupling_mode
     use med_internalstate_mod , only : defaultMasks
     use med_constants_mod     , only : ispval_mask => med_constants_ispval_mask
+    use ufs_trace_mod
 
     ! input/output variables
     integer                    , intent(in)    :: n1
@@ -410,6 +411,7 @@ contains
     lfield = ESMF_FieldCreate(mesh_dst, ESMF_TYPEKIND_I4, meshloc=ESMF_MESHLOC_ELEMENT, name=trim(dstatname), rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
+    if (maintask) call ufs_trace("cmeps", "RHinit"//trim(dstatname), "B")
     ! set src and dst masking using defaults
     srcMaskValue = defaultMasks(n1,1)
     dstMaskValue = defaultMasks(n2,2)
@@ -651,6 +653,7 @@ contains
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     end if
 
+    if (maintask) call ufs_trace("cmeps", "RHinit"//trim(dstatname), "E")
   end subroutine med_map_routehandles_initfrom_field
 
   !================================================================================
