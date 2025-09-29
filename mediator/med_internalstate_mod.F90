@@ -109,6 +109,7 @@ module med_internalstate_mod
   end type packed_data_type
 
   logical, public :: write_dststatus = .false.
+  logical, public :: rw_routehandles = .false.
 
   ! Mesh info
   type, public ::  mesh_info_type
@@ -450,6 +451,12 @@ contains
        write(logunit,*)
     end if
 
+    ! Allow read/write of routehandles
+    call NUOPC_CompAttributeGet(gcomp, name='rw_routehandles', value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
+    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent .and. isSet) rw_routehandles=(trim(cvalue) == "true")
+    write(msgString,*) trim(subname)//': Mediator rw_routehandles is ',rw_routehandles
+    call ESMF_LogWrite(trim(msgString), ESMF_LOGMSG_INFO)
     ! Allocate dststatus FB if needed
     call NUOPC_CompAttributeGet(gcomp, name='write_dststatus', value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return

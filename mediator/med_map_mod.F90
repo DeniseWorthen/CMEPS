@@ -350,20 +350,20 @@ contains
     use ESMF                  , only : ESMF_RouteHandle, ESMF_RouteHandlePrint, ESMF_Field, ESMF_MAXSTR
     use ESMF                  , only : ESMF_PoleMethod_Flag, ESMF_POLEMETHOD_ALLAVG, ESMF_POLEMETHOD_NONE
     use ESMF                  , only : ESMF_FieldSMMStore, ESMF_FieldRedistStore, ESMF_FieldRegridStore
-    use ESMF                  , only : ESMF_RouteHandleIsCreated, ESMF_RouteHandleCreate
+    use ESMF                  , only : ESMF_RouteHandleIsCreated, ESMF_RouteHandleCreate, ESMF_RouteHandleWrite
     use ESMF                  , only : ESMF_REGRIDMETHOD_BILINEAR, ESMF_REGRIDMETHOD_PATCH
     use ESMF                  , only : ESMF_REGRIDMETHOD_CONSERVE, ESMF_NORMTYPE_DSTAREA, ESMF_NORMTYPE_FRACAREA
     use ESMF                  , only : ESMF_UNMAPPEDACTION_IGNORE, ESMF_REGRIDMETHOD_NEAREST_STOD
     use ESMF                  , only : ESMF_EXTRAPMETHOD_NEAREST_STOD
     use ESMF                  , only : ESMF_Mesh, ESMF_MeshLoc, ESMF_MESHLOC_ELEMENT, ESMF_TYPEKIND_I4
     use ESMF                  , only : ESMF_MeshGet, ESMF_DistGridGet, ESMF_DistGrid, ESMF_TYPEKIND_R8
-    use ESMF                  , only : ESMF_FieldGet, ESMF_FieldCreate, ESMF_FieldDestroy
+    use ESMF                  , only : ESMF_FieldGet, ESMF_FieldCreate, ESMF_FieldDestroy, ESMF_FAILURE
     use med_internalstate_mod , only : mapbilnr, mapconsf, mapconsd, mappatch, mappatch_uv3d, mapbilnr_uv3d, mapfcopy
     use med_internalstate_mod , only : mapunset, mapnames, nmappers
     use med_internalstate_mod , only : mapnstod, mapnstod_consd, mapnstod_consf, mapnstod_consd
     use med_internalstate_mod , only : mapfillv_bilnr, mapbilnr_nstod, mapconsf_aofrac, mapconsf_uv3d
     use med_internalstate_mod , only : compocn, compwav, complnd, compname, compatm
-    use med_internalstate_mod , only : coupling_mode
+    use med_internalstate_mod , only : coupling_mode, write_dststatus, rw_routehandles
     use med_internalstate_mod , only : defaultMasks
     use med_constants_mod     , only : ispval_mask => med_constants_ispval_mask
 
@@ -389,12 +389,15 @@ contains
     real(R8), pointer          :: r8ptr(:)
     integer(I4), pointer       :: i4ptr(:)
     character(len=ESMF_MAXSTR) :: lmapfile
+    character(len=ESMF_MAXSTR) :: rh_filename =''
     logical                    :: rhprint = .false.
+    logical                    :: rh_file_exists
     integer                    :: srcTermProcessing_Value = 0
     type(ESMF_PoleMethod_Flag) :: polemethod
     character(len=*), parameter :: subname=' (module_med_map: med_map_routehandles_initfrom_field) '
     !---------------------------------------------
 
+    rc = ESMF_SUCCESS
     lmapfile = 'unset'
     if (present(mapfile)) then
        lmapfile = trim(mapfile)
@@ -409,6 +412,21 @@ contains
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     lfield = ESMF_FieldCreate(mesh_dst, ESMF_TYPEKIND_I4, meshloc=ESMF_MESHLOC_ELEMENT, name=trim(dstatname), rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
+    if (rw_routehandles) then
+       rh_filename = 'cmeps.rh_'//trim(dstatname)
+       inquire(FILE=trim(rh_filename), EXIST=rh_file_exists)
+       if (rh_file_exists) then
+          if (maintask) write(logunit,'(A)') trim(subname)//' Reading RH from file: '//trim(rh_filename)
+          if (write_dststatus) then
+             if (maintask) write(logunit,'(A)') 'ERROR: dststatus not available when RHs are read from file'
+             rc = ESMF_FAILURE
+             return
+          end if
+          routehandles(mapindex) = ESMF_RouteHandleCreate(fileName=trim(rh_filename), rc=rc)
+          if (chkerr(rc,__LINE__,u_FILE_u)) return
+          return
+       end if
+    end if
 
     ! set src and dst masking using defaults
     srcMaskValue = defaultMasks(n1,1)
@@ -634,6 +652,16 @@ contains
           write(logunit,'(a)') trim(subname)//trim(string)//": printing  RH for "//trim(mapname)
        end if
        call ESMF_RouteHandlePrint(routehandles(mapindex), rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+    endif
+
+    ! Save route handle to file if requested
+    if (rw_routehandles) then
+       rh_filename = 'cmeps.rh_'//trim(dstatname)
+       if (maintask) then
+          write(logunit,'(a)') trim(subname)//": saving  RH for "//trim(dstatname)
+       end if
+       call ESMF_RouteHandleWrite(routehandles(mapindex), fileName=trim(rh_filename), rc=rc)
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     endif
 
