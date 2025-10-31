@@ -61,7 +61,7 @@ contains
     character(len=*),parameter :: subname='(med_phases_prep_atm)'
     !-------------------------------------------------------------------------------
 
-    if (maintask) call ufs_trace("cmeps", "med_phases_prep_atm", "B")
+    call ufs_trace("cmeps", "med_phases_prep_atm", "B")
     call t_startf('MED:'//subname)
     rc = ESMF_SUCCESS
 
@@ -250,7 +250,7 @@ contains
     end if
     call t_stopf('MED:'//subname)
 
-    if (maintask) call ufs_trace("cmeps", "med_phases_prep_atm", "E")
+    call ufs_trace("cmeps", "med_phases_prep_atm", "E")
   end subroutine med_phases_prep_atm
 
   !-----------------------------------------------------------------------------

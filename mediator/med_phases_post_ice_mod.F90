@@ -44,7 +44,7 @@ contains
     character(len=*),parameter :: subname='(med_phases_post_ice)'
     !-------------------------------------------------------------------------------
 
-    if (maintask) call ufs_trace("cmeps", "med_phases_post_ice", "B")
+    call ufs_trace("cmeps", "med_phases_post_ice", "B")
     call t_startf('MED:'//subname)
     rc = ESMF_SUCCESS
 
@@ -101,7 +101,7 @@ contains
        call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO)
     end if
 
-    if (maintask) call ufs_trace("cmeps", "med_phases_post_ice", "E")
+    call ufs_trace("cmeps", "med_phases_post_ice", "E")
   end subroutine med_phases_post_ice
 
 end module med_phases_post_ice_mod

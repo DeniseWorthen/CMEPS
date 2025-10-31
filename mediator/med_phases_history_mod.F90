@@ -190,7 +190,7 @@ contains
     !---------------------------------------
 
     rc = ESMF_SUCCESS
-    if (maintask) call ufs_trace("cmeps", "med_phases_history_write", "B")
+    call ufs_trace("cmeps", "med_phases_history_write", "B")
     call t_startf('MED:'//subname)
 
     ! Get the internal state
@@ -386,7 +386,7 @@ contains
 
     call t_stopf('MED:'//subname)
 
-    if (maintask) call ufs_trace("cmeps", "med_phases_history_write", "E")
+    call ufs_trace("cmeps", "med_phases_history_write", "E")
   end subroutine med_phases_history_write
 
   !===============================================================================
@@ -424,7 +424,7 @@ contains
     character(len=*), parameter :: subname='(med_phases_history_write_med)'
     !---------------------------------------
     rc = ESMF_SUCCESS
-    if (maintask) call ufs_trace("cmeps", "med_phases_history_write_med", "B")
+    call ufs_trace("cmeps", "med_phases_history_write_med", "B")
 
     ! Get the internal state
     nullify(is_local%wrap)
@@ -531,7 +531,7 @@ contains
        end if ! end of if-write_now block
     end if  ! end of if-active block
 
-    if (maintask) call ufs_trace("cmeps", "med_phases_history_write_med", "E")
+    call ufs_trace("cmeps", "med_phases_history_write_med", "E")
   end subroutine med_phases_history_write_med
 
   !===============================================================================
@@ -573,7 +573,7 @@ contains
     !---------------------------------------
 
     rc = ESMF_SUCCESS
-    if (maintask) call ufs_trace("cmeps", "med_phases_history_write_lnd2glc", "B")
+    call ufs_trace("cmeps", "med_phases_history_write_lnd2glc", "B")
 
     ! Get the internal state
     nullify(is_local%wrap)
@@ -662,7 +662,7 @@ contains
     call med_io_close(io_file, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    if (maintask) call ufs_trace("cmeps", "med_phases_history_write_lnd2glc", "E")
+    call ufs_trace("cmeps", "med_phases_history_write_lnd2glc", "E")
   end subroutine med_phases_history_write_lnd2glc
 
   !===============================================================================
@@ -676,7 +676,7 @@ contains
     integer            , intent(out)   :: rc
     !---------------------------------------
     rc = ESMF_SUCCESS
-    if (maintask) call ufs_trace("cmeps", "med_phases_history_write_comp", "B")
+    call ufs_trace("cmeps", "med_phases_history_write_comp", "B")
 
     call med_phases_history_write_comp_inst(gcomp, compid, instfiles(compid), rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -685,7 +685,7 @@ contains
     call med_phases_history_write_comp_aux(gcomp, compid, auxcomp(compid), rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-    if (maintask) call ufs_trace("cmeps", "med_phases_history_write_comp", "E")
+    call ufs_trace("cmeps", "med_phases_history_write_comp", "E")
   end subroutine med_phases_history_write_comp
 
   !===============================================================================

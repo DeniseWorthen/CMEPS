@@ -411,7 +411,7 @@ contains
     lfield = ESMF_FieldCreate(mesh_dst, ESMF_TYPEKIND_I4, meshloc=ESMF_MESHLOC_ELEMENT, name=trim(dstatname), rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
-    if (maintask) call ufs_trace("cmeps", "RH"//trim(dstatname), "B")
+    call ufs_trace("cmeps", "RH"//trim(dstatname), "B")
     ! set src and dst masking using defaults
     srcMaskValue = defaultMasks(n1,1)
     dstMaskValue = defaultMasks(n2,2)
@@ -653,7 +653,7 @@ contains
        if (chkerr(rc,__LINE__,u_FILE_u)) return
     end if
 
-    if (maintask) call ufs_trace("cmeps", "RH"//trim(dstatname), "E")
+    call ufs_trace("cmeps", "RH"//trim(dstatname), "E")
   end subroutine med_map_routehandles_initfrom_field
 
   !================================================================================
