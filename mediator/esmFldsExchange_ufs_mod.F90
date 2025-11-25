@@ -87,7 +87,7 @@ contains
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
     ! Set maptype according to coupling_mode
-    if (trim(coupling_mode) == 'ufs.nfrac' .or. trim(coupling_mode) == 'ufs.nfrac.aoflux') then
+    if (trim(coupling_mode) == 'ufs.nfrac') then
        maptype = mapnstod_consf
     else
        maptype = mapconsf
