@@ -20,12 +20,15 @@ module esmFldsExchange_ufs_mod
   integer :: lnd2atm_maptype
 
   ! optional mapping files
-  character(len=CL) :: atm2ice_bilnr = 'unset'
-  character(len=CL) :: atm2ice_patchuv = 'unset'
-  character(len=CL) :: atm2ocn_patchuv = 'unset'
-  character(len=CL) :: atm2wav_bilnr = 'unset'
-  character(len=CL) :: wav2ocn_bilnr_nstod = 'unset'
-  character(len=CL) :: ocn2wav_bilnr_nstod = 'unset'
+  ! mapfiles are not used =>ATM for one of two reasons: for an active ATM, src/dst masking of
+  ! the ATM when creating mapfiles is not available (the ATM mesh is created internally by reading
+  ! the supergrid) OR the ATM is a DATM and thus no fields are sent to ATM
+  character(len=CL) :: a2oi_bilnr = 'unset'
+  character(len=CL) :: a2oi_patch = 'unset'
+  character(len=CL) :: a2oi_consf = 'unset'
+  character(len=CL) :: a2w_bilnr = 'unset'
+  character(len=CL) :: w2oi_bilnr_nstod = 'unset'
+  character(len=CL) :: oi2w_bilnr_nstod = 'unset'
 
   character(*), parameter :: u_FILE_u = &
        __FILE__
@@ -110,29 +113,20 @@ contains
        end if
     end if
 
-    !character(len=CL) :: atm2ice_bilnr = 'unset'
-    !character(len=CL) :: atm2ice_patchuv = 'unset'
-    !character(len=CL) :: atm2ocn_patchuv = 'unset'
-    !character(len=CL) :: atm2wav_bilnr = 'unset'
-    !character(len=CL) :: wav2ocn_bilnr_nstod = 'unset'
-    !character(len=CL) :: ocn2wav_bilnr_nstod = 'unset'
-
-    ! to ice
-    atm2ice_bilnr = get_mapfile(gcomp, 'map_atm2ice_bilnr', rc)
+    ! to ocn/ice
+    a2oi_bilnr = get_mapfile(gcomp, 'map_a2oi_bilnr', rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    atm2ice_patchuv = get_mapfile(gcomp, 'map_atm2ice_patchuv', rc)
+    a2oi_patch = get_mapfile(gcomp, 'map_a2oi_patch', rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-
-    ! to ocn
-    atm2ocn_patchuv = get_mapfile(gcomp, 'map_atm2ocn_patchuv', rc)
+    a2oi_consf = get_mapfile(gcomp, 'map_a2oi_consf', rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    wav2ocn_bilnr_nstod = get_mapfile(gcomp, 'map_wav2ocn_bilnr_nstod', rc)
+    w2oi_bilnr_nstod = get_mapfile(gcomp, 'map_w2oi_bilnr_nstod', rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
     ! to wav
-    atm2wav_bilnr = get_mapfile(gcomp, 'map_atm2wav_bilnr', rc)
+    a2w_bilnr = get_mapfile(gcomp, 'map_a2w_bilnr', rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    ocn2wav_bilnr_nstod = get_mapfile(gcomp, 'map_ocn2wav_bilnr_nstod', rc)
+    oi2w_bilnr_nstod = get_mapfile(gcomp, 'map_oi2w_bilnr_nstod', rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
     if (trim(coupling_mode) == 'ufs.nfrac.aoflux' .or. trim(coupling_mode) == 'ufs.frac.aoflux') then
@@ -193,7 +187,7 @@ contains
              call addfld_from(compatm , fldname)
           else
              if ( fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
-                call addmap_from(compatm, fldname, compocn, mapbilnr, 'one', 'unset')
+                call addmap_from(compatm, fldname, compocn, mapbilnr, 'one', a2oi_bilnr)
              end if
           end if
        end do
@@ -404,6 +398,8 @@ contains
     else
        if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Sa_pslv', rc=rc) .and. &
             fldchk(is_local%wrap%FBImp(compatm,compatm), 'Sa_pslv', rc=rc)) then
+          !TODO: this should be bilinear
+          !call addmap_from(compatm, 'Sa_pslv', compocn, mapbilnr, 'one', a2oi_bilnr)
           call addmap_from(compatm, 'Sa_pslv', compocn, maptype, 'one', 'unset')
           call addmrg_to(compocn, 'Sa_pslv', mrg_from=compatm, mrg_fld='Sa_pslv', mrg_type='copy')
        end if
@@ -439,7 +435,7 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compocn)        , trim(oflds(n)), rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), trim(aflds(n)), rc=rc)) then
-             call addmap_from(compatm, trim(aflds(n)), compocn, maptype, 'one', 'unset')
+             call addmap_from(compatm, trim(aflds(n)), compocn, maptype, 'one', a2oi_consf)
           end if
        end if
     end do
@@ -474,7 +470,7 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compocn)        , fldname, rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
-             call addmap_from(compatm, fldname, compocn, maptype, 'one', 'unset')
+             call addmap_from(compatm, fldname, compocn, maptype, 'one', a2oi_consf)
              call addmrg_to(compocn, fldname, &
                   mrg_from=compatm, mrg_fld=fldname, mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
@@ -509,9 +505,9 @@ contains
                   fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_'//fldname, rc=rc)) then
                 call addmap_from(compice, 'Fioi_'//fldname, compocn, mapfcopy, 'unset', 'unset')
                 if (mapuv_with_cart3d) then
-                   call addmap_from(compatm, 'Faxa_'//fldname, compocn, mapconsf_uv3d, 'aofrac', 'unset')
+                   call addmap_from(compatm, 'Faxa_'//fldname, compocn, mapconsf_uv3d, 'aofrac', a2oi_consf)
                 else
-                   call addmap_from(compatm, 'Faxa_'//fldname, compocn, mapconsf_aofrac, 'aofrac', 'unset')
+                   call addmap_from(compatm, 'Faxa_'//fldname, compocn, mapconsf_aofrac, 'aofrac', a2oi_consf)
                 end if
                 call addmrg_to(compocn, 'Foxx_'//fldname, &
                      mrg_from=compice, mrg_fld='Fioi_'//fldname, mrg_type='merge', mrg_fracname='ifrac')
@@ -545,7 +541,7 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Foxx_lwnet', rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_lwnet', rc=rc)) then
-             call addmap_from(compatm, 'Faxa_lwnet', compocn, mapconsf_aofrac, 'aofrac', 'unset')
+             call addmap_from(compatm, 'Faxa_lwnet', compocn, mapconsf_aofrac, 'aofrac', a2oi_consf)
              call addmrg_to(compocn, 'Foxx_lwnet', &
                   mrg_from=compatm, mrg_fld='Faxa_lwnet', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
@@ -569,7 +565,7 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Foxx_sen', rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_sen', rc=rc)) then
-             call addmap_from(compatm, 'Faxa_sen', compocn, mapconsf_aofrac, 'aofrac', 'unset')
+             call addmap_from(compatm, 'Faxa_sen', compocn, mapconsf_aofrac, 'aofrac', a2oi_consf)
              call addmrg_to(compocn, 'Foxx_sen', &
                   mrg_from=compatm, mrg_fld='Faxa_sen', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
@@ -593,7 +589,7 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Foxx_evap', rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_evap' , rc=rc)) then
-             call addmap_from(compatm, 'Faxa_evap', compocn, mapconsf_aofrac, 'aofrac', 'unset')
+             call addmap_from(compatm, 'Faxa_evap', compocn, mapconsf_aofrac, 'aofrac', a2oi_consf)
              call addmrg_to(compocn, 'Foxx_evap', &
                   mrg_from=compatm, mrg_fld='Faxa_evap', mrg_type='copy_with_weights', mrg_fracname='ofrac')
           end if
@@ -637,7 +633,7 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compocn)        , fldname, rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compwav,compwav), fldname, rc=rc)) then
-             call addmap_from(compwav, fldname, compocn, mapbilnr_nstod, 'one', wav2ocn_bilnr_nstod)
+             call addmap_from(compwav, fldname, compocn, mapbilnr_nstod, 'one', w2oi_bilnr_nstod)
              call addmrg_to(compocn, fldname, mrg_from=compwav, mrg_fld=fldname, mrg_type='copy')
           end if
        end if
@@ -670,7 +666,7 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compice)        , fldname, rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
-             call addmap_from(compatm, fldname, compice, maptype, 'one', 'unset')
+             call addmap_from(compatm, fldname, compice, maptype, 'one', a2oi_consf)
              call addmrg_to(compice, fldname, mrg_from=compatm, mrg_fld=fldname, mrg_type='copy')
           end if
        end if
@@ -696,7 +692,7 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compice)        , fldname, rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
-             call addmap_from(compatm, fldname, compice, mapbilnr, 'one', atm2ice_bilnr)
+             call addmap_from(compatm, fldname, compice, mapbilnr, 'one', a2oi_bilnr)
              call addmrg_to(compice, fldname, mrg_from=compatm, mrg_fld=fldname, mrg_type='copy')
           end if
        end if
@@ -716,9 +712,9 @@ contains
           if ( fldchk(is_local%wrap%FBexp(compice)        , fldname, rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
              if (mapuv_with_cart3d) then
-                call addmap_from(compatm, fldname, compice, mappatch_uv3d, 'one', atm2ice_patchuv)
+                call addmap_from(compatm, fldname, compice, mappatch_uv3d, 'one', a2oi_patch)
              else
-                call addmap_from(compatm, fldname, compice, mappatch, 'one', 'unset')
+                call addmap_from(compatm, fldname, compice, mappatch, 'one', a2oi_patch)
              end if
              call addmrg_to(compice, fldname, mrg_from=compatm, mrg_fld=fldname, mrg_type='copy')
           end if
@@ -762,7 +758,7 @@ contains
     else
        if ( fldchk(is_local%wrap%FBExp(compice)        , 'Sw_elevation_spectrum', rc=rc) .and. &
             fldchk(is_local%wrap%FBImp(compwav,compwav), 'Sw_elevation_spectrum', rc=rc)) then
-          call addmap_from(compwav, 'Sw_elevation_spectrum', compice, mapbilnr_nstod, 'one', 'unset')
+          call addmap_from(compwav, 'Sw_elevation_spectrum', compice, mapbilnr_nstod, 'one', w2oi_bilnr_nstod)
           call addmrg_to(compice, 'Sw_elevation_spectrum', mrg_from=compwav, &
                mrg_fld='Sw_elevation_spectrum', mrg_type='copy')
        end if
@@ -787,7 +783,7 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compwav)        , fldname, rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), fldname, rc=rc)) then
-             call addmap_from(compatm, fldname, compwav, mapbilnr, 'one', atm2wav_bilnr)
+             call addmap_from(compatm, fldname, compwav, mapbilnr, 'one', a2w_bilnr)
              call addmrg_to(compwav, fldname, mrg_from=compatm, mrg_fld=fldname, mrg_type='copy')
           end if
        end if
@@ -810,7 +806,7 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compwav)        , fldname, rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compice,compice), fldname, rc=rc)) then
-             call addmap_from(compice, fldname, compwav, mapbilnr_nstod , 'one', ocn2wav_bilnr_nstod)
+             call addmap_from(compice, fldname, compwav, mapbilnr_nstod , 'one', oi2w_bilnr_nstod)
              call addmrg_to(compwav, fldname, mrg_from=compice, mrg_fld=fldname, mrg_type='copy')
           end if
        end if
@@ -833,7 +829,7 @@ contains
        else
           if ( fldchk(is_local%wrap%FBexp(compwav)        , fldname, rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compocn,compocn), fldname, rc=rc)) then
-             call addmap_from(compocn, fldname, compwav, mapbilnr_nstod , 'one', ocn2wav_bilnr_nstod)
+             call addmap_from(compocn, fldname, compwav, mapbilnr_nstod , 'one', oi2w_bilnr_nstod)
              call addmrg_to(compwav, fldname, mrg_from=compocn, mrg_fld=fldname, mrg_type='copy')
           end if
        end if
