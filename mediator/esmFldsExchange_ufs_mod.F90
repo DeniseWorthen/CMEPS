@@ -6,7 +6,10 @@ module esmFldsExchange_ufs_mod
   ! mapping and merging
   !---------------------------------------------------------------------
 
-  use med_kind_mod , only : CX=>SHR_KIND_CX, CS=>SHR_KIND_CS, CL=>SHR_KIND_CL, R8=>SHR_KIND_R8
+  use ESMF
+  use NUOPC
+  use med_utils_mod , only : chkerr => med_utils_chkerr
+  use med_kind_mod  , only : CX=>SHR_KIND_CX, CS=>SHR_KIND_CS, CL=>SHR_KIND_CL, R8=>SHR_KIND_R8
 
   implicit none
   public
@@ -21,7 +24,6 @@ module esmFldsExchange_ufs_mod
   character(len=CL) :: atm2ice_patchuv = 'unset'
   character(len=CL) :: atm2ocn_patchuv = 'unset'
   character(len=CL) :: atm2wav_bilnr = 'unset'
-
   character(len=CL) :: wav2ocn_bilnr_nstod = 'unset'
   character(len=CL) :: ocn2wav_bilnr_nstod = 'unset'
 
@@ -34,10 +36,6 @@ contains
 
   subroutine esmFldsExchange_ufs(gcomp, phase, rc)
 
-    use ESMF
-    use NUOPC
-
-    use med_utils_mod         , only : chkerr => med_utils_chkerr
     use med_methods_mod       , only : fldchk => med_methods_FB_FldChk
     use med_internalstate_mod , only : InternalState
     use med_internalstate_mod , only : compmed, compatm, compocn, compice, complnd, compwav, ncomps
@@ -120,52 +118,22 @@ contains
     !character(len=CL) :: ocn2wav_bilnr_nstod = 'unset'
 
     ! to ice
-    call NUOPC_CompAttributeGet(gcomp, name='map_atm2ice_bilnr', isPresent=isPresent, rc=rc)
+    atm2ice_bilnr = get_mapfile(gcomp, 'map_atm2ice_bilnr', rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       call NUOPC_CompAttributeGet(gcomp, name='map_atm2ice_bilnr', value=cvalue, rc=rc)
-       if (chkerr(rc,__LINE__,u_FILE_u)) return
-       atm2ice_bilnr = trim(cvalue)
-    end if
-    call NUOPC_CompAttributeGet(gcomp, name='map_atm2ice_patchuv', isPresent=isPresent, rc=rc)
+    atm2ice_patchuv = get_mapfile(gcomp, 'map_atm2ice_patchuv', rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       call NUOPC_CompAttributeGet(gcomp, name='map_atm2ice_patchuv', value=cvalue, rc=rc)
-       if (chkerr(rc,__LINE__,u_FILE_u)) return
-       atm2ice_patchuv = trim(cvalue)
-    end if
 
     ! to ocn
-    call NUOPC_CompAttributeGet(gcomp, name='map_atm2ocn_patchuv', isPresent=isPresent, rc=rc)
+    atm2ocn_patchuv = get_mapfile(gcomp, 'map_atm2ocn_patchuv', rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       call NUOPC_CompAttributeGet(gcomp, name='map_atm2ocn_patchuv', value=cvalue, rc=rc)
-       if (chkerr(rc,__LINE__,u_FILE_u)) return
-       atm2ocn_patchuv = trim(cvalue)
-    end if
-    call NUOPC_CompAttributeGet(gcomp, name='map_wav2ocn_bilnr_nstod', isPresent=isPresent, rc=rc)
+    wav2ocn_bilnr_nstod = get_mapfile(gcomp, 'map_wav2ocn_bilnr_nstod', rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       call NUOPC_CompAttributeGet(gcomp, name='map_wav2ocn_bilnr_nstod', value=cvalue, rc=rc)
-       if (chkerr(rc,__LINE__,u_FILE_u)) return
-       wav2ocn_bilnr_nstod = trim(cvalue)
-    end if
 
     ! to wav
-    call NUOPC_CompAttributeGet(gcomp, name='map_atm2wav_bilnr', isPresent=isPresent, rc=rc)
+    atm2wav_bilnr = get_mapfile(gcomp, 'map_atm2wav_bilnr', rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       call NUOPC_CompAttributeGet(gcomp, name='map_atm2wav_bilnr', value=cvalue, rc=rc)
-       if (chkerr(rc,__LINE__,u_FILE_u)) return
-       atm2wav_bilnr = trim(cvalue)
-    end if
-    call NUOPC_CompAttributeGet(gcomp, name='map_ocn2wav_bilnr_nstod', isPresent=isPresent, rc=rc)
+    ocn2wav_bilnr_nstod = get_mapfile(gcomp, 'map_ocn2wav_bilnr_nstod', rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
-    if (isPresent) then
-       call NUOPC_CompAttributeGet(gcomp, name='map_ocn2wav_bilnr_nstod', value=cvalue, rc=rc)
-       if (chkerr(rc,__LINE__,u_FILE_u)) return
-       ocn2wav_bilnr_nstod = trim(cvalue)
-    end if
 
     if (trim(coupling_mode) == 'ufs.nfrac.aoflux' .or. trim(coupling_mode) == 'ufs.frac.aoflux') then
        med_aoflux_to_ocn = .true.
@@ -931,5 +899,29 @@ contains
     end if ! lm4
 
   end subroutine esmFldsExchange_ufs
+
+  function get_mapfile(gcomp, attribute_name, rc) result(mapfile)
+
+    type(ESMF_GridComp), intent(in)    :: gcomp
+    character(len=*)   , intent(in)    :: attribute_name
+    integer            , intent(inout) :: rc
+    character(len=CL)                  :: mapfile
+
+    logical           :: isPresent, isSet
+    character(len=CL) :: cvalue
+    !--------------------------------------
+
+    rc = ESMF_SUCCESS
+
+    mapfile = 'unset'
+    call NUOPC_CompAttributeGet(gcomp, name=attribute_name, isPresent=isPresent, isSet=isSet, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    if (isPresent .and. isSet) then
+       call NUOPC_CompAttributeGet(gcomp, name=attribute_name, value=cvalue, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       mapfile = trim(cvalue)
+    end if
+
+  end function get_mapfile
 
 end module esmFldsExchange_ufs_mod
