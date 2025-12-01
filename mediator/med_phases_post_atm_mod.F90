@@ -35,7 +35,7 @@ contains
     use med_utils_mod         , only : chkerr    => med_utils_ChkErr
     use med_internalstate_mod , only : compocn, compatm, compice, complnd, compwav
     use perf_mod              , only : t_startf, t_stopf
-    use ufs_trace_mod
+    !use ufs_trace_mod
 
     ! input/output variables
     type(ESMF_GridComp)  :: gcomp

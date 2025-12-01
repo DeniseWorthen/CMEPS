@@ -19,7 +19,7 @@ module med_phases_restart_mod
   use shr_is_restart_fh_mod   , only : log_restart_fh
 #endif
   use shr_log_mod             , only : shr_log_error
-  use ufs_trace_mod
+  !use ufs_trace_mod
 
   implicit none
   private

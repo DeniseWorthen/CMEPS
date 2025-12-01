@@ -27,7 +27,7 @@ contains
     use med_internalstate_mod , only : compwav, compatm, compocn, compice
     use med_phases_history_mod, only : med_phases_history_write_comp
     use perf_mod              , only : t_startf, t_stopf
-    use ufs_trace_mod
+    !use ufs_trace_mod
 
     ! input/output variables
     type(ESMF_GridComp)  :: gcomp

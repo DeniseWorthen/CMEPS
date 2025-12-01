@@ -23,7 +23,7 @@ module med_phases_prep_atm_mod
   use perf_mod              , only : t_startf, t_stopf
   use med_phases_aofluxes_mod, only : med_aofluxes_map_xgrid2agrid_output
   use med_phases_aofluxes_mod, only : med_aofluxes_map_ogrid2agrid_output
-  use ufs_trace_mod
+  !use ufs_trace_mod
 
   implicit none
   private

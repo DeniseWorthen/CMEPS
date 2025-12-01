@@ -23,7 +23,7 @@ module med_phases_prep_ocn_mod
   use esmFlds               , only : med_fldList_GetfldListTo, med_fldlist_type
   use med_internalstate_mod , only : compocn, compatm, compice, coupling_mode
   use perf_mod              , only : t_startf, t_stopf
-  use ufs_trace_mod
+  !use ufs_trace_mod
 
   implicit none
   private

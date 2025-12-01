@@ -41,7 +41,7 @@ contains
     use med_internalstate_mod , only : coupling_mode
     use esmFlds               , only : med_fldList_GetFldListTo
     use perf_mod              , only : t_startf, t_stopf
-    use ufs_trace_mod
+    !use ufs_trace_mod
 
     ! input/output variables
     type(ESMF_GridComp)  :: gcomp

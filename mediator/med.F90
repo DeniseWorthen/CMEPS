@@ -52,7 +52,7 @@ module MED
   use esmFldsExchange_hafs_mod , only : esmFldsExchange_hafs
   use med_phases_profile_mod   , only : med_phases_profile_finalize
   use shr_log_mod              , only : shr_log_error
-  use ufs_trace_mod
+  !use ufs_trace_mod
 
 
   implicit none

@@ -11,7 +11,7 @@ module med_phases_ocnalb_mod
   use shr_orb_mod           , only : shr_orb_cosz, shr_orb_decl
   use shr_orb_mod           , only : shr_orb_params, SHR_ORB_UNDEF_INT, SHR_ORB_UNDEF_REAL
   use shr_log_mod           , only : shr_log_unit, shr_log_error
-  use ufs_trace_mod
+  !use ufs_trace_mod
   implicit none
   private
 
