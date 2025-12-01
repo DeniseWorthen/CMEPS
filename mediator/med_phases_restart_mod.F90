@@ -199,7 +199,7 @@ contains
     character(len=*), parameter :: subname='(med_phases_restart_write)'
     !---------------------------------------
 
-    if (maintask) call ufs_trace("cmeps", "med_phases_restart_write", "B")
+    !if (maintask) call ufs_trace("cmeps", "med_phases_restart_write", "B")
     call t_startf('MED:'//subname)
     if (dbug_flag > 5) then
        call ESMF_LogWrite(trim(subname)//": called", ESMF_LOGMSG_INFO)
@@ -510,7 +510,7 @@ contains
     endif
     call t_stopf('MED:'//subname)
 
-    if (maintask) call ufs_trace("cmeps", "med_phases_restart_write", "E")
+    !if (maintask) call ufs_trace("cmeps", "med_phases_restart_write", "E")
   end subroutine med_phases_restart_write
 
   !===============================================================================
@@ -546,7 +546,7 @@ contains
     character(ESMF_MAXSTR) :: restart_pfile  ! Local path to restart pointer filename
     character(len=*), parameter :: subname='(med_phases_restart_read)'
     !---------------------------------------
-    if (maintask) call ufs_trace("cmeps", "med_phases_restart_read", "B")
+    !if (maintask) call ufs_trace("cmeps", "med_phases_restart_read", "B")
     call t_startf('MED:'//subname)
     call ESMF_LogWrite(trim(subname)//": called", ESMF_LOGMSG_INFO)
     rc = ESMF_SUCCESS
@@ -665,7 +665,7 @@ contains
     call ESMF_LogWrite(trim(subname)//": done", ESMF_LOGMSG_INFO)
     call t_stopf('MED:'//subname)
 
-    if (maintask) call ufs_trace("cmeps", "med_phases_restart_read", "E")
+    !if (maintask) call ufs_trace("cmeps", "med_phases_restart_read", "E")
   end subroutine med_phases_restart_read
 
   !===============================================================================

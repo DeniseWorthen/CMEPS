@@ -315,7 +315,7 @@ contains
     !---------------------------------------
 
     rc = ESMF_SUCCESS
-    if (maintask) call ufs_trace("cmeps", "med_phases_ocnalb_run", "B")
+    !if (maintask) call ufs_trace("cmeps", "med_phases_ocnalb_run", "B")
 
     ! Determine main task
     call ESMF_GridCompGet(gcomp, vm=vm, rc=rc)
@@ -509,7 +509,7 @@ contains
     end if
     call t_stopf('MED:'//subname)
 
-    if (maintask) call ufs_trace("cmeps", "med_phases_ocnalb_run", "E")
+    !if (maintask) call ufs_trace("cmeps", "med_phases_ocnalb_run", "E")
   end subroutine med_phases_ocnalb_run
 
 !===============================================================================

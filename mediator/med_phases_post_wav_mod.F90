@@ -39,7 +39,7 @@ contains
     character(len=*),parameter :: subname='(med_phases_post_wav)'
     !-------------------------------------------------------------------------------
 
-    if (maintask) call ufs_trace("cmeps", "med_phases_post_wav", "B")
+    !if (maintask) call ufs_trace("cmeps", "med_phases_post_wav", "B")
     call t_startf('MED:'//subname)
     rc = ESMF_SUCCESS
 
@@ -99,7 +99,7 @@ contains
        call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO)
     end if
 
-    if (maintask) call ufs_trace("cmeps", "med_phases_post_wav", "E")
+    !if (maintask) call ufs_trace("cmeps", "med_phases_post_wav", "E")
   end subroutine med_phases_post_wav
 
 end module med_phases_post_wav_mod

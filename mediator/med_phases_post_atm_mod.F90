@@ -48,7 +48,7 @@ contains
     !-------------------------------------------------------------------------------
 
     rc = ESMF_SUCCESS
-    if (maintask) call ufs_trace("cmeps", "med_phases_post_atm", "B")
+    !if (maintask) call ufs_trace("cmeps", "med_phases_post_atm", "B")
 
     call t_startf('MED:'//subname)
     if (dbug_flag > 20) then
@@ -128,7 +128,7 @@ contains
     end if
     call t_stopf('MED:'//subname)
 
-    if (maintask) call ufs_trace("cmeps", "med_phases_post_atm", "E")
+    !if (maintask) call ufs_trace("cmeps", "med_phases_post_atm", "E")
   end subroutine med_phases_post_atm
 
 end module med_phases_post_atm_mod
