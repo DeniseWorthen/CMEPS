@@ -20,15 +20,12 @@ module esmFldsExchange_ufs_mod
   integer :: lnd2atm_maptype
 
   ! optional mapping files
-  ! mapfiles are not used =>ATM for one of two reasons: for an active ATM, src/dst masking of
-  ! the ATM when creating mapfiles is not available (the ATM mesh is created internally by reading
-  ! the supergrid) OR the ATM is a DATM and thus no fields are sent to ATM
-  character(len=CL) :: a2oi_bilnr = 'unset'
-  character(len=CL) :: a2oi_patch = 'unset'
-  character(len=CL) :: a2oi_consf = 'unset'
-  character(len=CL) :: a2w_bilnr = 'unset'
-  character(len=CL) :: w2oi_bilnr_nstod = 'unset'
-  character(len=CL) :: oi2w_bilnr_nstod = 'unset'
+  character(len=CL) :: a2oi_bilnr
+  character(len=CL) :: a2oi_patch
+  character(len=CL) :: a2oi_consf
+  character(len=CL) :: a2w_bilnr
+  character(len=CL) :: w2oi_bilnr_nstod
+  character(len=CL) :: oi2w_bilnr_nstod
 
   character(*), parameter :: u_FILE_u = &
        __FILE__
