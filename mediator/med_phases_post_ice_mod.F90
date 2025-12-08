@@ -32,7 +32,7 @@ contains
     use med_phases_history_mod, only : med_phases_history_write_comp
     use med_internalstate_mod , only : compice, compocn, compwav
     use perf_mod              , only : t_startf, t_stopf
-    use ufs_trace_mod
+    use med_ufs_trace_wrapper_mod, only : ufs_trace_wrapper
 
     ! input/output variables
     type(ESMF_GridComp)  :: gcomp
@@ -44,7 +44,7 @@ contains
     character(len=*),parameter :: subname='(med_phases_post_ice)'
     !-------------------------------------------------------------------------------
 
-    if (maintask) call ufs_trace("cmeps", "med_phases_post_ice", "B")
+    if (maintask) call ufs_trace_wrapper("cmeps", "med_phases_post_ice", "B")
     call t_startf('MED:'//subname)
     rc = ESMF_SUCCESS
 
@@ -101,7 +101,7 @@ contains
        call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO)
     end if
 
-    if (maintask) call ufs_trace("cmeps", "med_phases_post_ice", "E")
+    if (maintask) call ufs_trace_wrapper("cmeps", "med_phases_post_ice", "E")
   end subroutine med_phases_post_ice
 
 end module med_phases_post_ice_mod
