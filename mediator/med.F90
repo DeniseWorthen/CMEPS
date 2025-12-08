@@ -2762,13 +2762,13 @@ contains
     integer, intent(out) :: rc
 
     rc = ESMF_SUCCESS
-    if (maintask) call ufs_trace("cmeps", "ModelFinalize", "B")
+    if (maintask) call ufs_trace_wrapper("cmeps", "ModelFinalize", "B")
     call memcheck("med_finalize", 0, maintask)
     if (maintask) then
        write(logunit,*)' SUCCESSFUL TERMINATION OF CMEPS'
        call med_phases_profile_finalize()
     end if
-    if (maintask) call ufs_trace("cmeps", "ModelFinalize", "E")
+    if (maintask) call ufs_trace_wrapper("cmeps", "ModelFinalize", "E")
 
   end subroutine med_finalize
 
