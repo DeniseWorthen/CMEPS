@@ -701,8 +701,32 @@ contains
     ! - zonal sea surface slope from ocn
     ! - meridional sea surface slope from ocn
     ! - ocean melt and freeze potential from ocn
-    allocate(flds(7))
-    flds = (/'So_t   ', 'So_s   ', 'So_u   ', 'So_v   ','So_dhdx', 'So_dhdy', 'Fioo_q '/)
+    allocate(flds(2))
+    if (grid_ice == 'C') then
+       flds = (/'Sa_uc', 'Sa_vc'/)
+    else
+       flds = (/'Sa_u', 'Sa_v'/)
+    end if
+    do n = 1,size(flds)
+       fldname = trim(flds(n))
+       if (phase == 'advertise') then
+          if (is_local%wrap%comp_present(compocn) .and. is_local%wrap%comp_present(compice)) then
+             call addfld_from(compocn , fldname)
+             call addfld_to(compice   , fldname)
+          endif
+       else
+          if ( fldchk(is_local%wrap%FBexp(compice)        , fldname, rc=rc) .and. &
+               fldchk(is_local%wrap%FBImp(compocn,compocn), fldname, rc=rc)) then
+             call addmap_from(compocn, fldname, compice, mapfcopy , 'unset', 'unset')
+             call addmrg_to(compice, fldname, mrg_from=compocn, mrg_fld=fldname, mrg_type='copy')
+          end if
+       end if
+    end do
+    deallocate(flds)
+
+    ! slopes are send sent by OCN on either A or C grid
+    allocate(flds(5))
+    flds = (/'So_t   ', 'So_s   ', 'So_dhdx', 'So_dhdy', 'Fioo_q '/)
     do n = 1,size(flds)
        fldname = trim(flds(n))
        if (phase == 'advertise') then
