@@ -42,7 +42,7 @@ module MED
   use med_internalstate_mod    , only : med_internalstate_defaultmasks, logunit, maintask
   use med_internalstate_mod    , only : ncomps, compname
   use med_internalstate_mod    , only : compmed, compatm, compocn, compice, complnd, comprof, compwav, compglc
-  use med_internalstate_mod    , only : coupling_mode, aoflux_code, aoflux_ccpp_suite, write_dststatus
+  use med_internalstate_mod    , only : coupling_mode, aoflux_code, aoflux_ccpp_suite, write_dststatus, grid_ice
   use esmFlds                  , only : med_fldList_GetocnalbfldList, med_fldList_type
   use esmFlds                  , only : med_fldList_GetNumFlds, med_fldList_GetFldNames, med_fldList_GetFldInfo
   use esmFlds                  , only : med_fldList_Document_Mapping, med_fldList_Document_Merging
