@@ -55,6 +55,9 @@ module med_internalstate_mod
   ! Atmosphere-ocean CCPP suite name
   character(len=CL), public :: aoflux_ccpp_suite
 
+  ! Stagger location of surface velocities exhanged between OCN and ICE
+  character(len=CL), public :: grid_ice
+
   ! Default src and destination masks for mapping
   integer, public, allocatable :: defaultMasks(:,:)
 

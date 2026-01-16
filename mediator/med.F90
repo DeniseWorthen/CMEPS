@@ -813,6 +813,23 @@ contains
        end if
     end if
 
+    ! Determine stagger location of surface velocities from OCN to ICE
+    call NUOPC_CompAttributeGet(gcomp, name='grid_ice', value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    if (.not. isPresent .and. .not. isSet) then
+       cvalue = 'A'
+    else if (trim(cvalue) /= 'C') then
+       grid_ice = trim(cvalue)
+    else
+       call shr_log_error("grid_ice must be either A or C", rc=rc)
+       return
+    end if
+    if (maintask) then
+       write(logunit,*) '========================================================'
+       write(logunit,'(a)')trim(subname)//' OCN-ICE velocities exchanged on '//trim(cvalue)//' grid'
+       write(logunit,*) '========================================================'
+    end if
+
     !------------------
     ! Initialize mediator flds
     !------------------

@@ -692,12 +692,11 @@ contains
     end do
     deallocate(flds)
 
-
     ! to ice: states and fluxes from ocn
     ! - sea surface temperature from ocn
     ! - sea surface salinity from ocn
-    ! - zonal sea water velocity from ocn
-    ! - meridional sea water velocity from ocn
+    ! - zonal sea water velocity from ocn, either A or C stagger
+    ! - meridional sea water velocity from ocn, either A or C stagger
     ! - zonal sea surface slope from ocn
     ! - meridional sea surface slope from ocn
     ! - ocean melt and freeze potential from ocn
