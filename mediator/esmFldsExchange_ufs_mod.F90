@@ -702,9 +702,9 @@ contains
     ! - ocean melt and freeze potential from ocn
     allocate(flds(2))
     if (grid_ice == 'C') then
-       flds = (/'Sa_uc', 'Sa_vc'/)
+       flds = (/'So_uc', 'So_vc'/)
     else
-       flds = (/'Sa_u', 'Sa_v'/)
+       flds = (/'So_u', 'So_v'/)
     end if
     do n = 1,size(flds)
        fldname = trim(flds(n))
