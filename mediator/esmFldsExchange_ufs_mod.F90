@@ -187,6 +187,13 @@ contains
        call addfld_ocnalb('So_anidf')
     end if
 
+    if (phase == 'advertise') then
+       call addfld_from(compocn, 'So_uc')
+       call addfld_from(compocn, 'So_vc')
+       call addfld_to(compmed, 'So_uc')
+       call addfld_to(compmed, 'So_vc')
+    end if
+
     !=====================================================================
     ! FIELDS TO ATMOSPHERE (compatm)
     !=====================================================================
