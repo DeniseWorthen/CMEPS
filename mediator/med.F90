@@ -1681,6 +1681,7 @@ contains
     !debug
     character(len=10) :: str1, str2
     !-----------------------------------------------------------
+    if (maintask) call ufs_trace_wrapper("cmeps", "DataInitialize", "B")
 
     !debug
     str1='FirstCallF'
@@ -2310,6 +2311,7 @@ contains
 
 
 
+    if (maintask) call ufs_trace_wrapper("cmeps", "DataInitialize", "E")
   end subroutine DataInitialize
 
   !-----------------------------------------------------------------------------
