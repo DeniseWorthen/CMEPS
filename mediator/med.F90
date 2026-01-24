@@ -2281,8 +2281,6 @@ contains
       call ESMF_LogWrite(trim(subname)//": done", ESMF_LOGMSG_INFO)
     endif
 
-
-
     if (maintask) call ufs_trace_wrapper("cmeps", "DataInitialize", "E")
   end subroutine DataInitialize
 
