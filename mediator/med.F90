@@ -42,7 +42,7 @@ module MED
   use med_internalstate_mod    , only : med_internalstate_defaultmasks, logunit, maintask
   use med_internalstate_mod    , only : ncomps, compname
   use med_internalstate_mod    , only : compmed, compatm, compocn, compice, complnd, comprof, compwav, compglc
-  use med_internalstate_mod    , only : coupling_mode, aoflux_code, aoflux_ccpp_suite, write_dststatus
+  use med_internalstate_mod    , only : coupling_mode, aoflux_code, aoflux_ccpp_suite, write_dststatus, grid_ocn
   use esmFlds                  , only : med_fldList_GetocnalbfldList, med_fldList_type
   use esmFlds                  , only : med_fldList_GetNumFlds, med_fldList_GetFldNames, med_fldList_GetFldInfo
   use esmFlds                  , only : med_fldList_Document_Mapping, med_fldList_Document_Merging
@@ -828,6 +828,23 @@ contains
           write(logunit,'(a)')trim(subname)//' Mediator aoflux CCPP suite is '//trim(aoflux_ccpp_suite)
           write(logunit,*) '========================================================'
        end if
+    end if
+
+    ! Determine stagger location of surface velocities from OCN to ICE
+    call NUOPC_CompAttributeGet(gcomp, name='grid_ocn', value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
+    if (chkerr(rc,__LINE__,u_FILE_u)) return
+    if (.not. isPresent .and. .not. isSet) then
+       cvalue = 'A'
+    else if (trim(cvalue) == 'C' .or. trim(cvalue) == 'A') then
+       grid_ocn = trim(cvalue)
+    else
+       call shr_log_error("grid_ocn must be either A or C", rc=rc)
+       return
+    end if
+    if (maintask) then
+       write(logunit,*) '========================================================'
+       write(logunit,'(a)')trim(subname)//' OCN velocities and slopes sent to ICE on '//trim(cvalue)//' grid'
+       write(logunit,*) '========================================================'
     end if
 
     !------------------

@@ -42,7 +42,7 @@ contains
     use med_internalstate_mod , only : mapbilnr, mapconsf, mapconsd, mappatch, mappatch_uv3d
     use med_internalstate_mod , only : mapfcopy, mapnstod, mapnstod_consd, mapnstod_consf
     use med_internalstate_mod , only : mapconsf_aofrac, mapbilnr_nstod, mapconsf_uv3d
-    use med_internalstate_mod , only : coupling_mode, mapnames, samegrid_atmlnd
+    use med_internalstate_mod , only : coupling_mode, mapnames, samegrid_atmlnd, grid_ocn
     use esmFlds               , only : med_fldList_type
     use esmFlds               , only : addfld_to => med_fldList_addfld_to
     use esmFlds               , only : addmrg_to => med_fldList_addmrg_to
@@ -717,17 +717,40 @@ contains
     end do
     deallocate(flds)
 
-
     ! to ice: states and fluxes from ocn
+    ! note that grid_ocn must be consistent with OCEAN_SURFACE_STAGGER in MOM parameter set
     ! - sea surface temperature from ocn
     ! - sea surface salinity from ocn
-    ! - zonal sea water velocity from ocn
-    ! - meridional sea water velocity from ocn
-    ! - zonal sea surface slope from ocn
-    ! - meridional sea surface slope from ocn
+    ! - zonal sea water velocity from ocn, either A or C grid
+    ! - meridional sea water velocity from ocn, either A or C grid
+    ! - zonal sea surface slope from ocn, either A or C grid
+    ! - meridional sea surface slope from ocn, either A or C grid
     ! - ocean melt and freeze potential from ocn
-    allocate(flds(7))
-    flds = (/'So_t   ', 'So_s   ', 'So_u   ', 'So_v   ','So_dhdx', 'So_dhdy', 'Fioo_q '/)
+    allocate(flds(2))
+    if (grid_ocn == 'C') then
+       flds = (/'So_uc', 'So_vc'/)
+    else
+       flds = (/'So_u', 'So_v'/)
+    end if
+    do n = 1,size(flds)
+       fldname = trim(flds(n))
+       if (phase == 'advertise') then
+          if (is_local%wrap%comp_present(compocn) .and. is_local%wrap%comp_present(compice)) then
+             call addfld_from(compocn , fldname)
+             call addfld_to(compice   , fldname)
+          endif
+       else
+          if ( fldchk(is_local%wrap%FBexp(compice)        , fldname, rc=rc) .and. &
+               fldchk(is_local%wrap%FBImp(compocn,compocn), fldname, rc=rc)) then
+             call addmap_from(compocn, fldname, compice, mapfcopy , 'unset', 'unset')
+             call addmrg_to(compice, fldname, mrg_from=compocn, mrg_fld=fldname, mrg_type='copy')
+          end if
+       end if
+    end do
+    deallocate(flds)
+
+    allocate(flds(5))
+    flds = (/'So_t   ', 'So_s   ', 'So_dhdx', 'So_dhdy', 'Fioo_q '/)
     do n = 1,size(flds)
        fldname = trim(flds(n))
        if (phase == 'advertise') then
