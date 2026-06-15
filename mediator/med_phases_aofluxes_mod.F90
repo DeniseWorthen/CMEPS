@@ -1100,8 +1100,8 @@ contains
          logunit=logunit, nMax=aoflux_in%lsize, mask=aoflux_in%mask,                           &
          zbot=aoflux_in%zbot, ubot=aoflux_in%ubot, vbot=aoflux_in%vbot, qbot=aoflux_in%shum,   &
          rbot=aoflux_in%dens, tbot=aoflux_in%tbot, thbot=aoflux_in%thbot, pbot=aoflux_in%pbot, &
-         ts=aoflux_in%tocn, us=aoflux_in%uocn, vs=aoflux_in%vocn,                              &
-         usfc=aoflux_in%usfc, vsfc=aoflux_in%vsfc, psfc=aoflux_in%psfc, lwdn=aoflux_in%lwdn,   &
+         ts=aoflux_in%tocn, us=aoflux_in%uocn, vs=aoflux_in%vocn, psfc=aoflux_in%psfc          &
+         usfc=aoflux_in%usfc, vsfc=aoflux_in%vsfc, lwdn=aoflux_in%lwdn,                        &
          sen=aoflux_out%sen, lat=aoflux_out%lat, lwup=aoflux_out%lwup,                         &
          taux=aoflux_out%taux, tauy=aoflux_out%tauy, evap=aoflux_out%evap,                     &
          tref=aoflux_out%tref, qref=aoflux_out%qref, duu10n=aoflux_out%duu10n,                 &
@@ -1606,9 +1606,9 @@ end subroutine med_aofluxes_map_ogrid2xgrid_input
           call fldbun_getfldptr(fldbun_a, 'Faxa_lwdn', aoflux_in%lwdn, xgrid=xgrid, rc=rc)
           if (chkerr(rc,__LINE__,u_FILE_u)) return
        else
-          allocate(aoflux_in%usfc(lsize), source=0.0_R8)
-          allocate(aoflux_in%vsfc(lsize), source=0.0_R8)
-          allocate(aoflux_in%lwdn(lsize), source=0.0_R8)
+          allocate(aoflux_in%usfc(1), source=0.0_R8)
+          allocate(aoflux_in%vsfc(1), source=0.0_R8)
+          allocate(aoflux_in%lwdn(1), source=0.0_R8)
        end if
     end if
 

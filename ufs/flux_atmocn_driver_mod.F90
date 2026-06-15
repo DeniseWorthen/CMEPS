@@ -18,7 +18,7 @@ contains
   subroutine flux_atmocn_driver(ocn_surface_flux_scheme,     &
        gcomp, garea, maintask, logunit, nMax, mask,          &
        zbot, ubot, vbot, qbot, rbot, tbot, thbot, pbot,      &
-       ts, us, vs, usfc, vsfc, psfc, lwdn,                   &
+       ts, us, vs, psfc, lwdn, usfc, vsfc,                   &
        sen, lat, lwup, taux, tauy, evap, tref, qref, duu10n, &
        missval, ustar_sv, re_sv, ssq_sv, rc)
 
@@ -43,10 +43,10 @@ contains
     real(R8), intent(in) :: ts   (nMax) ! ocn temperature (K)
     real(R8), intent(in) :: us   (nMax) ! ocn u-velocity (m/s)
     real(R8), intent(in) :: vs   (nMax) ! ocn v-velocity (m/s)
-    real(R8), intent(in) :: usfc (nMax) ! atm u wind (surface) (m/s)
-    real(R8), intent(in) :: vsfc (nMax) ! atm v wind (surface) (m/s)
     real(R8), intent(in) :: psfc (nMax) ! atm P (surface) (Pa)
-    real(R8), intent(in) :: lwdn (nMax) ! atm lw downward (W/m^2)
+    real(R8), intent(in), optional :: lwdn (:) ! atm lw downward (W/m^2)
+    real(R8), intent(in), optional :: usfc (:) ! atm u wind (surface) (m/s)
+    real(R8), intent(in), optional :: vsfc (:) ! atm v wind (surface) (m/s)
 
     !--- output arguments -------------------------------
     real(R8), intent(out) :: sen   (nMax) ! heat flux: sensible (W/m^2)
