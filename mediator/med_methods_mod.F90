@@ -1770,8 +1770,8 @@ contains
     elseif (geomtype == ESMF_GEOMTYPE_MESH) then
       call ESMF_FieldGet(field, mesh=lmesh, rc=rc)
       if (chkerr(rc,__LINE__,u_FILE_u)) return
-      call med_methods_Mesh_Print(lmesh, string, rc)
-      if (chkerr(rc,__LINE__,u_FILE_u)) return
+      !call med_methods_Mesh_Print(lmesh, string, rc)
+      !if (chkerr(rc,__LINE__,u_FILE_u)) return
     endif
 
     call med_methods_Field_GetFldPtr(field, &
@@ -2442,7 +2442,7 @@ contains
     rc = ESMF_SUCCESS
 
     if(.not. mediator_checkfornans) return
-    
+
     call ESMF_FieldBundleGet(FB, fieldCount=fieldCount, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
@@ -2475,7 +2475,7 @@ contains
        call shr_log_error('ABORTING JOB, see PET file for details', line=__LINE__, file=u_FILE_u, rc=rc)
        return
     end if
-    
+
   end subroutine med_methods_FB_check_for_nans
 
   !-----------------------------------------------------------------------------

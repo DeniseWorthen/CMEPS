@@ -42,6 +42,9 @@ module med_phases_aofluxes_mod
   use shr_const_mod         , only : pi => SHR_CONST_PI
 #endif
   use shr_log_mod           , only : shr_log_error
+  ! debug
+  use med_methods_mod , only : FB_diagnose  => med_methods_FB_diagnose
+
   implicit none
   private
 
@@ -124,6 +127,7 @@ module med_phases_aofluxes_mod
      real(R8) , pointer :: tbot        (:) => null() ! atm bottom surface T
      real(R8) , pointer :: lwdn        (:) => null() ! atm downward longwave heat flux
      real(R8) , pointer :: rainc       (:) => null() ! convective rain flux
+     real(R8) , pointer :: swnet       (:) => null() ! swnet
      ! local size and computational mask and area: on aoflux grid
      integer            :: lsize                     ! local size
      integer  , pointer :: mask        (:) => null() ! integer ocn domain mask: 0 <=> inactive cell
@@ -549,9 +553,17 @@ contains
     ! ------------------------
     ! input fields from atm and ocn on aofluxgrid
     ! ------------------------
+
     call set_aoflux_in_pointers(is_local%wrap%FBImp(compatm,compocn), is_local%wrap%FBImp(compocn,compocn), &
          aoflux_in, lsize, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+    call FB_diagnose(is_local%wrap%FBMed_aoflux_o, string=trim(subname) //' FBMed_aoflux_o' , rc=rc)
+    ! retrieve export swnet for cool/warm skin parameterization
+    if (FB_fldchk(is_local%wrap%FBMed_aoflux_o, 'Foxx_swnet', rc=rc)) then
+       call fldbun_getfldptr(is_local%wrap%FBMed_aoflux_o, 'Foxx_swnet', aoflux_in%swnet, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+    end if
 
     ! ------------------------
     ! output fields from aoflux calculation
@@ -1100,7 +1112,7 @@ contains
          logunit=logunit, nMax=aoflux_in%lsize, mask=aoflux_in%mask,                           &
          zbot=aoflux_in%zbot, ubot=aoflux_in%ubot, vbot=aoflux_in%vbot, qbot=aoflux_in%shum,   &
          rbot=aoflux_in%dens, tbot=aoflux_in%tbot, thbot=aoflux_in%thbot, pbot=aoflux_in%pbot, &
-         ts=aoflux_in%tocn, us=aoflux_in%uocn, vs=aoflux_in%vocn, psfc=aoflux_in%psfc          &
+         ts=aoflux_in%tocn, us=aoflux_in%uocn, vs=aoflux_in%vocn, psfc=aoflux_in%psfc,         &
          usfc=aoflux_in%usfc, vsfc=aoflux_in%vsfc, lwdn=aoflux_in%lwdn,                        &
          sen=aoflux_out%sen, lat=aoflux_out%lat, lwup=aoflux_out%lwup,                         &
          taux=aoflux_out%taux, tauy=aoflux_out%tauy, evap=aoflux_out%evap,                     &
@@ -1603,13 +1615,12 @@ end subroutine med_aofluxes_map_ogrid2xgrid_input
           if (chkerr(rc,__LINE__,u_FILE_u)) return
           call fldbun_getfldptr(fldbun_a, 'Sa_v10m', aoflux_in%vsfc, xgrid=xgrid, rc=rc)
           if (chkerr(rc,__LINE__,u_FILE_u)) return
-          call fldbun_getfldptr(fldbun_a, 'Faxa_lwdn', aoflux_in%lwdn, xgrid=xgrid, rc=rc)
-          if (chkerr(rc,__LINE__,u_FILE_u)) return
        else
           allocate(aoflux_in%usfc(1), source=0.0_R8)
           allocate(aoflux_in%vsfc(1), source=0.0_R8)
-          allocate(aoflux_in%lwdn(1), source=0.0_R8)
        end if
+       call fldbun_getfldptr(fldbun_a, 'Faxa_lwdn', aoflux_in%lwdn, xgrid=xgrid, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
     end if
 
     ! bottom level potential temperature will need to be computed if not received from the atm

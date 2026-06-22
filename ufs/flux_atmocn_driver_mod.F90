@@ -18,7 +18,7 @@ contains
   subroutine flux_atmocn_driver(ocn_surface_flux_scheme,     &
        gcomp, garea, maintask, logunit, nMax, mask,          &
        zbot, ubot, vbot, qbot, rbot, tbot, thbot, pbot,      &
-       ts, us, vs, psfc, lwdn, usfc, vsfc,                   &
+       ts, us, vs, psfc, usfc, vsfc, lwdn,                   &
        sen, lat, lwup, taux, tauy, evap, tref, qref, duu10n, &
        missval, ustar_sv, re_sv, ssq_sv, rc)
 

@@ -468,6 +468,9 @@ contains
     if (FB_fldchk(is_local%wrap%FBExp(compocn), 'Foxx_swnet', rc=rc)) then
        call FB_GetFldPtr(is_local%wrap%FBExp(compocn), 'Foxx_swnet',  Foxx_swnet, rc=rc)
        if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    elseif (FB_fldchk(is_local%wrap%FBMed_aoflux_o, 'Foxx_swnet', rc=rc)) then
+       call FB_GetFldPtr(is_local%wrap%FBMed_aoflux_o, 'Foxx_swnet',  Foxx_swnet, rc=rc)
+       if (ChkErr(rc,__LINE__,u_FILE_u)) return
     else
        lsize = size(Faxa_swvdr)
        allocate(Foxx_swnet(lsize))
@@ -616,7 +619,8 @@ contains
     end if  ! if sea-ice is present
 
     ! Deallocate Foxx_swnet if it was allocated in this subroutine
-    if (.not. FB_fldchk(is_local%wrap%FBExp(compocn), 'Foxx_swnet', rc=rc)) then
+    if (.not. FB_fldchk(is_local%wrap%FBExp(compocn), 'Foxx_swnet', rc=rc) .and. &
+         .not. FB_fldchk(is_local%wrap%FBMed_aoflux_o, 'Foxx_swnet', rc=rc)) then
        deallocate(Foxx_swnet)
     end if
 

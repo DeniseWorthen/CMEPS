@@ -202,6 +202,11 @@ contains
           end if
        end do
        deallocate(flds)
+
+       ! from custom ocn merge: swnet and lwdn for cool/warm skin
+       if (phase == 'advertise') then
+          call addfld_aoflux('Foxx_swnet')
+       end if
     end if
 
     ! from med: ocean albedos (not sent to the ATM in UFS).
@@ -518,6 +523,7 @@ contains
     if (phase == 'advertise') then
        if (is_local%wrap%comp_present(compatm) .and. is_local%wrap%comp_present(compocn)) then
           call addfld_aoflux('Faox_lwup')
+          call addfld_aoflux('Faxa_lwdn')
           call addfld_from(compatm , 'Faxa_lwnet')
           call addfld_from(compatm , 'Faxa_lwdn')
           call addfld_to(compocn   , 'Foxx_lwnet')
@@ -526,7 +532,8 @@ contains
        if (med_aoflux_to_ocn) then
           if ( fldchk(is_local%wrap%FBexp(compocn)        , 'Foxx_lwnet', rc=rc) .and. &
                fldchk(is_local%wrap%FBImp(compatm,compatm), 'Faxa_lwdn' , rc=rc) .and. &
-               fldchk(is_local%wrap%FBMed_aoflux_o        , 'Faox_lwup' , rc=rc)) then
+               fldchk(is_local%wrap%FBMed_aoflux_o        , 'Faox_lwup' , rc=rc) .and. &
+               fldchk(is_local%wrap%FBMed_aoflux_o        , 'Faxa_lwdn' , rc=rc)) then
              call addmap_from(compatm, 'Faxa_lwdn', compocn, maptype, 'one', 'unset')
              call addmrg_to(compocn, 'Foxx_lwnet', &
                   mrg_from=compmed, mrg_fld='Faox_lwup', mrg_type='merge', mrg_fracname='ofrac')
